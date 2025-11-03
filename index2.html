@@ -1,0 +1,1250 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>豪情值 · 任务与计时（修正版-今日已完成）</title>
+<style>
+  :root{ --bg:#0e1117; --panel:#141925; --panel-2:#111623; --text:#e7ebf4; --muted:#9aa6bd;
+    --primary:#7aa2ff; --primary-2:#9cc0ff; --accent:#28c686; --danger:#ff5d73; --border:#1f2740;
+    --ring-bg:#2a3246; --shadow:0 10px 28px rgba(0,0,0,.35) }
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:var(--text);
+    background:linear-gradient(160deg,var(--bg),#0b0d12 60%)}
+  .app{max-width:1200px;margin:20px auto 60px;padding:0 16px}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  h1{font-size:18px;margin:0;font-weight:700}
+  .grid{display:grid;gap:16px;grid-template-columns:1.1fr .9fr}
+  @media (max-width:980px){.grid{grid-template-columns:1fr}}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow)}
+  .card .hd{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .card .bd{padding:14px 16px}
+  .muted{color:var(--muted)}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  input,select{background:#0d1016;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px;outline:none}
+  .btn{appearance:none;border:1px solid var(--border);background:#0f1420;color:var(--text);padding:10px 14px;border-radius:10px;cursor:pointer}
+  .btn.primary{background:var(--primary);border-color:transparent;color:#fff}
+  .btn.accent{background:var(--accent);border-color:transparent;color:#052018}
+  .btn.danger{background:var(--danger);border-color:transparent;color:#fff}
+  .btn.small{padding:6px 10px;border-radius:8px;font-size:12px}
+  .btn[disabled]{opacity:.55;cursor:not-allowed}
+  .kpi{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .kpi .chip{padding:6px 10px;border-radius:10px;border:1px dashed var(--border);font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px;border-radius:999px;background:#0f1420;border:1px solid var(--border);color:var(--muted)}
+  .tasks{display:flex;flex-direction:column;gap:10px}
+  .task{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.02)}
+  .task.selected{border-color:var(--primary);box-shadow:0 0 0 2px rgba(122,162,255,.25) inset;background:rgba(122,162,255,.05)}
+  .section-2col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .pane{border:1px dashed var(--border);border-radius:12px;padding:12px}
+  .timer{display:grid;grid-template-rows:auto 1fr auto;min-height:520px}
+  .timer .bd{display:grid;place-items:center;padding:22px}
+  .ring-wrap{position:relative;width:320px;height:320px}
+  .ring{width:100%;height:100%}
+  .ring .bg{stroke:var(--ring-bg);stroke-width:16;fill:none;opacity:.85}
+  .ring .fg{stroke:url(#grad);stroke-linecap:round;stroke-width:16;fill:none}
+  .ring .cap{dominant-baseline:middle;text-anchor:middle;font-size:13px;fill:var(--muted)}
+  .ring .task-name{dominant-baseline:middle;text-anchor:middle;font-size:12px;fill:var(--muted)}
+  .centerFlip{position:absolute;left:0;right:0;top:52%;transform:translateY(-28px);display:flex;justify-content:center;pointer-events:none}
+  .timer-kpis{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:10px}
+  .timer-kpis .pill{border:1px solid var(--border);padding:8px 12px;border-radius:999px;color:var(--muted);font-size:12px}
+  .timer-kpis .pill.warn{border-color:var(--danger);color:#ff9da8;background:rgba(255,93,115,.08)}
+  /* FlipCounter */
+  .flip{display:inline-flex;gap:6px;align-items:flex-end}
+  .flip .col{position:relative;width:22px;height:30px;overflow:hidden;border-radius:6px;background:#0f1420;border:1px solid var(--border)}
+  .flip.small .col{width:18px;height:24px}
+  .flip .digits{position:absolute;left:0;top:0;width:100%;display:flex;flex-direction:column;align-items:center;transition:transform .22s cubic-bezier(.2,.6,.2,1)}
+  .flip .digit{width:100%;height:30px;display:grid;place-items:center;font-variant-numeric:tabular-nums;font-size:18px;font-weight:800;color:var(--text)}
+  .flip.small .digit{height:24px;font-size:14px}
+  .flip .sep{width:6px;text-align:center;color:var(--muted);font-weight:800;user-select:none}
+  /* Modal */
+  .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:50}
+  .modal{width:min(640px,92vw);background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow);color:var(--text)}
+  .modal .mh{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .modal .mb{padding:16px}
+  /* 奖励条 */
+  .result-bar{margin-top:10px;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,.03)}
+  .result-ok{border-left:4px solid var(--accent)}
+  .result-warn{border-left:4px solid #ffdd7a}
+  .result-err{border-left:4px solid var(--danger)}
+  .badge{display:inline-block;margin-right:8px;margin-bottom:6px;padding:6px 8px;border:1px solid var(--border);border-radius:8px;background:rgba(255,255,255,.03);font-size:12px}
+  .choice{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .choice .opt{border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:#0f1420;cursor:pointer}
+  .loots{display:inline-flex;gap:8px;align-items:center}
+  .loot{padding:4px 6px;border:1px dashed var(--border);border-radius:8px}
+  /* 徽章工坊（省略其它说明样式，保留必要项） */
+  details.workshop{margin-top:12px;border:1px solid var(--border);border-radius:12px;padding:12px;background:rgba(255,255,255,.02)}
+  .workshop-body{margin-top:12px;display:grid;gap:14px}
+  .workshop-section{border:1px dashed var(--border);border-radius:10px;padding:10px}
+  .badge-card{border:1px solid var(--border);border-radius:10px;padding:10px;display:grid;gap:6px;background:rgba(0,0,0,.08)}
+  .loadout-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+  .loadout-slot{border:1px solid var(--border);border-radius:10px;padding:10px;display:grid;gap:6px;background:rgba(255,255,255,.03)}
+  .cooldown-label{font-size:12px;color:var(--muted)}
+  .badge-tier-rare{color:#7aa2ff}
+  .badge-tier-epic{color:#c38bff}
+  .badge-tier-legend{color:#ffdd7a}
+  .toast-container{position:fixed;top:24px;right:24px;display:flex;flex-direction:column;gap:10px;z-index:120;pointer-events:none}
+  .toast{background:rgba(15,20,32,.92);border:1px solid var(--border);border-left:4px solid var(--primary);padding:10px 14px;border-radius:12px;color:var(--text);min-width:220px;max-width:320px;box-shadow:var(--shadow);opacity:0;transform:translateY(14px);transition:opacity .3s ease,transform .3s ease}
+  .toast.show{opacity:1;transform:translateY(0)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>豪情值 · 任务与计时</h1>
+    <div class="kpi">
+      <span class="chip">总豪情值：<span id="kpiTotalFlip">000,000,0000</span></span>
+      <span class="chip">累计用时：<strong id="kpiTime">0:00:00</strong></span>
+      <span class="chip"><button class="btn small" id="btnHelp">帮助 ❓</button></span>
+      <label class="chip"><input type="checkbox" id="arcadeMode" /> 街机模式</label>
+      <span class="chip"><button class="btn small" id="btnDev">调试 ⚙️</button></span>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <div class="hd">
+        <h2 style="margin:0;font-size:16px">任务清单</h2>
+        <span class="muted">创建 → 选择 → 继续/暂停/开始/结束</span>
+      </div>
+      <div class="bd">
+        <div class="row" style="margin-bottom:10px">
+          <input id="taskTitle" type="text" placeholder="任务标题（如：论文引言改写）" />
+          <select id="taskDiff" style="max-width:140px">
+            <option value="1">难度 1 · 轻松</option>
+            <option value="2">难度 2</option>
+            <option value="3" selected>难度 3 · 标准</option>
+            <option value="4">难度 4</option>
+            <option value="5">难度 5 · 硬仗</option>
+          </select>
+          <button class="btn primary" id="btnAdd">添加任务</button>
+          <button class="btn" id="btnClearAll">清空数据</button>
+        </div>
+        <div class="tasks" id="taskList"></div>
+        <div class="muted" id="emptyTask" style="display:none;padding:18px;text-align:center">暂无任务，先在上方添加一个。</div>
+      </div>
+
+      <div class="bd">
+        <div class="section-2col">
+          <div class="pane">
+            <h3>每日任务</h3>
+            <div id="dailyList"></div>
+            <div class="row" style="margin-top:8px">
+              <button class="btn small" id="btnDailyRefresh">刷新任务</button>
+              <button class="btn small" id="btnTaskLibrary">任务库</button>
+              <small class="muted">每日首次免费，之后每次消耗抽卡券×1</small>
+            </div>
+            <div class="row" style="margin-top:8px">
+              <button class="btn small" id="btnTodayDone">今日已完成</button>
+              <small class="muted">查看今天完成过的所有任务</small>
+            </div>
+          </div>
+          <div class="pane">
+            <h3>库存 / 幸运轮</h3>
+            <div class="badge-row" id="invRow"></div>
+            <div class="row" style="margin-top:8px">
+              <button class="btn" id="btnWheel">幸运轮（消耗抽卡券×1）</button>
+            </div>
+            <div class="row" style="margin-top:8px">
+              <button class="btn small" id="btnForgeFreeze">锻造冻结卡（稀有×15）</button>
+              <button class="btn small" id="btnRareRefresh">稀有刷新每日（稀有×6）</button>
+              <button class="btn small" id="btnWheelBoost">幸运轮强运（稀有×10）</button>
+              <button class="btn small" id="btnSpeedChip">调速芯片 +5%（稀有×20）</button>
+            </div>
+            <details class="workshop" id="badgeWorkshop">
+              <summary>徽章工坊</summary>
+              <div class="workshop-body" id="badgeWorkshopBody"></div>
+            </details>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card timer">
+      <div class="hd">
+        <h2 style="margin:0;font-size:16px">计时与豪情值</h2>
+        <span class="muted" id="activeHint">未选择任务</span>
+      </div>
+      <div class="bd" style="position:relative">
+        <div class="ring-wrap">
+          <svg viewBox="0 0 220 220" class="ring" aria-label="进度环">
+            <defs>
+              <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="var(--primary)"/>
+                <stop offset="100%" stop-color="var(--primary-2)"/>
+              </linearGradient>
+            </defs>
+            <circle class="bg" cx="110" cy="110" r="90"></circle>
+            <circle class="fg" cx="110" cy="110" r="90" stroke-dasharray="565.48" stroke-dashoffset="565.48"></circle>
+            <text x="110" y="78" class="cap">豪情值（本次）</text>
+            <text x="110" y="158" class="cap">速率：<tspan id="rateText">0</tspan> / 秒</text>
+            <text x="110" y="178" class="task-name" id="taskNameText">未开始</text>
+          </svg>
+          <div class="centerFlip"><div id="sessionFlip"></div></div>
+        </div>
+        <div class="timer-kpis">
+          <div class="pill">当前任务累计豪情值：<strong id="taskTotal">0</strong></div>
+          <div class="pill">本次用时：<strong id="sessionTime">0:00:00</strong></div>
+          <div class="pill">任务总用时：<strong id="taskTime">0:00:00</strong></div>
+          <div class="pill warn" id="pauseIndicator" style="display:none">已暂停：<strong id="pauseTime">0:00</strong></div>
+        </div>
+      </div>
+      <div class="bd" style="padding-top:0">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+          <button class="btn accent" id="btnStart"  aria-label="开始" disabled>开始</button>
+          <button class="btn"         id="btnPause"  aria-label="暂停" disabled>暂停</button>
+          <button class="btn"         id="btnResume" aria-label="继续" disabled>继续</button>
+          <button class="btn danger"  id="btnStop"   aria-label="结束"  disabled>结束</button>
+        </div>
+      </div>
+    </section>
+  </div>
+</div>
+
+<!-- 任务库模态框 -->
+<div class="modal-mask" id="taskLibraryMask" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="mh">
+      <h3>任务库</h3>
+      <button class="btn small" id="btnCloseTaskLibrary">关闭</button>
+    </div>
+    <div class="mb">
+      <p style="font-size: 13px; color: var(--muted); margin: 0 0 10px;">
+        任务库语法示例（每行一个任务，格式：标题|难度）：<br>
+        <code style="background: var(--ring-bg); padding: 2px 4px; border-radius: 4px;">论文引言改写|3</code><br>
+        <code style="background: var(--ring-bg); padding: 2px 4px; border-radius: 4px;">代码重构|4</code><br>
+        <code style="background: var(--ring-bg); padding: 2px 4px; border-radius: 4px;">文档撰写|2</code>
+      </p>
+      <textarea id="taskLibraryInput" placeholder="在此粘贴你的任务列表，每行格式：标题|难度 (难度1-5)" style="width: 100%; height: 200px; background: #0d1016; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 10px; resize: vertical; font-family: monospace;"></textarea>
+      <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px;">
+        <button class="btn" id="btnImportTasks">导入任务</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 奖励弹窗 -->
+<div class="modal-mask" id="rewardMask" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="mh">
+      <h3>奖励阶段</h3>
+      <button class="btn small" id="btnCloseReward">关闭</button>
+    </div>
+    <div class="mb" id="rewardBody"></div>
+  </div>
+</div>
+
+<!-- 今日已完成 -->
+<div class="modal-mask" id="todayDoneMask" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="mh">
+      <h3>今日已完成</h3>
+      <button class="btn small" id="btnCloseTodayDone">关闭</button>
+    </div>
+    <div class="mb" id="todayDoneBody" style="display:grid;gap:8px"></div>
+  </div>
+</div>
+
+<!-- 帮助弹窗 -->
+<div class="modal-mask" id="helpMask">
+  <div class="modal">
+    <div class="mh"><h3>怎么玩（超简）</h3><button class="btn small" id="btnCloseHelp">关闭</button></div>
+    <div class="mb" id="helpContent" style="line-height:1.7">
+      ① 新建任务并选择 → 点<b>继续</b>开始计时。<br/>
+      ② 难度越高，豪情值/秒越多（可在<b>调试</b>里自定义）。<br/>
+      ③ 计时中：只亮<b>暂停/结束</b>；暂停后：只亮<b>开始/结束</b>。<br/>
+      ④ 结束进入<b>奖励</b>；开<b>街机</b>可押注奖金。<br/>
+      ⑤ 每日任务/幸运轮产出<b>抽卡券、冻结卡、碎片</b>。
+    </div>
+  </div>
+</div>
+
+<!-- 调试后门 -->
+<div class="modal-mask" id="devMask">
+  <div class="modal">
+    <div class="mh"><h3>调试面板（后门）</h3><button class="btn small" id="btnCloseDev">关闭</button></div>
+    <div class="mb" id="devBody">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:10px">
+        <div><label class="muted">D1 速率</label><input type="number" id="rate1" min="0" step="0.1"></div>
+        <div><label class="muted">D2 速率</label><input type="number" id="rate2" min="0" step="0.1"></div>
+        <div><label class="muted">D3 速率</label><input type="number" id="rate3" min="0" step="0.1"></div>
+        <div><label class="muted">D4 速率</label><input type="number" id="rate4" min="0" step="0.1"></div>
+        <div><label class="muted">D5 速率</label><input type="number" id="rate5" min="0" step="0.1"></div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="btn primary" id="btnSaveRates">保存速率并应用</button>
+        <button class="btn" id="btnResetRates">恢复默认速率</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn" id="devAddTicket">+1 抽卡券</button>
+        <button class="btn" id="devAddFreeze">+1 冻结卡</button>
+        <button class="btn" id="devAddHQ100">+100 豪情值</button>
+        <button class="btn" id="devAddHQ1000">+1000 豪情值</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 幸运轮 -->
+<div class="modal-mask" id="wheelMask" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="mh"><h3>幸运轮</h3><button class="btn small" id="btnCloseWheel">关闭</button></div>
+    <div class="mb" id="wheelBody">
+      <div style="display:grid;place-items:center;gap:10px">
+        <div id="prizeTicker"
+             style="min-height:48px;font-size:20px;font-weight:800;letter-spacing:1px;
+                    padding:12px 16px;border:1px dashed var(--border);border-radius:12px;
+                    background:rgba(255,255,255,.03);width:min(360px,80vw);text-align:center">
+          点击“开始抽奖”
+        </div>
+        <div class="muted" style="font-size:12px">消耗抽卡券×1，名称将快速跳动，停止即为结果</div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:8px">
+        <button class="btn primary" id="btnSpin">开始抽奖</button>
+      </div>
+      <div id="wheelResult" class="wheel-result muted" aria-live="polite" style="text-align:center;margin-top:6px"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+<script>
+/* ========== 存储兜底层 ========== */
+const storage = (() => {
+  try {
+    const t = '__hq_test__';
+    window.localStorage.setItem(t, '1');
+    window.localStorage.removeItem(t);
+    return window.localStorage;
+  } catch (e) {
+    const m = new Map();
+    return {
+      getItem: k => (m.has(k) ? m.get(k) : null),
+      setItem: (k, v) => m.set(k, v),
+      removeItem: k => m.delete(k)
+    };
+  }
+})();
+
+const readJSON = (key, fallback) => {
+  try { const s = storage.getItem(key); return s ? JSON.parse(s) : fallback; }
+  catch { return fallback; }
+};
+const writeJSON = (key, val) => {
+  try { storage.setItem(key, JSON.stringify(val)); } catch { }
+};
+
+window.requestIdleCallback = window.requestIdleCallback || function(cb){return setTimeout(()=>cb({didTimeout:false,timeRemaining:()=>0}),200)};
+window.cancelIdleCallback = window.cancelIdleCallback || function(id){clearTimeout(id)};
+
+/* ========== 静态数据（省略无关注释） ========== */
+const PRIZE_NAMES = ['特等奖','一等奖','二等奖','三等奖','四等奖','五等奖','六等奖','七等奖'];
+const WHEEL_SEGMENTS = PRIZE_NAMES.map((name, i) => {
+  const types = ['hq','rare','epic','freeze'];
+  const colors = ['#6f87ff','#28c686','#c38bff','#ff7b92'];
+  return { type: types[i % types.length], label: name, color: colors[i % colors.length] };
+});
+
+class FlipCounter{
+  constructor(container,{digits=6,small=false,comma=true}={}){
+    this.digits=digits;this.comma=comma;this.cellHeight=small?24:30;
+    this.root=document.createElement('div');this.root.className='flip'+(small?' small':'');this.cols=[];
+    for(let i=0;i<digits;i++){
+      const col=document.createElement('div');col.className='col';
+      const stack=document.createElement('div');stack.className='digits';
+      for(let d=0;d<=9;d++){const cell=document.createElement('div');cell.className='digit';cell.textContent=d;stack.appendChild(cell)}
+      for(const e of [0,1]){const cell=document.createElement('div');cell.className='digit';cell.textContent=e;stack.appendChild(cell)}
+      col.appendChild(stack);this.root.appendChild(col);this.cols.push({stack,value:0,pos:0,wrapPos:stack.childElementCount-2});
+      if(this.comma&&(digits-i)%3===1&&i!==digits-1){const sep=document.createElement('div');sep.className='sep';sep.textContent=',';this.root.appendChild(sep)}
+    }
+    container.innerHTML='';container.appendChild(this.root);
+    const sample=this.root.querySelector('.digit'); if(sample){const rect=sample.getBoundingClientRect(); if(rect&&rect.height){this.cellHeight=rect.height;}}
+    this.setValue(0,true)
+  }
+  _str(n){return Math.floor(n).toString().padStart(this.digits,'0').slice(-this.digits)}
+  setValue(n,instant=false){
+    const s=this._str(n);
+    [...s].forEach((ch,i)=>{const v=ch.charCodeAt(0)-48;const c=this.cols[i];c.value=v;c.pos=v;
+      if(instant)c.stack.style.transition='none';
+      c.stack.style.transform=`translateY(${-c.pos*this.cellHeight}px)`;
+      if(instant){void c.stack.offsetHeight;c.stack.style.transition=''}
+    })
+  }
+  flipBy(step=1){
+    for(let i=this.digits-1;i>=0;i--){
+      const c=this.cols[i];const next=(c.value+step)%10;const wrap=(c.value+step)>=10;
+      if(wrap){
+        const wrapPos=c.wrapPos??10;
+        c.pos=wrapPos;c.stack.style.transform=`translateY(${-c.pos*this.cellHeight}px)`;
+        c.stack.addEventListener('transitionend',()=>{c.stack.style.transition='none';c.pos=0;c.stack.style.transform='translateY(0px)';void c.stack.offsetHeight;c.stack.style.transition=''}, {once:true});
+      }else{c.pos=next;c.stack.style.transform=`translateY(${-c.pos*this.cellHeight}px)`}
+      c.value=next;if(!wrap)break
+    }
+  }
+  flipTo(n){
+    const s=this._str(n);
+    [...s].forEach((ch,i)=>{const v=ch.charCodeAt(0)-48;const c=this.cols[i];
+      if(c.value===9&&v===0){
+        const wrapPos=c.wrapPos??10;
+        c.pos=wrapPos;c.stack.style.transform=`translateY(${-c.pos*this.cellHeight}px)`;
+        c.stack.addEventListener('transitionend',()=>{c.stack.style.transition='none';c.pos=0;c.value=0;c.stack.style.transform='translateY(0px)';void c.stack.offsetHeight;c.stack.style.transition=''}, {once:true});
+      }else{c.value=v;c.pos=v;c.stack.style.transform=`translateY(${-c.pos*this.cellHeight}px)`}
+    })
+  }
+}
+
+/* 经济参数/常量 */
+const ECON={k:0.0009, baseFloorMinSec:180, streakStep:0.1, pauseBreakSec:90, bonusCapRatio:3, pityStep:1, pityBoost:0.015};
+const LOOT_TABLE=[{id:'rare_gem',name:'稀有徽章碎片',rarity:'rare',p:0.22},{id:'epic_gem',name:'史诗徽章碎片',rarity:'epic',p:0.06},{id:'freeze_card',name:'冻结卡',rarity:'rare',p:0.10},{id:'ticket',name:'抽卡券',rarity:'rare',p:0.12}];
+const MAX_FLIPS_PER_SECOND=8, CYCLE_SECONDS_BASE=20, CIRCUM=2*Math.PI*90;
+
+/* ========== 主逻辑 ========== */
+document.addEventListener('DOMContentLoaded',()=>{
+  const LS_KEY="haoqing_tasks_v1", LS_AGG="haoqing_agg_v1", LS_META="haoqing_meta_v1", LS_RATES="haoqing_rates_v1";
+  const DEFAULT_RATES={1:1,2:2,3:4,4:7,5:11};
+  let RATE_BY_DIFFICULTY = (()=>{ const r=readJSON(LS_RATES,{}); return {...DEFAULT_RATES,...r} })();
+  let state = { tasks: readJSON(LS_KEY, []), agg: readJSON(LS_AGG, {totalHQ:0,totalSeconds:0}), active:null };
+  let meta = readJSON(LS_META, {
+    streak:0,pity:0,arcade:false,freeze:0,badges:{},tickets:0,
+    daily:{},dailyBuff:{},multDayCount:{},guardUsedToday:0,guardDay:null,nextWheelBoost:1,
+    completed:{} /* 新增：今日已完成持久化容器（date->[]） */
+  });
+
+  function ensureBadgeMeta(){
+    meta.badges = meta.badges || {};
+    meta.badges.rare_gem = meta.badges.rare_gem || 0;
+    meta.badges.epic_gem = meta.badges.epic_gem || 0;
+    meta.badges.rare_tokens = meta.badges.rare_tokens || 0;
+    meta.badges.epic_tokens = meta.badges.epic_tokens || 0;
+    meta.badges.legendary_tokens = meta.badges.legendary_tokens || 0;
+    meta.badges.owned = meta.badges.owned || {};
+    meta.badges.loadout = meta.badges.loadout || {slot1:null,slot2:null,slot3:null};
+    meta.badges.loadoutCooldownUntil = meta.badges.loadoutCooldownUntil || 0;
+    meta.nextWheelBoost = meta.nextWheelBoost || 1;
+  }
+  ensureBadgeMeta();
+
+  const $=s=>document.querySelector(s);
+  const el = {
+    kpiTotalWrap: $('#kpiTotalFlip'), kpiTime: $('#kpiTime'),
+    taskTitle: $('#taskTitle'), taskDiff: $('#taskDiff'),
+    btnAdd: $('#btnAdd'), btnClearAll: $('#btnClearAll'),
+    taskList: $('#taskList'), emptyTask: $('#emptyTask'),
+    rateText: $('#rateText'), taskNameText: $('#taskNameText'),
+    sessionTime: $('#sessionTime'), taskTotal: $('#taskTotal'), taskTime: $('#taskTime'),
+    activeHint: $('#activeHint'), btnStart: $('#btnStart'), btnPause: $('#btnPause'), btnResume: $('#btnResume'), btnStop: $('#btnStop'),
+    arcadeToggle: $('#arcadeMode'),
+    rewardMask: $('#rewardMask'), rewardBody: $('#rewardBody'), btnCloseReward: $('#btnCloseReward'),
+    helpMask: $('#helpMask'), btnHelp: $('#btnHelp'), btnCloseHelp: $('#btnCloseHelp'),
+    dailyList: $('#dailyList'), btnDailyRefresh: $('#btnDailyRefresh'),
+    invRow: $('#invRow'), badgeWorkshopBody: $('#badgeWorkshopBody'),
+    toastWrap: $('#toastContainer'), pauseIndicator: $('#pauseIndicator'), pauseTime: $('#pauseTime'),
+    wheelMask: $('#wheelMask'), btnWheel: $('#btnWheel'), btnCloseWheel: $('#btnCloseWheel'), btnSpin: $('#btnSpin'), wheelResult: $('#wheelResult'),
+    btnDev: $('#btnDev'), devMask: $('#devMask'), btnCloseDev: $('#btnCloseDev'),
+    rate1: $('#rate1'), rate2: $('#rate2'), rate3: $('#rate3'), rate4: $('#rate4'), rate5: $('#rate5'),
+    btnSaveRates: $('#btnSaveRates'), btnResetRates: $('#btnResetRates'),
+    devAddTicket: $('#devAddTicket'), devAddFreeze: $('#devAddFreeze'),
+    devAddHQ100: $('#devAddHQ100'), devAddHQ1000: $('#devAddHQ1000'),
+    btnForgeFreeze: $('#btnForgeFreeze'), btnRareRefresh: $('#btnRareRefresh'), btnWheelBoost: $('#btnWheelBoost'), btnSpeedChip: $('#btnSpeedChip'),
+    prizeTicker: $('#prizeTicker'),
+    btnTaskLibrary: $('#btnTaskLibrary'), taskLibraryMask: $('#taskLibraryMask'),
+    btnCloseTaskLibrary: $('#btnCloseTaskLibrary'), taskLibraryInput: $('#taskLibraryInput'), btnImportTasks: $('#btnImportTasks'),
+    /* 今日已完成 */
+    btnTodayDone: $('#btnTodayDone'), todayDoneMask: $('#todayDoneMask'), todayDoneBody: $('#todayDoneBody'), btnCloseTodayDone: $('#btnCloseTodayDone')
+  };
+
+  const sessionFlip = new FlipCounter($('#sessionFlip'),{digits:6,comma:true});
+  const kpiTotal = new FlipCounter(el.kpiTotalWrap,{digits:10,small:true,comma:true});
+
+  /* 幸运轮名称跳动器（简化） */
+  let tickerTimer = null, tickerTimeout = null, tickerIndex = 0;
+  function clearTicker(){ if(tickerTimer){clearInterval(tickerTimer);tickerTimer=null;} if(tickerTimeout){clearTimeout(tickerTimeout);tickerTimeout=null;} }
+  function rollWheelOutcomeType(){ const base=[{type:'hq',p:0.40},{type:'rare',p:0.32},{type:'epic',p:0.12},{type:'freeze',p:0.16}]; const r=Math.random(); let acc=0; for(const it of base){acc+=it.p;if(r<acc)return it.type} return 'hq'; }
+  function applyWheelReward(type){
+    const boost = Math.max(1, meta.nextWheelBoost || 1);
+    let msg='';
+    if(type==='hq'){ const add=Math.floor(50*boost); state.agg.totalHQ=(state.agg.totalHQ||0)+add; msg=`幸运轮获得豪情值 +${add}${boost>1?`（强运×${boost.toFixed(2)}）`:''}`; }
+    else if(type==='rare'){ meta.badges.rare_gem=(meta.badges.rare_gem||0)+Math.max(1,Math.round(2*boost)); msg=`获得稀有碎片 ×${Math.max(1,Math.round(2*boost))}`; }
+    else if(type==='epic'){ meta.badges.epic_gem=(meta.badges.epic_gem||0)+1; msg='获得史诗碎片 ×1'; }
+    else if(type==='freeze'){ meta.freeze=(meta.freeze||0)+1; msg='获得冻结卡 ×1'; }
+    meta.nextWheelBoost=1; save(); renderKPI(); renderInventory(); pushToast(msg,'success');
+    if(el.wheelResult){ el.wheelResult.textContent=msg; el.wheelResult.classList.remove('muted'); }
+  }
+  function startNameTicker(){
+    if((meta.tickets||0)<=0){alert('抽卡券不足');return;}
+    meta.tickets-=1; save(); renderInventory();
+    tickerIndex = Math.floor(Math.random()*PRIZE_NAMES.length);
+    if(el.prizeTicker) el.prizeTicker.textContent = PRIZE_NAMES[tickerIndex];
+    if(el.wheelResult){el.wheelResult.textContent='跳动中…';el.wheelResult.classList.add('muted');}
+    if(el.btnSpin) el.btnSpin.disabled=true;
+    clearTicker();
+    tickerTimer = setInterval(()=>{ tickerIndex=(tickerIndex+1)%PRIZE_NAMES.length; if(el.prizeTicker) el.prizeTicker.textContent=PRIZE_NAMES[tickerIndex]; }, 80);
+    tickerTimeout = setTimeout(()=>{ clearTicker(); const outcome=rollWheelOutcomeType(); const chosen=WHEEL_SEGMENTS.find(seg=>seg.type===outcome) || WHEEL_SEGMENTS[0]; if(el.prizeTicker) el.prizeTicker.textContent=chosen.label; applyWheelReward(outcome); if(el.btnSpin) el.btnSpin.disabled=false; }, 2000);
+  }
+
+  function fmtTime(sec){ sec=Math.floor(sec); const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60; const pad=n=>n.toString().padStart(2,'0'); return `${h}:${pad(m)}:${pad(s)}`; }
+  function fmtPause(sec){ sec=Math.max(0,Math.floor(sec||0)); const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60; const pad=n=>n.toString().padStart(2,'0'); return h>0?`${h}:${pad(m)}:${pad(s)}`:`${m}:${pad(s)}`;}
+  function todayKey(){ return new Date().toISOString().slice(0,10); }
+
+  function save(){ writeJSON(LS_KEY, state.tasks); writeJSON(LS_AGG, state.agg); writeJSON(LS_META, meta); writeJSON(LS_RATES, RATE_BY_DIFFICULTY); }
+
+  function pushToast(message, variant='info'){
+    const wrap = el.toastWrap || document.getElementById('toastContainer'); if(!wrap) return;
+    const toast = document.createElement('div'); toast.className = 'toast'; if(variant==='warn') toast.classList.add('warn'); if(variant==='success') toast.classList.add('success');
+    toast.textContent = message; wrap.appendChild(toast);
+    requestAnimationFrame(()=>toast.classList.add('show'));
+    setTimeout(()=>{ toast.classList.remove('show'); toast.addEventListener('transitionend',()=>toast.remove(),{once:true}); },4000);
+  }
+
+  /* 首屏加载渲染 */
+  (function load(){ kpiTotal.setValue(state.agg.totalHQ||0,true); el.kpiTime.textContent=fmtTime(state.agg.totalSeconds||0); document.querySelector('.fg').setAttribute('stroke-dasharray', CIRCUM.toFixed(2)); setRing(0); })();
+
+  const uid=()=>Math.random().toString(36).slice(2,10);
+  const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
+  const getTask=id=>state.tasks.find(t=>t.id===id);
+  function difficultyBadge(d){const map={1:"轻松",2:"较易",3:"标准",4:"较难",5:"硬仗"};return `<span class="tag">${"★".repeat(d)}${"☆".repeat(5-d)} <b style="margin-left:4px">D${d}</b> · ${map[d]}</span>`}
+
+  function renderKPI(){ kpiTotal.flipTo(Math.floor(state.agg.totalHQ || 0)); el.kpiTime.textContent = fmtTime(state.agg.totalSeconds || 0); }
+
+  function renderTasks(){
+    el.taskList.innerHTML=''; el.emptyTask.style.display = state.tasks.length?'none':'block';
+    state.tasks.forEach(t=>{
+      const row=document.createElement('div'); row.className='task';
+      if(state.active && state.active.taskId===t.id) row.classList.add('selected');
+      row.innerHTML = `
+        <div>${difficultyBadge(t.difficulty)}</div>
+        <div><div class="task-title">${t.title}</div>
+          <div class="muted" style="font-size:12px;margin-top:4px">累计豪情值：<b>${Math.floor(t.totalHQ||0)}</b> · 累计用时：<b>${fmtTime(t.totalSeconds||0)}</b></div>
+        </div>
+        <div class="controls"><button class="btn small" data-act="edit">编辑</button><button class="btn small danger" data-act="del">删除</button></div>
+        <div><button class="btn small accent" data-act="select">${state.active&&state.active.taskId===t.id?'已选':'选择'}</button></div>`;
+      row.querySelector('[data-act="edit"]').onclick=()=>editTask(t.id);
+      row.querySelector('[data-act="del"]').onclick=()=>deleteTask(t.id);
+      row.querySelector('[data-act="select"]').onclick=()=>selectTask(t.id);
+      el.taskList.appendChild(row);
+    });
+  }
+
+  function setRing(p){ const off=CIRCUM*(1-Math.max(0,Math.min(1,p))); document.querySelector('.fg')?.setAttribute('stroke-dashoffset', off.toFixed(2)); }
+function setControls(){
+  el.btnStart.disabled = true;
+  el.btnPause.disabled = true;
+  el.btnResume.disabled = true;
+  el.btnStop.disabled  = true;
+
+  if (!state.active) return;
+  const a = state.active;
+
+  // 未开始：仅允许“开始”
+  if (!a.startedAt) {
+    el.btnStart.disabled = false;
+    return;
+  }
+
+  // 计时中：允许暂停和结束
+  if (!a.isPaused) {
+    el.btnPause.disabled = false;
+    el.btnStop.disabled  = false;
+    return;
+  }
+
+  // 暂停中：允许继续（开始）与结束
+  el.btnStart.disabled = false;
+  el.btnStop.disabled  = false;
+}
+  function showPauseIndicator(sec){ if(!el.pauseIndicator||!el.pauseTime) return; el.pauseIndicator.style.display='flex'; el.pauseTime.textContent=fmtPause(sec); }
+  function hidePauseIndicator(){ if(!el.pauseIndicator||!el.pauseTime) return; el.pauseIndicator.style.display='none'; el.pauseTime.textContent='0:00'; }
+
+  function addTask(){
+    const title=el.taskTitle.value.trim(); const diff=parseInt(el.taskDiff.value,10);
+    if(!title){alert('请输入任务标题');return}
+    state.tasks.unshift({id:uid(), title, difficulty:diff, totalHQ:0, totalSeconds:0});
+    save(); renderTasks(); el.taskTitle.value='';
+  }
+  function editTask(id){
+    const t=getTask(id); if(!t) return;
+    const title=prompt('编辑任务标题：',t.title); if(title===null) return;
+    let diff=prompt('编辑难度（1-5）：',t.difficulty); if(diff===null) return;
+    diff=clamp(parseInt(diff,10)||t.difficulty,1,5);
+    t.title=(title.trim()||t.title); t.difficulty=diff;
+    save(); renderTasks(); if(state.active&&state.active.taskId===id){ updateRate(); el.taskNameText.textContent=t.title; }
+  }
+  function deleteTask(id){
+    if(state.active&&state.active.taskId===id){ alert('请先结束当前任务的计时，再删除。'); return; }
+    state.tasks=state.tasks.filter(t=>t.id!==id); save(); renderTasks();
+  }
+
+  function baseRateOfTask(task){return RATE_BY_DIFFICULTY[task.difficulty]||1;}
+  function todayBuff(){const day=todayKey(); meta.dailyBuff=meta.dailyBuff||{}; meta.dailyBuff[day]=meta.dailyBuff[day]||{rateBuff:0}; return meta.dailyBuff[day];}
+  function effectiveRate(baseRate, difficulty){
+    let rate=baseRate;
+    // 可在此叠加徽章/当日加成（简化保留）
+    const chip = todayBuff().rateBuff || 0; rate *= (1 + chip);
+    return rate;
+  }
+  function rateOfActive(){ if(!state.active) return 0; const task=getTask(state.active.taskId); if(!task) return 0; return effectiveRate(baseRateOfTask(task), task.difficulty); }
+  function updateRate(){
+    if(!state.active){ el.rateText.textContent='0'; return; }
+    const task=getTask(state.active.taskId); if(!task){el.rateText.textContent='0';return;}
+    const eff=effectiveRate(baseRateOfTask(task), task.difficulty);
+    el.rateText.textContent=eff.toFixed(2);
+    if(state.active.display){ state.active.display.flipEvery = eff>0?1/Math.min(MAX_FLIPS_PER_SECOND, eff):1; }
+  }
+
+  function selectTask(id){
+    const t=getTask(id); if(!t) return;
+    state.active={taskId:id,startedAt:null,pausedAt:null,isPaused:false,sessionSeconds:0,sessionHQ:0,ringPhase:0,pauses:0,
+      display:{intShown:0,flipEvery:1/Math.min(MAX_FLIPS_PER_SECOND,effectiveRate(baseRateOfTask(t),t.difficulty)||1),accTime:0}
+    };
+    el.activeHint.textContent=`已选择：${t.title}（难度 ${t.difficulty}）`; el.taskNameText.textContent=t.title;
+    sessionFlip.setValue(0,true); el.sessionTime.textContent='0:00:00'; el.taskTotal.textContent=Math.floor(t.totalHQ||0); el.taskTime.textContent=fmtTime(t.totalSeconds||0);
+    hidePauseIndicator(); updateRate(); renderTasks(); setControls();
+  }
+  function startTimer(){
+    if(!state.active){ alert('请先选择任务'); return; }
+    if(state.active.startedAt && !state.active.isPaused) return;
+    const now=performance.now();
+    if(!state.active.startedAt){ state.active.startedAt=now; }
+    else{ const paused=(now-(state.active.pausedAt||now))/1000; state.active.startedAt+=paused*1000; }
+    state.active.isPaused=false; state.active.pausedAt=null; hidePauseIndicator(); setControls();
+  }
+  function pauseTimer(){
+    if(state.active && !state.active.isPaused){
+      state.active.isPaused=true; state.active.pausedAt=performance.now(); state.active.pauses=(state.active.pauses||0)+1; showPauseIndicator(0); setControls();
+    }
+  }
+
+  /* —— 今日已完成：核心 —— */
+
+  // [fix] 确保今日对象正确初始化completed数组
+  function todayObj() {
+    const k = todayKey();
+    if (!meta.daily[k]) meta.daily[k] = {progressSec:0,hardSec:0,sessions:0,zeroPauseSessions:0,missions:null,refreshUsed:false,done:{}, completed:[]};
+    if (!Array.isArray(meta.daily[k].completed)) meta.daily[k].completed = [];
+    return meta.daily[k];
+  }
+
+  // [fix] 确保今日已完成数据正确写入并保存
+  function pushTodayDone(entry){
+    const d = todayObj();
+    d.completed.unshift(entry);
+    save();
+  }
+
+  function renderTodayDone(){
+    const d = todayObj();
+    const list = d.completed || [];
+    const box = document.getElementById('todayDoneBody');
+    if(!box) return;
+    if(list.length === 0){
+      box.innerHTML = '<div class="muted">今天还没有完成的任务。</div>';
+      return;
+    }
+    // [fix] 倒序显示（最新在前）
+    box.innerHTML = list.map(it => `
+      <div class="pane">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div style="font-weight:600">${it.title}</div>
+          <span class="tag">D${it.difficulty}</span>
+        </div>
+        <div class="muted" style="margin-top:6px;font-size:12px">
+          用时：<b>${fmtTime(it.seconds)}</b> · 本次豪情值：<b>${Math.floor(it.hq)}</b> · 完成于：${new Date(it.ts).toLocaleTimeString()}
+        </div>
+      </div>
+    `).join('');
+  }
+
+  /* 奖励计算与弹窗 */
+  function applySessionModifiers(baseHQ, seconds, diff){
+    // 基础奖励 × 难度系数 × 时间系数
+    const diffMulti = {1:0.6,2:0.8,3:1,4:1.3,5:1.7}[diff] || 1;
+    const timeMulti = Math.min(3, Math.max(0.5, seconds / 600)); // 10分钟基准
+    return baseHQ * diffMulti * timeMulti;
+  }
+
+  // [fix] 统一绑定奖励弹窗关闭事件，防止押注后关闭失效
+  function bindRewardClose() {
+    const closeBtn = el.btnCloseReward;
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        el.rewardMask.style.display = 'none';
+      };
+    }
+  }
+
+  function openReward({baseHQ, seconds, difficulty, rawHQ}){
+    const streakMulti = 1 + (meta.streak || 0);
+    const baseReward = Math.floor(baseHQ * streakMulti);
+    const isArcade = !!meta.arcade;
+
+    const body = el.rewardBody;
+    if(!body) return;
+
+    body.innerHTML = `
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:24px;font-weight:800;margin-bottom:4px">${baseReward}</div>
+        <div class="muted">基础奖励（连击 ×${streakMulti.toFixed(2)}）</div>
+      </div>
+      ${isArcade ? `
+        <div class="choice" id="betChoice">
+          <div class="opt" data-bet="0">不押注</div>
+          <div class="opt" data-bet="0.5">押注 ×0.5（${Math.floor(baseReward*0.5)}）</div>
+          <div class="opt" data-bet="1">押注 ×1（${baseReward}）</div>
+          <div class="opt" data-bet="2">押注 ×2（${Math.floor(baseReward*2)}）</div>
+        </div>
+        <div class="muted" style="margin-top:10px;font-size:12px">街机模式：可押注赢取更多豪情值，失败则失去基础奖励</div>
+      ` : ''}
+    `;
+
+    if(isArcade){
+      const opts = body.querySelectorAll('.opt');
+      opts.forEach(opt => {
+        opt.onclick = () => {
+          const bet = parseFloat(opt.dataset.bet);
+          if(bet === 0){
+            // 不押注，直接给基础奖励
+            state.agg.totalHQ = (state.agg.totalHQ || 0) + baseReward;
+            save(); renderKPI();
+            body.innerHTML += `<div class="result-bar result-ok" style="margin-top:16px">已领取基础奖励 +${baseReward}</div>`;
+            // [fix] 统一绑定关闭事件
+            bindRewardClose();
+          }else{
+            // 押注逻辑
+            const cost = Math.floor(baseReward * bet);
+            const chance = Math.min(0.9, 0.4 + bet * 0.25 + (meta.pity || 0)); // 基础40% + 押注倍率加成 + 怜悯机制
+            const won = Math.random() < chance;
+            const loot = won ? Math.floor(cost * (1.5 + Math.random() * 1.5)) : 0; // 赢取1.5~3倍
+            
+            if(won){
+              state.agg.totalHQ = (state.agg.totalHQ || 0) + loot;
+              meta.pity = Math.max(0, (meta.pity || 0) - ECON.pityStep);
+              body.innerHTML += `
+                <div class="result-bar result-ok" style="margin-top:16px">
+                  <div>🎉 押注成功！获得 +${loot} 豪情值</div>
+                  <div class="loots" style="margin-top:8px">
+                    <span class="loot">基础消耗：${cost}</span>
+                    <span class="loot">倍率：×${(loot/cost).toFixed(2)}</span>
+                    <span class="loot">怜悯：+${(chance*100).toFixed(1)}%</span>
+                  </div>
+                </div>
+              `;
+            }else{
+              meta.pity = (meta.pity || 0) + ECON.pityBoost;
+              body.innerHTML += `
+                <div class="result-bar result-err" style="margin-top:16px">
+                  <div>💥 押注失败，失去基础奖励 -${baseReward}</div>
+                  <div class="loots" style="margin-top:8px">
+                    <span class="loot">怜悯+${(ECON.pityBoost*100).toFixed(1)}%</span>
+                  </div>
+                </div>
+              `;
+            }
+            save(); renderKPI();
+          }
+          // [fix] 确保押注完成后始终可以关闭弹窗
+          bindRewardClose();
+        };
+      });
+    }else{
+      // 非街机模式直接给奖励
+      state.agg.totalHQ = (state.agg.totalHQ || 0) + baseReward;
+      save(); renderKPI();
+      body.innerHTML += `<div class="result-bar result-ok" style="margin-top:16px">已领取基础奖励 +${baseReward}</div>`;
+      // [fix] 统一绑定关闭事件
+      bindRewardClose();
+    }
+
+    el.rewardMask.style.display = 'flex';
+  }
+
+  /* 结束计时（最终版） */
+  function stopTimer(){
+    if(!state.active) return;
+
+    const t = getTask(state.active.taskId);
+
+    // 会话快照（先取，避免后续 UI/状态清理影响数据）
+    const sessionHQ = Math.floor(state.active.sessionHQ || 0);
+    const sessionSeconds = state.active.sessionSeconds || 0;
+    const pauses = state.active.pauses || 0;
+    const diff = t ? t.difficulty : 3;
+
+    // 写入任务与全局累计
+    if(t){
+      t.totalHQ = (t.totalHQ || 0) + sessionHQ;
+      t.totalSeconds = (t.totalSeconds || 0) + sessionSeconds;
+    }
+    state.agg.totalHQ = (state.agg.totalHQ || 0) + sessionHQ;
+    state.agg.totalSeconds = (state.agg.totalSeconds || 0) + sessionSeconds;
+
+    // 写入"今日已完成"列表
+    pushTodayDone({
+      title: t ? t.title : '未知任务',
+      difficulty: t ? t.difficulty : 3,
+      seconds: sessionSeconds,
+      hq: sessionHQ,
+      ts: Date.now()
+    });
+
+    // 计算奖励基础
+    const finalBase = applySessionModifiers(sessionHQ, sessionSeconds, diff);
+
+    // 完成即从主任务列表移除
+    state.tasks = state.tasks.filter(task => task.id !== (state.active && state.active.taskId));
+    save();
+    renderTasks();
+    renderKPI();
+
+    // 重置计时 UI
+    el.activeHint.textContent='未选择任务';
+    el.taskNameText.textContent='未开始';
+    sessionFlip.setValue(0,true);
+    el.sessionTime.textContent='0:00:00';
+    el.taskTotal.textContent = t ? Math.floor(t.totalHQ||0) : '0';
+    el.taskTime.textContent  = t ? fmtTime(t.totalSeconds||0) : '0:00:00';
+    el.rateText.textContent='0';
+    setRing(0);
+    hidePauseIndicator();
+
+    // 每日统计 + 奖励弹窗
+    onSegmentEnd_base(sessionSeconds, diff, pauses);
+    singleMissionJudge(sessionSeconds, diff, pauses);
+    openReward({ baseHQ: finalBase, seconds: sessionSeconds, difficulty: diff, rawHQ: sessionHQ });
+
+    // 清空活动态并存盘
+    state.active = null;
+    save();
+    setControls();
+
+    // 保险：确保"结束"按钮指向此最终实现
+    el.btnStop.onclick = stopTimer;
+  }
+
+  /* 动画主循环（保留） */
+  let lastFrame=performance.now();
+  function loop(now){
+    const dt=(now-lastFrame)/1000; lastFrame=now;
+    if(state.active && !state.active.isPaused){
+      const task=getTask(state.active.taskId);
+      if(task){
+        const rate=effectiveRate(baseRateOfTask(task), task.difficulty);
+        state.active.sessionSeconds += dt || 0;
+        state.active.sessionHQ += (rate || 0) * (dt || 0);
+
+        // 翻牌显示
+        const d=state.active.display; d.accTime += dt || 0;
+        while(d.accTime>=d.flipEvery && d.flipEvery>0){
+          d.accTime-=d.flipEvery;
+          const realInt=Math.floor(state.active.sessionHQ);
+          if(d.intShown<realInt){ sessionFlip.flipBy(1); d.intShown+=1; } else break;
+        }
+
+        el.sessionTime.textContent=fmtTime(state.active.sessionSeconds);
+        el.taskTotal.textContent=Math.floor((task.totalHQ||0)+(state.active.sessionHQ||0));
+        el.taskTime.textContent=fmtTime((task.totalSeconds||0)+(state.active.sessionSeconds||0));
+
+        // 环进度
+        const cycle = CYCLE_SECONDS_BASE / Math.sqrt(task.difficulty || 3);
+        state.active.ringPhase = (state.active.ringPhase + (dt || 0)) % (cycle || 20);
+        setRing(cycle ? (state.active.ringPhase / cycle) : 0);
+
+        // 总值即时显示
+        const totalValue = Math.floor((state.agg.totalHQ||0) + (state.active.sessionHQ||0));
+        kpiTotal.flipTo(totalValue);
+      }
+    }else{
+      if(state.active && state.active.isPaused){
+        const pausedFor = (performance.now() - (state.active.pausedAt || performance.now())) / 1000;
+        showPauseIndicator(pausedFor);
+      }else{
+        hidePauseIndicator();
+      }
+      kpiTotal.flipTo(Math.floor(state.agg.totalHQ || 0));
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(ts=>{lastFrame=ts; loop(ts);});
+  document.addEventListener('visibilitychange',()=>{ if(document.hidden && state.active && !state.active.isPaused){ pauseTimer(); }});
+
+  /* 事件绑定 */
+  el.arcadeToggle.checked = !!meta.arcade; el.arcadeToggle.addEventListener('change',()=>{ meta.arcade = el.arcadeToggle.checked; save(); });
+  el.btnHelp.onclick=()=>{ el.helpMask.style.display='flex'; };
+  el.btnCloseHelp.onclick=()=>{ el.helpMask.style.display='none'; };
+  el.btnDev.onclick=()=>{ el.rate1.value=RATE_BY_DIFFICULTY[1]; el.rate2.value=RATE_BY_DIFFICULTY[2]; el.rate3.value=RATE_BY_DIFFICULTY[3]; el.rate4.value=RATE_BY_DIFFICULTY[4]; el.rate5.value=RATE_BY_DIFFICULTY[5]; el.devMask.style.display='flex'; };
+  el.btnCloseDev.onclick=()=>{ el.devMask.style.display='none'; };
+  el.btnSaveRates.onclick=()=>{ const r1=parseFloat(el.rate1.value)||0, r2=parseFloat(el.rate2.value)||0, r3=parseFloat(el.rate3.value)||0, r4=parseFloat(el.rate4.value)||0, r5=parseFloat(el.rate5.value)||0; RATE_BY_DIFFICULTY={1:Math.max(0,r1),2:Math.max(0,r2),3:Math.max(0,r3),4:Math.max(0,r4),5:Math.max(0,r5)}; save(); updateRate(); pushToast('速率已保存并应用','success'); };
+  el.btnResetRates.onclick=()=>{ RATE_BY_DIFFICULTY={...DEFAULT_RATES}; save(); updateRate(); pushToast('已恢复默认速率','success'); };
+  el.devAddTicket.onclick=()=>{ meta.tickets=(meta.tickets||0)+1; save(); renderInventory(); };
+  el.devAddFreeze.onclick=()=>{ meta.freeze=(meta.freeze||0)+1; save(); renderInventory(); };
+  el.devAddHQ100.onclick=()=>{ state.agg.totalHQ+=100; save(); renderKPI(); };
+  el.devAddHQ1000.onclick=()=>{ state.agg.totalHQ+=1000; save(); renderKPI(); };
+
+  el.btnAdd.onclick=addTask; el.taskTitle.addEventListener('keydown',e=>{ if(e.key==='Enter') addTask(); });
+  el.btnClearAll.onclick=()=>{ if(confirm('清空所有任务与累计数据（不清空库存/连胜/每日/速率），确定？')){ state.tasks=[]; state.agg={totalHQ:0,totalSeconds:0}; state.active=null; save(); renderTasks(); renderKPI(); setRing(0); setControls(); el.activeHint.textContent='未选择任务'; el.taskNameText.textContent='未开始'; sessionFlip.setValue(0,true); el.sessionTime.textContent='0:00:00'; el.taskTotal.textContent='0'; el.taskTime.textContent='0:00:00'; el.rateText.textContent='0'; } };
+  el.btnStart.onclick=startTimer; el.btnPause.onclick=pauseTimer; el.btnResume.onclick=startTimer; el.btnStop.onclick=stopTimer;
+
+  // [fix] 绑定“刷新任务”按钮
+  if (el.btnDailyRefresh) {
+    el.btnDailyRefresh.onclick = () => {
+      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
+      const ok = rollMissions(false, false);
+      if (ok) {
+        // 刷新成功后，立即刷新 UI
+        save();
+        renderDaily();
+        renderInventory();
+        pushToast('已刷新每日任务', 'success');
+      }
+    };
+  };
+
+  // [fix] 绑定“刷新任务”按钮
+  if (el.btnDailyRefresh) {
+    el.btnDailyRefresh.onclick = () => {
+      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
+      const ok = rollMissions(false, false);
+      if (ok) {
+        // 刷新成功后，立即刷新 UI
+        save();
+        renderDaily();
+        renderInventory();
+        pushToast('已刷新每日任务', 'success');
+      }
+    };
+  };
+
+  // [fix] 绑定“刷新任务”按钮
+  if (el.btnDailyRefresh) {
+    el.btnDailyRefresh.onclick = () => {
+      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
+      const ok = rollMissions(false, false);
+      if (ok) {
+        // 刷新成功后，立即刷新 UI
+        save();
+        renderDaily();
+        renderInventory();
+        pushToast('已刷新每日任务', 'success');
+      }
+    };
+  };
+
+  // [fix] 绑定“刷新任务”按钮
+  if (el.btnDailyRefresh) {
+    el.btnDailyRefresh.onclick = () => {
+      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
+      const ok = rollMissions(false, false);
+      if (ok) {
+        // 刷新成功后，立即刷新 UI
+        save();
+        renderDaily();
+        renderInventory();
+        pushToast('已刷新每日任务', 'success');
+      }
+    };
+  };
+
+  // [fix] 绑定“刷新任务”按钮
+  if (el.btnDailyRefresh) {
+    el.btnDailyRefresh.onclick = () => {
+      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
+      const ok = rollMissions(false, false);
+      if (ok) {
+        // 刷新成功后，立即刷新 UI
+        save();
+        renderDaily();
+        renderInventory();
+        pushToast('已刷新每日任务', 'success');
+      }
+    };
+  };
+
+  // [fix] 绑定“刷新任务”按钮
+  if (el.btnDailyRefresh) {
+    el.btnDailyRefresh.onclick = () => {
+      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
+      const ok = rollMissions(false, false);
+      if (ok) {
+        // 刷新成功后，立即刷新 UI
+        save();
+        renderDaily();
+        renderInventory();
+        pushToast('已刷新每日任务', 'success');
+      }
+    };
+  };
+
+  // [fix] 绑定“刷新任务”按钮
+  if (el.btnDailyRefresh) {
+    el.btnDailyRefresh.onclick = () => {
+      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
+      const ok = rollMissions(false, false);
+      if (ok) {
+        // 刷新成功后，立即刷新 UI
+        save();
+        renderDaily();
+        renderInventory();
+        pushToast('已刷新每日任务', 'success');
+      }
+    };
+  };
+
+  // [fix] 绑定“刷新任务”按钮
+  if (el.btnDailyRefresh) {
+    el.btnDailyRefresh.onclick = () => {
+      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
+      const ok = rollMissions(false, false);
+      if (ok) {
+        // 刷新成功后，立即刷新 UI
+        save();
+        renderDaily();
+        renderInventory();
+        pushToast('已刷新每日任务', 'success');
+      }
+    };
+  };
+
+  // [fix] 绑定“刷新任务”按钮
+  if (el.btnDailyRefresh) {
+    el.btnDailyRefresh.onclick = () => {
+      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
+      const ok = rollMissions(false, false);
+      if (ok) {
+        // 刷新成功后，立即刷新 UI
+        save();
+        renderDaily();
+        renderInventory();
+        pushToast('已刷新每日任务', 'success');
+      }
+    };
+  };
+
+  // [fix] 绑定“刷新任务”按钮
+  if (el.btnDailyRefresh) {
+    el.btnDailyRefresh.onclick = () => {
+      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
+      const ok = rollMissions(false, false);
+      if (ok) {
+        // 刷新成功后，立即刷新 UI
+        save();
+        renderDaily();
+        renderInventory();
+        pushToast('已刷新每日任务', 'success');
+      }
+    };
+  };
+
+/* 每日任务/库存（保留核心） */
+function todayObj(){
+  const k = todayKey();
+  if (!meta.daily[k]) {
+    meta.daily[k] = {
+      progressSec: 0,
+      hardSec: 0,
+      sessions: 0,
+      zeroPauseSessions: 0,
+      missions: null,
+      refreshUsed: false,
+      done: {},
+      completed: []
+    };
+  }
+  if (!Array.isArray(meta.daily[k].completed)) {
+    meta.daily[k].completed = [];
+  }
+  return meta.daily[k];
+}
+  const FIXED_MISSIONS=[{id:'total25',type:'totalSec',need:25*60,label:'今日累计 ≥ 25 分钟',reward:{ticket:1}},{id:'total45',type:'totalSec',need:45*60,label:'今日累计 ≥ 45 分钟',reward:{freeze:1}}];
+  const RANDOM_POOL=[{id:'total90',type:'totalSec',need:90*60,label:'今日累计 ≥ 90 分钟',reward:{ticket:2}},{id:'single15',type:'singleSec',need:15*60,label:'单次 ≥ 15 分钟',reward:{ticket:1}},{id:'single30',type:'singleSec',need:30*60,label:'单次 ≥ 30 分钟',reward:{ticket:2}},{id:'hard20',type:'hardSec',need:20*60,label:'难度≥4 今日累计 ≥ 20 分钟',reward:{ticket:1}},{id:'noPause10',type:'noPauseSingle',need:10*60,label:'单次 ≥ 10 分钟且无暂停',reward:{freeze:1}},{id:'sessions3',type:'sessions',need:3,label:'今日完成 ≥ 3 次计时',reward:{ticket:1}}];
+  function addTodayProgress({seconds,difficulty,pauses}){const d=todayObj(); d.progressSec+=seconds; if(difficulty>=4) d.hardSec+=seconds; d.sessions+=1; if(pauses===0 && seconds>=10*60) d.zeroPauseSessions+=1; save(); renderDaily();}
+  function onSegmentEnd_base(seconds,difficulty,pauses){ if(seconds>=ECON.baseFloorMinSec){ meta.streak=+(meta.streak+ECON.streakStep).toFixed(2)} addTodayProgress({seconds,difficulty,pauses}); save(); }
+  function singleMissionJudge(seconds,diff,pauses){ const d=todayObj(); if(!d.missions) return; d.missions.forEach(m=>{ if(d.done[m.id]) return; if(m.type==='singleSec' && seconds>=m.need) d.done[m.id]=true; if(m.type==='noPauseSingle' && seconds>=m.need && pauses===0) d.done[m.id]=true; }); save(); renderDaily(); }
+  function rollMissions(firstFree=false,useRare=false){
+    const d=todayObj();
+    if(useRare){ if((meta.badges.rare_gem||0)<6){alert('稀有碎片不足');return false;} meta.badges.rare_gem-=6; }
+    else{ if(d.refreshUsed && (meta.tickets||0)<=0){alert('抽卡券不足（每日首次刷新免费）');return false;} if(d.refreshUsed) meta.tickets-=1; }
+    d.refreshUsed=true; const pool=[...RANDOM_POOL], pick=[]; for(let i=0;i<3;i++){const j=Math.floor(Math.random()*pool.length); pick.push(pool.splice(j,1)[0]);}
+    d.missions=[...FIXED_MISSIONS,...pick]; d.done={}; save(); renderDaily(); renderInventory(); return true;
+  }
+  function renderDaily(){
+    const d=todayObj(); if(!d.missions){rollMissions(true);return}
+    el.dailyList.innerHTML='';
+    d.missions.forEach(m=>{
+      const row=document.createElement('div');row.style='display:flex;align-items:center;justify-content:space-between;margin:6px 0';
+      const progress=(()=>{if(m.type==='totalSec')return `${fmtTime(Math.min(d.progressSec,m.need))}/${fmtTime(m.need)}`; if(m.type==='hardSec')return `${fmtTime(Math.min(d.hardSec,m.need))}/${fmtTime(m.need)}`; if(m.type==='sessions')return `${Math.min(d.sessions,m.need)}/${m.need}`; if(m.type==='singleSec')return `完成一次 ≥ ${fmtTime(m.need)}`; if(m.type==='noPauseSingle')return `完成一次 ≥ ${fmtTime(m.need)}(0暂停)`; return ''})();
+      const done=!!d.done[m.id];
+      const ok=(()=>{if(m.type==='totalSec')return d.progressSec>=m.need; if(m.type==='hardSec')return d.hardSec>=m.need; if(m.type==='sessions')return d.sessions>=m.need; return false})();
+      row.innerHTML=`<div class="muted">${m.label} ${progress?`（${progress}）`:''}</div><div><button class="btn small" ${(!ok||done)?'disabled':''}>领取</button></div>`;
+      row.querySelector('button').onclick=()=>{ if(done||!ok)return; d.done[m.id]=true; if(m.reward.ticket)meta.tickets=(meta.tickets||0)+m.reward.ticket; if(m.reward.freeze)meta.freeze=(meta.freeze||0)+m.reward.freeze; save(); renderDaily(); renderInventory(); };
+      el.dailyList.appendChild(row);
+    });
+  }
+
+  function renderInventory(){
+    ensureBadgeMeta();
+    const b=meta.badges||{}; const buff=todayBuff();
+    el.invRow.innerHTML=`<div class="badge">稀有碎片：<b>${b.rare_gem||0}</b></div><div class="badge">史诗碎片：<b>${b.epic_gem||0}</b></div><div class="badge">稀有徽章：<b>${b.rare_tokens||0}</b></div><div class="badge">史诗徽章：<b>${b.epic_tokens||0}</b></div><div class="badge">传说徽章：<b>${b.legendary_tokens||0}</b></div><div class="badge">冻结卡：<b>${meta.freeze||0}</b></div><div class="badge">抽卡券：<b>${meta.tickets||0}</b></div><div class="badge">当日速率加成：<b>${Math.round((buff.rateBuff||0)*100)}%</b></div>${meta.nextWheelBoost>1?`<div class="badge">下一次幸运轮奖池 ×${meta.nextWheelBoost.toFixed(2)}</div>`:''}`;
+    // [fix] 库存变化时同步刷新工坊按钮状态
+    renderWorkshop();
+  }
+
+  // [fix] 实现徽章工坊渲染逻辑
+  function renderWorkshop(){
+    const body = el.badgeWorkshopBody;
+    if (!body) return;
+    ensureBadgeMeta();
+    const b = meta.badges || {};
+    const rare = b.rare_gem || 0;
+    const epic = b.epic_gem || 0;
+
+    body.innerHTML = `
+      <div class="workshop-section">
+        <div class="muted" style="margin-bottom:6px">碎片库存</div>
+        <div class="badge-card">稀有碎片：<b>${rare}</b> · 史诗碎片：<b>${epic}</b></div>
+      </div>
+      <div class="workshop-section">
+        <div class="muted" style="margin-bottom:6px">合成与消耗</div>
+        <div class="loadout-grid">
+          <div class="loadout-slot">
+            <div class="muted">合成冻结卡（稀有×15）</div>
+            <button class="btn small" id="wsForgeFreeze"${rare<15?' disabled':''}>锻造</button>
+          </div>
+          <div class="loadout-slot">
+            <div class="muted">刷新每日（稀有×6）</div>
+            <button class="btn small" id="wsRareRefresh"${rare<6?' disabled':''}>使用</button>
+          </div>
+          <div class="loadout-slot">
+            <div class="muted">幸运轮强运（稀有×10）</div>
+            <button class="btn small" id="wsWheelBoost"${rare<10?' disabled':''}>注入</button>
+          </div>
+          <div class="loadout-slot">
+            <div class="muted">调速芯片 +5%（稀有×20，上限20%）</div>
+            <button class="btn small" id="wsSpeedChip"${rare<20?' disabled':''}>安装</button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // 绑定工坊按钮
+    const bind = (id, fn) => { const x = document.getElementById(id); if (x) x.onclick = fn; };
+    bind('wsForgeFreeze', forgeFreeze);
+    bind('wsRareRefresh', rareRefresh);
+    bind('wsWheelBoost', activateWheelBoost);
+    bind('wsSpeedChip', applySpeedChip);
+  }
+
+  function forgeFreeze(){ if((meta.badges.rare_gem||0)<15){alert('稀有碎片不足');return;} meta.badges.rare_gem-=15; meta.freeze=(meta.freeze||0)+1; save(); renderInventory(); pushToast('锻造成功，获得冻结卡×1','success'); }
+  function rareRefresh(){ if(rollMissions(false,true)){ save(); renderInventory(); pushToast('已使用稀有碎片刷新每日任务','success'); } }
+  function activateWheelBoost(){ if((meta.badges.rare_gem||0)<10){alert('稀有碎片不足');return;} meta.badges.rare_gem-=10; meta.nextWheelBoost=Math.min((meta.nextWheelBoost||1)*1.5,3); save(); renderInventory(); pushToast('已注入强运，下一次幸运轮提升','success'); }
+  function applySpeedChip(){ if((meta.badges.rare_gem||0)<20){alert('稀有碎片不足');return;} const buff=todayBuff(); if(buff.rateBuff>=0.20){alert('今日加成已达上限');return;} meta.badges.rare_gem-=20; buff.rateBuff=+(Math.min(0.20,(buff.rateBuff||0)+0.05).toFixed(2)); save(); renderInventory(); updateRate(); pushToast('当日基础速率 +5%','success'); }
+  el.btnForgeFreeze.onclick=forgeFreeze; el.btnRareRefresh.onclick=rareRefresh; el.btnWheelBoost.onclick=activateWheelBoost; el.btnSpeedChip.onclick=applySpeedChip;
+
+  /* 任务库逻辑 */
+  if(el.btnTaskLibrary) el.btnTaskLibrary.onclick=()=>{ el.taskLibraryMask.style.display='flex'; };
+  if(el.btnCloseTaskLibrary) el.btnCloseTaskLibrary.onclick=()=>{ el.taskLibraryMask.style.display='none'; };
+  if(el.btnImportTasks) el.btnImportTasks.onclick=()=>{
+    const inputText = (el.taskLibraryInput.value||'').trim(); if(!inputText){ pushToast('任务库输入为空','warn'); return; }
+    const lines = inputText.split('\n'); let imported=0;
+    lines.forEach(line=>{
+      const s=line.trim(); if(!s) return;
+      const parts = s.split('|'); if(parts.length!==2){ pushToast(`跳过无效行: ${s}`,'warn'); return; }
+      const title=parts[0].trim(); const difficulty=parseInt(parts[1].trim(),10);
+      if(!title || isNaN(difficulty) || difficulty<1 || difficulty>5){ pushToast(`跳过无效任务: ${s}`,'warn'); return; }
+      state.tasks.unshift({id:uid(), title, difficulty, totalHQ:0, totalSeconds:0}); imported++;
+    });
+    if(imported>0){ save(); renderTasks(); pushToast(`成功导入 ${imported} 个任务`,'success'); el.taskLibraryInput.value=''; } else { pushToast('未导入任何任务','warn'); }
+  };
+
+  /* 今日已完成 */
+  el.btnTodayDone.onclick = () => {
+    renderTodayDone();
+    el.todayDoneMask.style.display = 'flex';
+  };
+  el.btnCloseTodayDone.onclick = () => {
+    el.todayDoneMask.style.display = 'none';
+  };
+
+  /* 幸运轮入口 */
+  el.btnWheel.onclick=()=>{ if((meta.tickets||0)<=0){alert('抽卡券不足');return;} clearTicker(); el.wheelMask.style.display='flex'; if(el.wheelResult){el.wheelResult.textContent=''; el.wheelResult.classList.add('muted');} if(el.prizeTicker) el.prizeTicker.textContent='点击“开始抽奖"'; if(el.btnSpin) el.btnSpin.disabled=false; };
+  el.btnCloseWheel.onclick=()=>{ clearTicker(); el.wheelMask.style.display='none'; };
+  el.btnSpin.onclick=startNameTicker;
+
+  /* 首渲染 */
+  function renderInitial(){ renderTasks(); renderKPI(); renderDaily(); renderInventory(); renderWorkshop(); hidePauseIndicator(); setControls(); }
+  renderInitial();
+
+  // 保险：确保"结束"按钮指向此最终实现
+  el.btnStop.onclick = stopTimer;
+});
+</script>
+<!-- 登录状态区 -->
+<div id="user-info" style="margin-bottom:10px;">
+  <button id="login">用 Google 登录</button>
+  <span id="status" style="margin-left:10px;color:#9ca3af;">未登录</span>
+</div>
+
+<div>豪情值：<span id="hq">0</span></div>
+<button id="hq-add">+1</button>
+<button id="hq-sub">-1</button>
+
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyBjcUD9nAGxg5mgTA2v7mMcfD5dcWU9nTw",
+  authDomain: "haoqing-af64d.firebaseapp.com",
+  projectId: "haoqing-af64d",
+  storageBucket: "haoqing-af64d.firebasestorage.app",
+  messagingSenderId: "1025278981441",
+  appId: "1:1025278981441:web:edaf5f1aa9446246c0ddc0"
+};
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db   = firebase.firestore();
+
+const loginBtn = document.getElementById('login');
+const statusEl = document.getElementById('status');
+
+loginBtn.onclick = () => {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider).catch(console.error);
+};
+
+// 登录状态监听
+auth.onAuthStateChanged(async user => {
+  if(user){
+    statusEl.textContent = `已登录：${user.displayName}`;
+    statusEl.style.color = "#4ade80";  // 绿色表示已登录
+
+    const hqEl  = document.getElementById('hq');
+    const addBt = document.getElementById('hq-add');
+    const subBt = document.getElementById('hq-sub');
+
+    async function load(){
+      const snap = await db.collection('users').doc(user.uid)
+                    .collection('data').doc('haoqing').get();
+      return snap.exists ? snap.data().value : 0;
+    }
+
+    async function save(v){
+      await db.collection('users').doc(user.uid)
+        .collection('data').doc('haoqing')
+        .set({ value:v, updatedAt:Date.now() });
+    }
+
+    let val = await load();
+    hqEl.textContent = val;
+
+    addBt.onclick = async()=>{ val++; hqEl.textContent = val; await save(val); };
+    subBt.onclick = async()=>{ val=Math.max(0,val-1); hqEl.textContent = val; await save(val); };
+  }else{
+    statusEl.textContent = "未登录";
+    statusEl.style.color = "#9ca3af";
+  }
+});
+</script>
+
+</body>
+</html>
