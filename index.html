@@ -34,6 +34,9 @@
   .auth-status{display:none;font-size:12px;color:var(--muted);font-weight:600}
   .auth-chip.logged-in .auth-status{display:inline-flex;align-items:center;color:#4ade80}
   .auth-chip.logged-in .btn{display:none}
+  .mobile-tabs{display:none;gap:10px;margin-bottom:12px}
+  .mobile-tabs .tab-btn{flex:1;display:inline-flex;align-items:center;justify-content:center;padding:10px;border-radius:10px;border:1px solid var(--border);background:rgba(15,20,32,.6);color:var(--muted);font-size:13px;cursor:pointer;transition:background .2s ease,color .2s ease,border-color .2s ease}
+  .mobile-tabs .tab-btn.active{background:var(--primary);color:#fff;border-color:transparent;font-weight:600}
   .tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px;border-radius:999px;background:#0f1420;border:1px solid var(--border);color:var(--muted)}
   .tasks{display:flex;flex-direction:column;gap:10px}
   .task{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.02)}
@@ -99,6 +102,7 @@
     .auth-chip{gap:8px}
     .auth-chip .btn{flex:1}
     .auth-chip .auth-status{justify-content:flex-start}
+    .mobile-tabs{display:flex;position:sticky;top:8px;z-index:20;padding:4px 0;backdrop-filter:blur(10px);background:rgba(14,17,23,.88);border-radius:12px}
     .grid{gap:12px}
     .card .bd{padding:12px}
     .row{flex-direction:column;align-items:stretch}
@@ -115,6 +119,7 @@
     .timer-kpis{gap:10px}
     .timer-kpis .pill{width:100%;justify-content:space-between;display:flex}
     .toast-container{top:16px;right:16px}
+    .mobile-hidden{display:none!important}
   }
 </style>
 </head>
@@ -135,8 +140,13 @@
     </div>
   </header>
 
+  <div class="mobile-tabs" aria-label="移动端视图切换">
+    <button class="tab-btn active" data-mobile-target="tasksCard">任务与奖励</button>
+    <button class="tab-btn" data-mobile-target="timerCard">计时面板</button>
+  </div>
+
   <div class="grid">
-    <section class="card">
+    <section class="card mobile-panel" id="tasksCard">
       <div class="hd">
         <h2 style="margin:0;font-size:16px">任务清单</h2>
         <span class="muted">创建 → 选择 → 继续/暂停/开始/结束</span>
@@ -194,7 +204,7 @@
       </div>
     </section>
 
-    <section class="card timer">
+    <section class="card timer mobile-panel" id="timerCard">
       <div class="hd">
         <h2 style="margin:0;font-size:16px">计时与豪情值</h2>
         <span class="muted" id="activeHint">未选择任务</span>
@@ -658,6 +668,48 @@ window.AppSync = {
 
   const sessionFlip = new FlipCounter($('#sessionFlip'),{digits:6,comma:true});
   const kpiTotal = new FlipCounter(el.kpiTotalWrap,{digits:10,small:true,comma:true});
+  const mobileTabButtons = document.querySelectorAll('.mobile-tabs .tab-btn');
+  const mobilePanels = document.querySelectorAll('.mobile-panel');
+  const mobileMedia = window.matchMedia('(max-width: 720px)');
+  let activeMobilePanel = 'tasksCard';
+
+  function setMobilePanel(id){
+    activeMobilePanel = id;
+    mobilePanels.forEach(panel=>{
+      if(!panel) return;
+      const hidden = mobileMedia.matches && panel.id !== id;
+      panel.classList.toggle('mobile-hidden', hidden);
+    });
+    mobileTabButtons.forEach(btn=>{
+      if(!btn.dataset.mobileTarget) return;
+      btn.classList.toggle('active', btn.dataset.mobileTarget === id);
+    });
+  }
+
+  function applyMobileLayout(){
+    if(mobileMedia.matches){
+      setMobilePanel(activeMobilePanel || 'tasksCard');
+    }else{
+      mobilePanels.forEach(panel=>panel.classList.remove('mobile-hidden'));
+      mobileTabButtons.forEach(btn=>btn.classList.remove('active'));
+    }
+  }
+
+  mobileTabButtons.forEach(btn=>{
+    btn.addEventListener('click',()=>{
+      const target = btn.dataset.mobileTarget;
+      if(target){
+        setMobilePanel(target);
+      }
+    });
+  });
+
+  if(mobileMedia.addEventListener){
+    mobileMedia.addEventListener('change',applyMobileLayout);
+  }else if(mobileMedia.addListener){
+    mobileMedia.addListener(applyMobileLayout);
+  }
+  applyMobileLayout();
 
   /* 幸运轮名称跳动器（简化） */
   let tickerTimer = null, tickerTimeout = null, tickerIndex = 0;
