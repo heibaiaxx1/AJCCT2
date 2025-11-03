@@ -1239,10 +1239,6 @@ function todayObj(){
   <span id="status" style="margin-left:10px;color:#9ca3af;">未登录</span>
 </div>
 
-<div>豪情值：<span id="hq">0</span></div>
-<button id="hq-add">+1</button>
-<button id="hq-sub">-1</button>
-
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -1327,5 +1323,122 @@ loginBtn.onclick = () => {
 });
 </script>
 
-</body>
+<script>
+(() => {
+  // 使用全局 firebase 实例，避免重复声明现有 const 变量
+  const auth = firebase.auth();
+  const db   = firebase.firestore();
+
+  // 安全获取 DOM
+  const statusEl = document.getElementById('status');
+  const hqEl  = document.getElementById('hq');
+  const addBt = document.getElementById('hq-add');
+  const subBt = document.getElementById('hq-sub');
+
+  // 工具：对演示区进行对齐至 haoqing_agg_v1（与主应用一致）
+  function wireDemoToAgg(user) {
+    if (!hqEl || !addBt || !subBt) return;
+
+    const AGG_DOC_ID = 'haoqing_agg_v1';
+    const aggDocRef = db.collection('users')
+                        .doc(user.uid)
+                        .collection('haoqing')
+                        .doc(AGG_DOC_ID);
+
+    async function loadAggTotalHQ() {
+      const snap = await aggDocRef.get();
+      if (!snap.exists) return 0;
+      const d = snap.data();
+      return (d && d.value && typeof d.value.totalHQ === 'number') ? d.value.totalHQ : 0;
+    }
+
+    async function saveAggTotalHQ(newTotalHQ) {
+      const now = Date.now();
+      let totalSeconds = 0;
+      try {
+        const snap = await aggDocRef.get();
+        if (snap.exists && snap.data() && snap.data().value) {
+          const v = snap.data().value;
+          totalSeconds = typeof v.totalSeconds === 'number' ? v.totalSeconds : 0;
+        }
+      } catch (e) {
+        console.warn('readAgg before save error:', e);
+      }
+      await aggDocRef.set({
+        value: { totalHQ: newTotalHQ, totalSeconds },
+        updatedAt: now
+      }, { merge: true });
+    }
+
+    // 初次加载并订阅实时变化
+    loadAggTotalHQ().then(val => { hqEl.textContent = val; }).catch(console.warn);
+
+    // 去抖：先清空旧 onclick，再重绑
+    addBt.onclick = null;
+    subBt.onclick = null;
+
+    // 实时订阅，跨端同步可见
+    aggDocRef.onSnapshot(snap => {
+      if (!snap.exists) return;
+      const d = snap.data();
+      if (d && d.value && typeof d.value.totalHQ === 'number') {
+        hqEl.textContent = d.value.totalHQ;
+      }
+    });
+
+    // 重绑按钮逻辑到聚合文档
+    addBt.onclick = async () => {
+      const current = parseInt(hqEl.textContent || '0', 10) || 0;
+      const next = current + 1;
+      hqEl.textContent = next;
+      await saveAggTotalHQ(next);
+    };
+    subBt.onclick = async () => {
+      const current = parseInt(hqEl.textContent || '0', 10) || 0;
+      const next = Math.max(0, current - 1);
+      hqEl.textContent = next;
+      await saveAggTotalHQ(next);
+    };
+  }
+
+  // 追加一个独立的 auth 监听器，不替换原有监听器
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      if (statusEl) {
+        statusEl.textContent = `已登录：${user.displayName}`;
+        statusEl.style.color = '#4ade80';
+      }
+
+      // 关键：接上你的 AppSync，用于 LS_META/LS_AGG/LS_KEY/LS_RATES 的合并与订阅
+      if (window.AppSync && typeof window.AppSync.setUser === 'function') {
+        try {
+          await window.AppSync.setUser(user, db);
+        } catch (e) {
+          console.warn('AppSync.setUser error:', e);
+        }
+      }
+
+      // 对齐演示区到底层聚合文档（含 onSnapshot 实时）
+      wireDemoToAgg(user);
+
+    } else {
+      if (statusEl) {
+        statusEl.textContent = '未登录';
+        statusEl.style.color = '#9ca3af';
+      }
+      // 关闭订阅
+      if (window.AppSync && typeof window.AppSync.setUser === 'function') {
+        try {
+          await window.AppSync.setUser(null);
+        } catch (e) {
+          console.warn('AppSync.clear error:', e);
+        }
+      }
+      if (hqEl) hqEl.textContent = '0';
+      if (addBt) addBt.onclick = null;
+      if (subBt) subBt.onclick = null;
+    }
+  });
+})();
+</script>
 </html>
