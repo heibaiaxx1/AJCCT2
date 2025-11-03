@@ -30,6 +30,10 @@
   .btn[disabled]{opacity:.55;cursor:not-allowed}
   .kpi{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   .kpi .chip{padding:6px 10px;border-radius:10px;border:1px dashed var(--border);font-size:12px;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .auth-chip .btn{white-space:nowrap}
+  .auth-status{display:none;font-size:12px;color:var(--muted);font-weight:600}
+  .auth-chip.logged-in .auth-status{display:inline-flex;align-items:center;color:#4ade80}
+  .auth-chip.logged-in .btn{display:none}
   .tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 8px;border-radius:999px;background:#0f1420;border:1px solid var(--border);color:var(--muted)}
   .tasks{display:flex;flex-direction:column;gap:10px}
   .task{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.02)}
@@ -97,6 +101,10 @@
       <span class="chip"><button class="btn small" id="btnHelp">帮助 ❓</button></span>
       <label class="chip"><input type="checkbox" id="arcadeMode" /> 街机模式</label>
       <span class="chip"><button class="btn small" id="btnDev">调试 ⚙️</button></span>
+      <span class="chip auth-chip" id="authChip">
+        <button class="btn small primary" id="login">用 Google 登录</button>
+        <span class="auth-status" id="status">未登录</span>
+      </span>
     </div>
   </header>
 
@@ -1233,12 +1241,6 @@ function todayObj(){
   el.btnStop.onclick = stopTimer;
 });
 </script>
-<!-- 登录状态区 -->
-<div id="user-info" style="margin-bottom:10px;">
-  <button id="login">用 Google 登录</button>
-  <span id="status" style="margin-left:10px;color:#9ca3af;">未登录</span>
-</div>
-
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
@@ -1259,16 +1261,32 @@ const db   = firebase.firestore();
 
 const loginBtn = document.getElementById('login');
 const statusEl = document.getElementById('status');
+const authChip = document.getElementById('authChip');
 
-loginBtn.onclick = () => {
-  const provider = new firebase.auth.GoogleAuthProvider();
-  auth.signInWithPopup(provider).catch(console.error);
-};
+function updateAuthUI(user){
+  if(!authChip || !statusEl || !loginBtn) return;
+  if(user){
+    authChip.classList.add('logged-in');
+    statusEl.textContent = `已登录：${user.displayName || 'Google 用户'}`;
+  }else{
+    authChip.classList.remove('logged-in');
+    statusEl.textContent = '未登录';
+  }
+}
+window.updateAuthUI = updateAuthUI;
+updateAuthUI(null);
+
+if(loginBtn){
+  loginBtn.onclick = () => {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider).catch(console.error);
+  };
+}
 
 // 登录状态监听
  auth.onAuthStateChanged(async user => {
+   updateAuthUI(user);
    if(user){
-     statusEl.textContent = `已登录：${user.displayName}`;
      // 启用云同步（把 db 传入）
      if (window.AppSync && typeof window.AppSync.setUser === 'function') {
        window.AppSync.setUser(user, db);
@@ -1281,8 +1299,6 @@ loginBtn.onclick = () => {
     } else {
       window.AppSync && window.AppSync.setUser && window.AppSync.setUser(user, db);
     }
-    statusEl.style.color = "#4ade80";  // 绿色表示已登录
-
     const hqEl  = document.getElementById('hq');
     const addBt = document.getElementById('hq-add');
     const subBt = document.getElementById('hq-sub');
@@ -1305,8 +1321,6 @@ loginBtn.onclick = () => {
     addBt.onclick = async()=>{ val++; hqEl.textContent = val; await save(val); };
     subBt.onclick = async()=>{ val=Math.max(0,val-1); hqEl.textContent = val; await save(val); };
    }else{
-     statusEl.textContent = "未登录";
-     statusEl.style.color = "#9ca3af";
      // 关闭云同步
      if (window.AppSync && typeof window.AppSync.setUser === 'function') {
        window.AppSync.setUser(null, null);
@@ -1330,7 +1344,6 @@ loginBtn.onclick = () => {
   const db   = firebase.firestore();
 
   // 安全获取 DOM
-  const statusEl = document.getElementById('status');
   const hqEl  = document.getElementById('hq');
   const addBt = document.getElementById('hq-add');
   const subBt = document.getElementById('hq-sub');
@@ -1403,12 +1416,10 @@ loginBtn.onclick = () => {
 
   // 追加一个独立的 auth 监听器，不替换原有监听器
   auth.onAuthStateChanged(async (user) => {
+    if (typeof window.updateAuthUI === 'function') {
+      window.updateAuthUI(user);
+    }
     if (user) {
-      if (statusEl) {
-        statusEl.textContent = `已登录：${user.displayName}`;
-        statusEl.style.color = '#4ade80';
-      }
-
       // 关键：接上你的 AppSync，用于 LS_META/LS_AGG/LS_KEY/LS_RATES 的合并与订阅
       if (window.AppSync && typeof window.AppSync.setUser === 'function') {
         try {
@@ -1422,10 +1433,6 @@ loginBtn.onclick = () => {
       wireDemoToAgg(user);
 
     } else {
-      if (statusEl) {
-        statusEl.textContent = '未登录';
-        statusEl.style.color = '#9ca3af';
-      }
       // 关闭订阅
       if (window.AppSync && typeof window.AppSync.setUser === 'function') {
         try {
