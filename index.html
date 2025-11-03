@@ -89,6 +89,33 @@
   .toast-container{position:fixed;top:24px;right:24px;display:flex;flex-direction:column;gap:10px;z-index:120;pointer-events:none}
   .toast{background:rgba(15,20,32,.92);border:1px solid var(--border);border-left:4px solid var(--primary);padding:10px 14px;border-radius:12px;color:var(--text);min-width:220px;max-width:320px;box-shadow:var(--shadow);opacity:0;transform:translateY(14px);transition:opacity .3s ease,transform .3s ease}
   .toast.show{opacity:1;transform:translateY(0)}
+  @media (max-width:720px){
+    .app{padding:0 12px;margin:16px auto 48px}
+    header{flex-direction:column;align-items:flex-start;gap:12px}
+    h1{font-size:16px}
+    .kpi{width:100%;gap:8px}
+    .kpi .chip{width:100%;justify-content:space-between}
+    .kpi .chip .btn{width:100%}
+    .auth-chip{gap:8px}
+    .auth-chip .btn{flex:1}
+    .auth-chip .auth-status{justify-content:flex-start}
+    .grid{gap:12px}
+    .card .bd{padding:12px}
+    .row{flex-direction:column;align-items:stretch}
+    .row > *{width:100%}
+    .tasks{gap:12px}
+    .task{display:flex;flex-direction:column;align-items:stretch;gap:8px}
+    .task .controls{display:flex;gap:8px}
+    .task .controls .btn{flex:1}
+    .task > div:last-child .btn{width:100%}
+    .section-2col{grid-template-columns:1fr;gap:12px}
+    .timer{min-height:440px}
+    .timer .bd{padding:18px}
+    .ring-wrap{width:min(260px,80vw);height:min(260px,80vw)}
+    .timer-kpis{gap:10px}
+    .timer-kpis .pill{width:100%;justify-content:space-between;display:flex}
+    .toast-container{top:16px;right:16px}
+  }
 </style>
 </head>
 <body>
