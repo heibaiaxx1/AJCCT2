@@ -400,7 +400,175 @@ const MAX_FLIPS_PER_SECOND=8, CYCLE_SECONDS_BASE=20, CIRCUM=2*Math.PI*90;
 
 /* ========== 主逻辑 ========== */
 document.addEventListener('DOMContentLoaded',()=>{
-  const LS_KEY="haoqing_tasks_v1", LS_AGG="haoqing_agg_v1", LS_META="haoqing_meta_v1", LS_RATES="haoqing_rates_v1";
+const LS_KEY="haoqing_tasks_v1", LS_AGG="haoqing_agg_v1", LS_META="haoqing_meta_v1", LS_RATES="haoqing_rates_v1";
+
+// === Cloud Sync（Firestore 适配） ===
+let CLOUD = { 
+  enabled: false,
+  uid: null,
+  col: null,
+  docIdMap: { 
+    [LS_KEY]: LS_KEY,
+    [LS_AGG]: LS_AGG,
+    [LS_META]: LS_META,
+    [LS_RATES]: LS_RATES
+  },
+  async get(key){
+    if(!this.enabled || !this.col) return null;
+    const snap = await this.col.doc(this.docIdMap[key] || key).get();
+    return snap.exists ? snap.data() : null; // { value, updatedAt }
+  },
+  async set(key, value){
+    if(!this.enabled || !this.col) return;
+    await this.col.doc(this.docIdMap[key] || key).set({
+      value, 
+      updatedAt: Date.now()
+    }, { merge: true });
+  },
+  subscribeUnsubMap: {},
+  subscribe(key, cb){
+    if(!this.enabled || !this.col) return () => {};
+    const ref = this.col.doc(this.docIdMap[key] || key);
+    const unsub = ref.onSnapshot(snap=>{
+      if(!snap.exists) return;
+      const d = snap.data();
+      cb({ 
+        key,
+        value: d.value,
+        updatedAt: d.updatedAt || 0 
+      });
+    });
+    this.subscribeUnsubMap[key] = unsub;
+    return unsub;
+  },
+  unsubscribeAll(){
+    Object.values(this.subscribeUnsubMap).forEach(fn=>{
+      try{fn();}
+      catch{}
+    });
+    this.subscribeUnsubMap = {};
+  }
+};
+
+// ———— 本地读写加时间戳（用于合并） ————
+function readWithUpdatedAt(key, fallback){
+  const v = readJSON(key, fallback);
+  const u = readJSON(key + '__updatedAt', 0);
+  return { value: v, updatedAt: u || 0 };
+}
+
+function writeWithUpdatedAt(key, value, updatedAt){
+  writeJSON(key, value);
+  writeJSON(key + '__updatedAt', updatedAt || Date.now());
+}
+
+// ———— 首次登录后的：合并 + 订阅 ————
+async function initialCloudMergeAndSubscribe(){
+  const keys = [LS_KEY, LS_AGG, LS_META, LS_RATES];
+  for(const key of keys){
+    // 准备本地默认
+    const localDefault = key===LS_KEY ? [] : 
+                         key===LS_AGG ? {totalHQ:0,totalSeconds:0} : 
+                         key===LS_META ? meta : 
+                         key===LS_RATES ? RATE_BY_DIFFICULTY : null;
+    const local = readWithUpdatedAt(key, localDefault);
+    let remote = await CLOUD.get(key); // { value, updatedAt }
+
+    if(!remote){
+      await CLOUD.set(key, local.value);
+      writeWithUpdatedAt(key, local.value, Date.now());
+    }else{
+      const ru = remote.updatedAt || 0;
+      const lu = local.updatedAt || 0;
+      if(ru > lu){
+        // 远端更新 → 覆盖内存与本地
+        if(key===LS_KEY){
+          state.tasks = Array.isArray(remote.value)?remote.value:[]; 
+        }
+        if(key===LS_AGG){
+          state.agg = remote.value || {totalHQ:0,totalSeconds:0};
+        }
+        if(key===LS_META){
+          meta = remote.value || meta;
+          ensureBadgeMeta();
+        }
+        if(key===LS_RATES){
+          RATE_BY_DIFFICULTY = {...RATE_BY_DIFFICULTY, ...(remote.value||{})};
+        }
+        writeWithUpdatedAt(key, remote.value, ru);
+      }else{
+        // 本地更新 → 推上远端
+        await CLOUD.set(key, local.value);
+        writeWithUpdatedAt(key, local.value, Date.now());
+      }
+    }
+  }
+
+  // 合并完刷新一次
+  renderTasks();
+  renderKPI();
+  renderDaily();
+  renderInventory();
+  renderWorkshop();
+  hidePauseIndicator();
+  setControls();
+
+  // 远端订阅：跨设备/多标签页实时同步
+  CLOUD.unsubscribeAll();
+  CLOUD.subscribe(LS_KEY, ({value,updatedAt})=>{
+    const localU = readJSON(LS_KEY+'__updatedAt',0);
+    if((updatedAt||0) > (localU||0)){
+      state.tasks = Array.isArray(value)?value:[]; 
+      writeWithUpdatedAt(LS_KEY, state.tasks, updatedAt);
+      renderTasks();
+    }
+  });
+  CLOUD.subscribe(LS_AGG, ({value,updatedAt})=>{
+    const localU = readJSON(LS_AGG+'__updatedAt',0);
+    if((updatedAt||0) > (localU||0)){
+      state.agg = value || {totalHQ:0,totalSeconds:0};
+      writeWithUpdatedAt(LS_AGG, state.agg, updatedAt);
+      renderKPI();
+    }
+  });
+  CLOUD.subscribe(LS_META, ({value,updatedAt})=>{
+    const localU = readJSON(LS_META+'__updatedAt',0);
+    if((updatedAt||0) > (localU||0)){
+      meta = value || meta;
+      ensureBadgeMeta();
+      writeWithUpdatedAt(LS_META, meta, updatedAt);
+      renderDaily();
+      renderInventory();
+      renderWorkshop();
+      setControls();
+    }
+  });
+  CLOUD.subscribe(LS_RATES, ({value,updatedAt})=>{
+    const localU = readJSON(LS_RATES+'__updatedAt',0);
+    if((updatedAt||0) > (localU||0)){
+      RATE_BY_DIFFICULTY = {...DEFAULT_RATES, ...(value||{})};
+      writeWithUpdatedAt(LS_RATES, RATE_BY_DIFFICULTY, updatedAt);
+      updateRate();
+    }
+  });
+}
+
+// ———— 暴露给最底部 Firebase 登录脚本调用 ————
+window.AppSync = {
+  async setUser(user, dbInstance){
+    if(user){
+      CLOUD.enabled = true;
+      CLOUD.uid = user.uid;
+      CLOUD.col = dbInstance.collection('users').doc(user.uid).collection('haoqing');
+      await initialCloudMergeAndSubscribe();
+    }else{
+      CLOUD.enabled = false;
+      CLOUD.uid = null;
+      CLOUD.col = null;
+      CLOUD.unsubscribeAll();
+    }
+  }
+};
   const DEFAULT_RATES={1:1,2:2,3:4,4:7,5:11};
   let RATE_BY_DIFFICULTY = (()=>{ const r=readJSON(LS_RATES,{}); return {...DEFAULT_RATES,...r} })();
   let state = { tasks: readJSON(LS_KEY, []), agg: readJSON(LS_AGG, {totalHQ:0,totalSeconds:0}), active:null };
@@ -486,7 +654,31 @@ document.addEventListener('DOMContentLoaded',()=>{
   function fmtPause(sec){ sec=Math.max(0,Math.floor(sec||0)); const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60; const pad=n=>n.toString().padStart(2,'0'); return h>0?`${h}:${pad(m)}:${pad(s)}`:`${m}:${pad(s)}`;}
   function todayKey(){ return new Date().toISOString().slice(0,10); }
 
-  function save(){ writeJSON(LS_KEY, state.tasks); writeJSON(LS_AGG, state.agg); writeJSON(LS_META, meta); writeJSON(LS_RATES, RATE_BY_DIFFICULTY); }
+function save(){
+  // 本地：写值 + 写时间戳（用于首轮合并时的胜出判断）
+  const now = Date.now();
+  writeWithUpdatedAt(LS_KEY,   state.tasks,           now);
+  writeWithUpdatedAt(LS_AGG,   state.agg,             now);
+  writeWithUpdatedAt(LS_META,  meta,                  now);
+  writeWithUpdatedAt(LS_RATES, RATE_BY_DIFFICULTY,    now);
+
+  // 云：若已登录则在空闲时段推送，不阻塞 UI 帧
+  if (CLOUD.enabled) {
+    const idle = window.requestIdleCallback || (fn => setTimeout(fn, 200));
+    idle(async () => {
+      try {
+        await Promise.all([
+          CLOUD.set(LS_KEY,   state.tasks),
+          CLOUD.set(LS_AGG,   state.agg),
+          CLOUD.set(LS_META,  meta),
+          CLOUD.set(LS_RATES, RATE_BY_DIFFICULTY),
+        ]);
+      } catch (e) {
+        console.warn('Cloud save error:', e);
+      }
+    });
+  }
+}
 
   function pushToast(message, variant='info'){
     const wrap = el.toastWrap || document.getElementById('toastContainer'); if(!wrap) return;
@@ -898,141 +1090,6 @@ function setControls(){
     };
   };
 
-  // [fix] 绑定“刷新任务”按钮
-  if (el.btnDailyRefresh) {
-    el.btnDailyRefresh.onclick = () => {
-      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
-      const ok = rollMissions(false, false);
-      if (ok) {
-        // 刷新成功后，立即刷新 UI
-        save();
-        renderDaily();
-        renderInventory();
-        pushToast('已刷新每日任务', 'success');
-      }
-    };
-  };
-
-  // [fix] 绑定“刷新任务”按钮
-  if (el.btnDailyRefresh) {
-    el.btnDailyRefresh.onclick = () => {
-      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
-      const ok = rollMissions(false, false);
-      if (ok) {
-        // 刷新成功后，立即刷新 UI
-        save();
-        renderDaily();
-        renderInventory();
-        pushToast('已刷新每日任务', 'success');
-      }
-    };
-  };
-
-  // [fix] 绑定“刷新任务”按钮
-  if (el.btnDailyRefresh) {
-    el.btnDailyRefresh.onclick = () => {
-      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
-      const ok = rollMissions(false, false);
-      if (ok) {
-        // 刷新成功后，立即刷新 UI
-        save();
-        renderDaily();
-        renderInventory();
-        pushToast('已刷新每日任务', 'success');
-      }
-    };
-  };
-
-  // [fix] 绑定“刷新任务”按钮
-  if (el.btnDailyRefresh) {
-    el.btnDailyRefresh.onclick = () => {
-      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
-      const ok = rollMissions(false, false);
-      if (ok) {
-        // 刷新成功后，立即刷新 UI
-        save();
-        renderDaily();
-        renderInventory();
-        pushToast('已刷新每日任务', 'success');
-      }
-    };
-  };
-
-  // [fix] 绑定“刷新任务”按钮
-  if (el.btnDailyRefresh) {
-    el.btnDailyRefresh.onclick = () => {
-      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
-      const ok = rollMissions(false, false);
-      if (ok) {
-        // 刷新成功后，立即刷新 UI
-        save();
-        renderDaily();
-        renderInventory();
-        pushToast('已刷新每日任务', 'success');
-      }
-    };
-  };
-
-  // [fix] 绑定“刷新任务”按钮
-  if (el.btnDailyRefresh) {
-    el.btnDailyRefresh.onclick = () => {
-      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
-      const ok = rollMissions(false, false);
-      if (ok) {
-        // 刷新成功后，立即刷新 UI
-        save();
-        renderDaily();
-        renderInventory();
-        pushToast('已刷新每日任务', 'success');
-      }
-    };
-  };
-
-  // [fix] 绑定“刷新任务”按钮
-  if (el.btnDailyRefresh) {
-    el.btnDailyRefresh.onclick = () => {
-      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
-      const ok = rollMissions(false, false);
-      if (ok) {
-        // 刷新成功后，立即刷新 UI
-        save();
-        renderDaily();
-        renderInventory();
-        pushToast('已刷新每日任务', 'success');
-      }
-    };
-  };
-
-  // [fix] 绑定“刷新任务”按钮
-  if (el.btnDailyRefresh) {
-    el.btnDailyRefresh.onclick = () => {
-      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
-      const ok = rollMissions(false, false);
-      if (ok) {
-        // 刷新成功后，立即刷新 UI
-        save();
-        renderDaily();
-        renderInventory();
-        pushToast('已刷新每日任务', 'success');
-      }
-    };
-  };
-
-  // [fix] 绑定“刷新任务”按钮
-  if (el.btnDailyRefresh) {
-    el.btnDailyRefresh.onclick = () => {
-      // 走普通刷新：首次免费，其后扣 1 张抽卡券（逻辑在 rollMissions 内部处理）
-      const ok = rollMissions(false, false);
-      if (ok) {
-        // 刷新成功后，立即刷新 UI
-        save();
-        renderDaily();
-        renderInventory();
-        pushToast('已刷新每日任务', 'success');
-      }
-    };
-  };
-
 /* 每日任务/库存（保留核心） */
 function todayObj(){
   const k = todayKey();
@@ -1213,9 +1270,21 @@ loginBtn.onclick = () => {
 };
 
 // 登录状态监听
-auth.onAuthStateChanged(async user => {
-  if(user){
-    statusEl.textContent = `已登录：${user.displayName}`;
+ auth.onAuthStateChanged(async user => {
+   if(user){
+     statusEl.textContent = `已登录：${user.displayName}`;
+     // 启用云同步（把 db 传入）
+     if (window.AppSync && typeof window.AppSync.setUser === 'function') {
+       window.AppSync.setUser(user, db);
+     } else {
+       window.AppSync && window.AppSync.setUser && window.AppSync.setUser(user, db);
+     }
+    // 启用云同步（把 db 传入）
+    if (window.AppSync && typeof window.AppSync.setUser === 'function') {
+      window.AppSync.setUser(user, db);
+    } else {
+      window.AppSync && window.AppSync.setUser && window.AppSync.setUser(user, db);
+    }
     statusEl.style.color = "#4ade80";  // 绿色表示已登录
 
     const hqEl  = document.getElementById('hq');
@@ -1239,9 +1308,21 @@ auth.onAuthStateChanged(async user => {
 
     addBt.onclick = async()=>{ val++; hqEl.textContent = val; await save(val); };
     subBt.onclick = async()=>{ val=Math.max(0,val-1); hqEl.textContent = val; await save(val); };
-  }else{
-    statusEl.textContent = "未登录";
-    statusEl.style.color = "#9ca3af";
+   }else{
+     statusEl.textContent = "未登录";
+     statusEl.style.color = "#9ca3af";
+     // 关闭云同步
+     if (window.AppSync && typeof window.AppSync.setUser === 'function') {
+       window.AppSync.setUser(null, null);
+     } else {
+       window.AppSync && window.AppSync.setUser && window.AppSync.setUser(null, null);
+     }
+    // 关闭云同步
+    if (window.AppSync && typeof window.AppSync.setUser === 'function') {
+      window.AppSync.setUser(null, null);
+    } else {
+      window.AppSync && window.AppSync.setUser && window.AppSync.setUser(null, null);
+    }
   }
 });
 </script>
