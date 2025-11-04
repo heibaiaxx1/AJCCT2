@@ -589,6 +589,19 @@
         </div>
       </div>
       <div class="control-group">
+        <h4>奖励阶段配置</h4>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;">
+            <div><label class="muted">基础胜率</label><input class="dev-input" type="number" id="devRewardBaseChance" min="0" max="1" step="0.01"></div>
+            <div><label class="muted">押注系数</label><input class="dev-input" type="number" id="devRewardBetCoeff" min="0" step="0.01"></div>
+            <div><label class="muted">最高胜率</label><input class="dev-input" type="number" id="devRewardMaxChance" min="0" max="1" step="0.01"></div>
+            <div><label class="muted">怜悯值增量</label><input class="dev-input" type="number" id="devRewardPityInc" min="0" step="0.001"></div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+            <button class="btn primary" id="btnSaveRewardParams">保存赔率</button>
+            <button class="btn" id="btnResetRewardParams">恢复默认</button>
+        </div>
+      </div>
+      <div class="control-group">
           <h4>资源编辑器</h4>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px 8px;">
               <div><label class="muted">总豪情值</label><input class="dev-input" type="number" id="devTotalHQ"></div>
@@ -626,6 +639,12 @@
 
 <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 <div id="completion-animation-container" class="completion-animation-container"></div>
+
+<!-- Sound Effects -->
+<audio id="tasksAudio" src="https://raw.githubusercontent.com/wuzhi-dev/haoqing/main/assets/tasks-audio.mp3" preload="auto"></audio>
+<audio id="timerAudio" src="https://raw.githubusercontent.com/wuzhi-dev/haoqing/main/assets/timer-audio.mp3" preload="auto"></audio>
+<audio id="backpackAudio" src="https://raw.githubusercontent.com/wuzhi-dev/haoqing/main/assets/backpack-audio.mp3" preload="auto"></audio>
+<audio id="clubAudio" src="https://raw.githubusercontent.com/wuzhi-dev/haoqing/main/assets/club-audio.mp3" preload="auto"></audio>
 
 <nav class="bottom-nav" aria-label="移动端视图切换">
   <button class="tab-btn active" data-mobile-target="tasksCard">
@@ -746,7 +765,7 @@ class FlipCounter{
 }
 
 /* 经济参数/常量 */
-const ECON={k:0.0009, baseFloorMinSec:180, streakStep:0.1, pauseBreakSec:90, bonusCapRatio:3, pityStep:1, pityBoost:0.015};
+const ECON={k:0.0009, baseFloorMinSec:180, streakStep:0.1, pauseBreakSec:90, bonusCapRatio:3, pityStep:1};
 const LOOT_TABLE=[{id:'rare_gem',name:'稀有徽章碎片',rarity:'rare',p:0.22},{id:'epic_gem',name:'史诗徽章碎片',rarity:'epic',p:0.06},{id:'freeze_card',name:'冻结卡',rarity:'rare',p:0.10},{id:'ticket',name:'抽卡券',rarity:'rare',p:0.12}];
 const REWARD_TYPES={
   hq:{label:'豪情值',apply:amt=>{state.agg.totalHQ=(state.agg.totalHQ||0)+amt;}},
@@ -767,7 +786,8 @@ const LS_KEYS = {
     AGG: "haoqing_agg_v1",
     META: "haoqing_meta_v1",
     RATES: "haoqing_rates_v1",
-    FUNSHOP: "haoqing_funshop_v1"
+    FUNSHOP: "haoqing_funshop_v1",
+    REWARD_PARAMS: "haoqing_reward_params_v1"
 };
 
 // === Cloud Sync（Firestore 适配） ===
@@ -780,7 +800,8 @@ let CLOUD = {
     [LS_KEYS.AGG]: LS_KEYS.AGG,
     [LS_KEYS.META]: LS_KEYS.META,
     [LS_KEYS.RATES]: LS_KEYS.RATES,
-    [LS_KEYS.FUNSHOP]: LS_KEYS.FUNSHOP
+    [LS_KEYS.FUNSHOP]: LS_KEYS.FUNSHOP,
+    [LS_KEYS.REWARD_PARAMS]: LS_KEYS.REWARD_PARAMS
   },
   async get(key){
     if(!this.enabled || !this.col) return null;
@@ -839,14 +860,16 @@ async function initialCloudMergeAndSubscribe(){
       [LS_KEYS.AGG]: (v) => { state.agg = v || { totalHQ: 0, totalSeconds: 0 }; },
       [LS_KEYS.META]: (v) => { meta = v || meta; ensureBadgeMeta(); },
       [LS_KEYS.RATES]: (v) => { RATE_BY_DIFFICULTY = { ...DEFAULT_RATES, ...(v || {}) }; },
-      [LS_KEYS.FUNSHOP]: (v) => { FUNSHOP = v || FUNSHOP; }
+      [LS_KEYS.FUNSHOP]: (v) => { FUNSHOP = v || FUNSHOP; },
+      [LS_KEYS.REWARD_PARAMS]: (v) => { REWARD_PARAMS = { ...DEFAULT_REWARD_PARAMS, ...(v || {}) }; }
   };
   const subscriptions = {
       [LS_KEYS.TASKS]: (v) => { state.tasks = Array.isArray(v) ? v : []; renderTasks(); },
       [LS_KEYS.AGG]: (v) => { state.agg = v || { totalHQ: 0, totalSeconds: 0 }; renderKPI(); },
       [LS_KEYS.META]: (v) => { meta = v || meta; ensureBadgeMeta(); renderDaily(); renderInventory(); renderWorkshop(); setControls(); updateModeButton(); },
       [LS_KEYS.RATES]: (v) => { RATE_BY_DIFFICULTY = { ...DEFAULT_RATES, ...(v || {}) }; updateRate(); },
-      [LS_KEYS.FUNSHOP]: (v) => { FUNSHOP = v || FUNSHOP; renderFunshop(); }
+      [LS_KEYS.FUNSHOP]: (v) => { FUNSHOP = v || FUNSHOP; renderFunshop(); },
+      [LS_KEYS.REWARD_PARAMS]: (v) => { REWARD_PARAMS = { ...DEFAULT_REWARD_PARAMS, ...(v || {}) }; }
   };
 
   for(const key of keys){
@@ -854,7 +877,8 @@ async function initialCloudMergeAndSubscribe(){
                          key===LS_KEYS.AGG ? {totalHQ:0,totalSeconds:0} : 
                          key===LS_KEYS.META ? meta : 
                          key===LS_KEYS.RATES ? RATE_BY_DIFFICULTY :
-                         key===LS_KEYS.FUNSHOP ? FUNSHOP : null;
+                         key===LS_KEYS.FUNSHOP ? FUNSHOP : 
+                         key===LS_KEYS.REWARD_PARAMS ? REWARD_PARAMS : null;
     const local = readWithUpdatedAt(key, localDefault);
     let remote = await CLOUD.get(key);
 
@@ -908,6 +932,10 @@ window.AppSync = {
 };
   const DEFAULT_RATES={1:1,2:2,3:4,4:7,5:11};
   let RATE_BY_DIFFICULTY = (()=>{ const r=readJSON(LS_KEYS.RATES,{}); return {...DEFAULT_RATES,...r} })();
+  
+  const DEFAULT_REWARD_PARAMS = { baseChance: 0.4, betCoefficient: 0.25, maxChance: 0.9, pityIncrement: 0.015 };
+  let REWARD_PARAMS = readJSON(LS_KEYS.REWARD_PARAMS, { ...DEFAULT_REWARD_PARAMS });
+
   let state = { tasks: readJSON(LS_KEYS.TASKS, []), agg: readJSON(LS_KEYS.AGG, {totalHQ:0,totalSeconds:0}), active:null };
   let meta = readJSON(LS_KEYS.META, {
     streak:0,pity:0,arcade:false,freeze:0,badges:{},tickets:0,
@@ -939,6 +967,22 @@ window.AppSync = {
   ensureBadgeMeta();
 
   const $=s=>document.querySelector(s);
+
+  // === Sound Effect Handling ===
+  const sfx = {
+    tasks: $('#tasksAudio'),
+    timer: $('#timerAudio'),
+    backpack: $('#backpackAudio'),
+    club: $('#clubAudio'),
+  };
+
+  function playSound(audioEl) {
+    if (audioEl) {
+      audioEl.currentTime = 0;
+      audioEl.play().catch(e => console.warn("Audio playback failed:", e));
+    }
+  }
+
   /* —— 徽章显示元数据 —— */
   const BADGE_META = {
     rare_token:   {label:'稀有徽章', cls:'fb-rare',   invKey:'rare_tokens'},
@@ -979,7 +1023,10 @@ window.AppSync = {
     devRareToken: $('#devRareToken'), devEpicToken: $('#devEpicToken'), devLegendToken: $('#devLegendToken'),
     btnSaveResources: $('#btnSaveResources'), btnSimulateNextDay: $('#btnSimulateNextDay'),
     btnResetDaily: $('#btnResetDaily'), btnHardReset: $('#btnHardReset'),
-    devStateText: $('#devStateText'), btnExportState: $('#btnExportState'), btnImportState: $('#btnImportState')
+    devStateText: $('#devStateText'), btnExportState: $('#btnExportState'), btnImportState: $('#btnImportState'),
+    devRewardBaseChance: $('#devRewardBaseChance'), devRewardBetCoeff: $('#devRewardBetCoeff'),
+    devRewardMaxChance: $('#devRewardMaxChance'), devRewardPityInc: $('#devRewardPityInc'),
+    btnSaveRewardParams: $('#btnSaveRewardParams'), btnResetRewardParams: $('#btnResetRewardParams'),
   };
 
   const sessionFlip = new FlipCounter($('#sessionFlip'),{digits:6,comma:true,large:true});
@@ -1014,6 +1061,11 @@ window.AppSync = {
     btn.addEventListener('click',()=>{
       const target = btn.dataset.mobileTarget;
       if(target){
+        if (target === 'tasksCard') playSound(sfx.tasks);
+        else if (target === 'timerCard') playSound(sfx.timer);
+        else if (target === 'backpackCard') playSound(sfx.backpack);
+        else if (target === 'clubCard') playSound(sfx.club);
+        
         setMobilePanel(target);
         window.scrollTo(0, 0);
       }
@@ -1068,6 +1120,7 @@ function save(){
   writeWithUpdatedAt(LS_KEYS.META,  meta,                  now);
   writeWithUpdatedAt(LS_KEYS.RATES, RATE_BY_DIFFICULTY,    now);
   writeWithUpdatedAt(LS_KEYS.FUNSHOP, FUNSHOP,              now);
+  writeWithUpdatedAt(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS, now);
 
   // 云：若已登录则在空闲时段推送，不阻塞 UI 帧
   if (CLOUD.enabled) {
@@ -1080,6 +1133,7 @@ function save(){
           CLOUD.set(LS_KEYS.META,     meta),
           CLOUD.set(LS_KEYS.RATES,    RATE_BY_DIFFICULTY),
           CLOUD.set(LS_KEYS.FUNSHOP,  FUNSHOP),
+          CLOUD.set(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS),
         ]);
       } catch (e) {
         console.warn('Cloud save error:', e);
@@ -1506,7 +1560,7 @@ function setControls(){
           }else{
             // 押注逻辑
             const cost = Math.floor(baseReward * bet);
-            const chance = Math.min(0.9, 0.4 + bet * 0.25 + (meta.pity || 0)); // 基础40% + 押注倍率加成 + 怜悯机制
+            const chance = Math.min(REWARD_PARAMS.maxChance, REWARD_PARAMS.baseChance + bet * REWARD_PARAMS.betCoefficient + (meta.pity || 0));
             const won = Math.random() < chance;
             const loot = won ? Math.floor(cost * (1.5 + Math.random() * 1.5)) : 0; // 赢取1.5~3倍
             
@@ -1524,12 +1578,12 @@ function setControls(){
                 </div>
               `;
             }else{
-              meta.pity = (meta.pity || 0) + ECON.pityBoost;
+              meta.pity = (meta.pity || 0) + REWARD_PARAMS.pityIncrement;
               body.innerHTML += `
                 <div class="result-bar result-err" style="margin-top:16px">
                   <div>💥 押注失败，失去基础奖励 -${baseReward}</div>
                   <div class="loots" style="margin-top:8px">
-                    <span class="loot">怜悯+${(ECON.pityBoost*100).toFixed(1)}%</span>
+                    <span class="loot">怜悯+${(REWARD_PARAMS.pityIncrement*100).toFixed(1)}%</span>
                   </div>
                 </div>
               `;
@@ -1960,6 +2014,11 @@ function todayObj(){
         if (el.devMask) {
             el.rate1.value=RATE_BY_DIFFICULTY[1]; el.rate2.value=RATE_BY_DIFFICULTY[2]; el.rate3.value=RATE_BY_DIFFICULTY[3]; el.rate4.value=RATE_BY_DIFFICULTY[4]; el.rate5.value=RATE_BY_DIFFICULTY[5];
             
+            el.devRewardBaseChance.value = REWARD_PARAMS.baseChance;
+            el.devRewardBetCoeff.value = REWARD_PARAMS.betCoefficient;
+            el.devRewardMaxChance.value = REWARD_PARAMS.maxChance;
+            el.devRewardPityInc.value = REWARD_PARAMS.pityIncrement;
+
             ensureBadgeMeta();
             const b = meta.badges || {};
             el.devTotalHQ.value = Math.floor(state.agg.totalHQ || 0);
@@ -1994,6 +2053,30 @@ function todayObj(){
       renderKPI();
       renderInventory();
       pushToast('资源已更新', 'success');
+    };
+  }
+
+  if (el.btnSaveRewardParams) {
+    el.btnSaveRewardParams.onclick = () => {
+      const p = s => parseFloat(s) || 0;
+      REWARD_PARAMS.baseChance = p(el.devRewardBaseChance.value);
+      REWARD_PARAMS.betCoefficient = p(el.devRewardBetCoeff.value);
+      REWARD_PARAMS.maxChance = p(el.devRewardMaxChance.value);
+      REWARD_PARAMS.pityIncrement = p(el.devRewardPityInc.value);
+      save();
+      pushToast('奖励赔率已保存', 'success');
+    };
+  }
+  
+  if (el.btnResetRewardParams) {
+    el.btnResetRewardParams.onclick = () => {
+      REWARD_PARAMS = { ...DEFAULT_REWARD_PARAMS };
+      el.devRewardBaseChance.value = REWARD_PARAMS.baseChance;
+      el.devRewardBetCoeff.value = REWARD_PARAMS.betCoefficient;
+      el.devRewardMaxChance.value = REWARD_PARAMS.maxChance;
+      el.devRewardPityInc.value = REWARD_PARAMS.pityIncrement;
+      save();
+      pushToast('已恢复默认赔率', 'success');
     };
   }
 
@@ -2036,7 +2119,8 @@ function todayObj(){
           agg: state.agg,
           meta: meta,
           rates: RATE_BY_DIFFICULTY,
-          funshop: FUNSHOP
+          funshop: FUNSHOP,
+          rewardParams: REWARD_PARAMS,
       };
       el.devStateText.value = JSON.stringify(fullState, null, 2);
       pushToast('状态已导出到文本框。');
@@ -2057,6 +2141,7 @@ function todayObj(){
         meta = imported.meta || meta;
         RATE_BY_DIFFICULTY = imported.rates || DEFAULT_RATES;
         FUNSHOP = imported.funshop || FUNSHOP;
+        REWARD_PARAMS = imported.rewardParams || DEFAULT_REWARD_PARAMS;
         ensureBadgeMeta();
         save();
         renderInitial();
