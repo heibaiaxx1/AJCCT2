@@ -41,6 +41,7 @@
   .tasks{display:flex;flex-direction:column;gap:10px}
   .task{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.02)}
   .task.selected{border-color:var(--primary);box-shadow:0 0 0 2px rgba(122,162,255,.25) inset;background:rgba(122,162,255,.05)}
+  .task .reward-tag{margin-top:4px;display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid var(--border);background:rgba(122,162,255,.08);color:var(--primary-2)}
   .section-2col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .pane{border:1px dashed var(--border);border-radius:12px;padding:12px}
   .timer{display:grid;grid-template-rows:auto 1fr auto;min-height:520px}
@@ -51,7 +52,7 @@
   .ring .fg{stroke:url(#grad);stroke-linecap:round;stroke-width:16;fill:none}
   .ring .cap{dominant-baseline:middle;text-anchor:middle;font-size:13px;fill:var(--muted)}
   .ring .task-name{dominant-baseline:middle;text-anchor:middle;font-size:12px;fill:var(--muted)}
-  .centerFlip{position:absolute;left:0;right:0;top:52%;transform:translateY(-28px);display:flex;justify-content:center;pointer-events:none}
+  .centerFlip{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:flex;justify-content:center;width:100%;pointer-events:none}
   .timer-kpis{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:10px}
   .timer-kpis .pill{border:1px solid var(--border);padding:8px 12px;border-radius:999px;color:var(--muted);font-size:12px}
   .timer-kpis .pill.warn{border-color:var(--danger);color:#ff9da8;background:rgba(255,93,115,.08)}
@@ -92,6 +93,22 @@
   .toast-container{position:fixed;top:24px;right:24px;display:flex;flex-direction:column;gap:10px;z-index:120;pointer-events:none}
   .toast{background:rgba(15,20,32,.92);border:1px solid var(--border);border-left:4px solid var(--primary);padding:10px 14px;border-radius:12px;color:var(--text);min-width:220px;max-width:320px;box-shadow:var(--shadow);opacity:0;transform:translateY(14px);transition:opacity .3s ease,transform .3s ease}
   .toast.show{opacity:1;transform:translateY(0)}
+  /* —— Funshop —— */
+  .funshop-list{display:grid;gap:10px}
+  .funshop-item{border:1px dashed var(--border);border-radius:10px;padding:10px;background:rgba(255,255,255,.03);display:grid;gap:6px}
+  .funshop-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .funshop-need{display:inline-flex;gap:6px;align-items:center;background:#0f1420;border:1px solid var(--border);border-radius:999px;padding:4px 8px;color:var(--muted);font-size:12px}
+  .mini-timer{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:4px 8px;background:#0f1420;font-size:12px;color:var(--muted)}
+  .funshop-muted{color:var(--muted);font-size:12px}
+  .funshop-grid-2{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+  .fb-line{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .fb-chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;border-radius:999px;padding:3px 8px;border:1px solid transparent;background:rgba(255,255,255,.05)}
+  .fb-rare{border-color:#7aa2ff33;color:#7aa2ff}
+  .fb-epic{border-color:#c38bff33;color:#c38bff}
+  .fb-legend{border-color:#ffdd7a33;color:#ffdd7a}
+  .fb-util{border-color:#9aa6bd33;color:#9aa6bd}
+  .fb-bad{border-color:#ff5d7333;color:#ff5d73}
+  .modal .note{font-size:12px;color:var(--muted)}
   @media (max-width:720px){
     .app{padding:0 12px;margin:16px auto 48px}
     header{flex-direction:column;align-items:flex-start;gap:12px}
@@ -195,6 +212,9 @@
               <button class="btn small" id="btnWheelBoost">幸运轮强运（稀有×10）</button>
               <button class="btn small" id="btnSpeedChip">调速芯片 +5%（稀有×20）</button>
             </div>
+            <div class="row" style="margin-top:8px">
+              <button class="btn" id="btnOpenFunshop">娱乐兑换所</button>
+            </div>
             <details class="workshop" id="badgeWorkshop">
               <summary>徽章工坊</summary>
               <div class="workshop-body" id="badgeWorkshopBody"></div>
@@ -237,11 +257,53 @@
         <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
           <button class="btn accent" id="btnStart"  aria-label="开始" disabled>开始</button>
           <button class="btn"         id="btnPause"  aria-label="暂停" disabled>暂停</button>
-          <button class="btn"         id="btnResume" aria-label="继续" disabled>继续</button>
           <button class="btn danger"  id="btnStop"   aria-label="结束"  disabled>结束</button>
         </div>
       </div>
     </section>
+  </div>
+</div>
+
+<!-- 娱乐兑换所 -->
+<div class="modal-mask" id="funshopMask" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="mh">
+      <h3>娱乐兑换所</h3>
+      <div style="display:flex;gap:8px">
+        <button class="btn small" id="btnFunshopEdit">调试/导入</button>
+        <button class="btn small" id="btnCloseFunshop">关闭</button>
+      </div>
+    </div>
+    <div class="mb">
+      <div class="note" style="margin-bottom:8px">
+        点“兑换”将检验并消耗所需徽章数量；若配置了磨损，将累计到对应徽章的磨损池，达到上限会按倍数销毁徽章。
+      </div>
+      <div id="funshopList" class="funshop-list"></div>
+    </div>
+  </div>
+</div>
+
+<!-- 娱乐兑换所 · 调试器 -->
+<div class="modal-mask" id="funshopEditMask" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="mh">
+      <h3>娱乐兑换所 · 调试导入</h3>
+      <button class="btn small" id="btnCloseFunshopEdit">完成</button>
+    </div>
+    <div class="mb">
+      <div class="note" style="margin-bottom:6px">一行一个娱乐活动，格式：</div>
+      <pre class="note" style="background:#0f1420;border:1px solid var(--border);padding:8px;border-radius:8px;white-space:pre-wrap">
+名称|时长秒|需求: badge*数量[,badge*数量...]|磨损: badge*磨损[,badge*磨损...]|时段: HH:MM-HH:MM
+示例：
+放松呼吸训练|300|需求: rare_token*1|磨损: rare_token*5|
+豪情轮盘挑战|180|需求: epic_token*1|磨损: epic_token*8|时段: 19:00-23:00
+街机小游园|120|需求: rare_token*1|磨损: rare_token*3,ticket*1|
+      </pre>
+      <textarea id="funshopInput" style="width:100%;height:200px;background:#0d1016;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px;font-family:monospace" placeholder="在此粘贴/编辑娱乐活动清单"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="btn" id="btnFunshopImport">导入覆盖</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -254,12 +316,13 @@
     </div>
     <div class="mb">
       <p style="font-size: 13px; color: var(--muted); margin: 0 0 10px;">
-        任务库语法示例（每行一个任务，格式：标题|难度）：<br>
-        <code style="background: var(--ring-bg); padding: 2px 4px; border-radius: 4px;">论文引言改写|3</code><br>
-        <code style="background: var(--ring-bg); padding: 2px 4px; border-radius: 4px;">代码重构|4</code><br>
-        <code style="background: var(--ring-bg); padding: 2px 4px; border-radius: 4px;">文档撰写|2</code>
+        任务库语法（每行：<strong>标题|难度|奖励类型|数量</strong>，奖励可选）：<br>
+        <code style="background: var(--ring-bg); padding: 2px 4px; border-radius: 4px;">论文引言改写|3|ticket|1</code><br>
+        <code style="background: var(--ring-bg); padding: 2px 4px; border-radius: 4px;">代码重构|4|rare_gem|2</code><br>
+        <code style="background: var(--ring-bg); padding: 2px 4px; border-radius: 4px;">文档撰写|2</code><br>
+        可选奖励：hq（豪情值）、ticket（抽卡券）、freeze、rare_gem、epic_gem、rare_token、epic_token、legend_token
       </p>
-      <textarea id="taskLibraryInput" placeholder="在此粘贴你的任务列表，每行格式：标题|难度 (难度1-5)" style="width: 100%; height: 200px; background: #0d1016; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 10px; resize: vertical; font-family: monospace;"></textarea>
+      <textarea id="taskLibraryInput" placeholder="在此粘贴你的任务列表，每行格式：标题|难度|奖励|数量（奖励可省略）" style="width: 100%; height: 200px; background: #0d1016; color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 10px; resize: vertical; font-family: monospace;"></textarea>
       <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px;">
         <button class="btn" id="btnImportTasks">导入任务</button>
       </div>
@@ -441,6 +504,16 @@ class FlipCounter{
 /* 经济参数/常量 */
 const ECON={k:0.0009, baseFloorMinSec:180, streakStep:0.1, pauseBreakSec:90, bonusCapRatio:3, pityStep:1, pityBoost:0.015};
 const LOOT_TABLE=[{id:'rare_gem',name:'稀有徽章碎片',rarity:'rare',p:0.22},{id:'epic_gem',name:'史诗徽章碎片',rarity:'epic',p:0.06},{id:'freeze_card',name:'冻结卡',rarity:'rare',p:0.10},{id:'ticket',name:'抽卡券',rarity:'rare',p:0.12}];
+const REWARD_TYPES={
+  hq:{label:'豪情值',apply:amt=>{state.agg.totalHQ=(state.agg.totalHQ||0)+amt;}},
+  ticket:{label:'抽卡券',apply:amt=>{meta.tickets=(meta.tickets||0)+amt;}},
+  freeze:{label:'冻结卡',apply:amt=>{meta.freeze=(meta.freeze||0)+amt;}},
+  rare_gem:{label:'稀有碎片',apply:amt=>{ensureBadgeMeta();meta.badges.rare_gem=(meta.badges.rare_gem||0)+amt;}},
+  epic_gem:{label:'史诗碎片',apply:amt=>{ensureBadgeMeta();meta.badges.epic_gem=(meta.badges.epic_gem||0)+amt;}},
+  rare_token:{label:'稀有徽章',apply:amt=>{ensureBadgeMeta();meta.badges.rare_tokens=(meta.badges.rare_tokens||0)+amt;}},
+  epic_token:{label:'史诗徽章',apply:amt=>{ensureBadgeMeta();meta.badges.epic_tokens=(meta.badges.epic_tokens||0)+amt;}},
+  legend_token:{label:'传说徽章',apply:amt=>{ensureBadgeMeta();meta.badges.legendary_tokens=(meta.badges.legendary_tokens||0)+amt;}}
+};
 const MAX_FLIPS_PER_SECOND=8, CYCLE_SECONDS_BASE=20, CIRCUM=2*Math.PI*90;
 
 /* ========== 主逻辑 ========== */
@@ -620,7 +693,8 @@ window.AppSync = {
   let meta = readJSON(LS_META, {
     streak:0,pity:0,arcade:false,freeze:0,badges:{},tickets:0,
     daily:{},dailyBuff:{},multDayCount:{},guardUsedToday:0,guardDay:null,nextWheelBoost:1,
-    completed:{} /* 新增：今日已完成持久化容器（date->[]） */
+    completed:{}, /* 今日已完成持久化容器（date->[]） */
+    funshop:{ activities:[], wearAccum:{} } /* —— 娱乐兑换所 —— */
   });
 
   function ensureBadgeMeta(){
@@ -634,10 +708,19 @@ window.AppSync = {
     meta.badges.loadout = meta.badges.loadout || {slot1:null,slot2:null,slot3:null};
     meta.badges.loadoutCooldownUntil = meta.badges.loadoutCooldownUntil || 0;
     meta.nextWheelBoost = meta.nextWheelBoost || 1;
+    meta.funshop = meta.funshop || { activities:[], wearAccum:{} };
   }
   ensureBadgeMeta();
 
   const $=s=>document.querySelector(s);
+  /* —— 徽章显示元数据 —— */
+  const BADGE_META = {
+    rare_token:   {label:'稀有徽章', cls:'fb-rare',   invKey:'rare_tokens'},
+    epic_token:   {label:'史诗徽章', cls:'fb-epic',   invKey:'epic_tokens'},
+    legend_token: {label:'传说徽章', cls:'fb-legend', invKey:'legendary_tokens'},
+    ticket:       {label:'抽卡券',   cls:'fb-util',   invKey:null},
+    freeze:       {label:'冻结卡',   cls:'fb-util',   invKey:null}
+  };
   const el = {
     kpiTotalWrap: $('#kpiTotalFlip'), kpiTime: $('#kpiTime'),
     taskTitle: $('#taskTitle'), taskDiff: $('#taskDiff'),
@@ -645,7 +728,7 @@ window.AppSync = {
     taskList: $('#taskList'), emptyTask: $('#emptyTask'),
     rateText: $('#rateText'), taskNameText: $('#taskNameText'),
     sessionTime: $('#sessionTime'), taskTotal: $('#taskTotal'), taskTime: $('#taskTime'),
-    activeHint: $('#activeHint'), btnStart: $('#btnStart'), btnPause: $('#btnPause'), btnResume: $('#btnResume'), btnStop: $('#btnStop'),
+    activeHint: $('#activeHint'), btnStart: $('#btnStart'), btnPause: $('#btnPause'), btnStop: $('#btnStop'),
     arcadeToggle: $('#arcadeMode'),
     rewardMask: $('#rewardMask'), rewardBody: $('#rewardBody'), btnCloseReward: $('#btnCloseReward'),
     helpMask: $('#helpMask'), btnHelp: $('#btnHelp'), btnCloseHelp: $('#btnCloseHelp'),
@@ -663,7 +746,12 @@ window.AppSync = {
     btnTaskLibrary: $('#btnTaskLibrary'), taskLibraryMask: $('#taskLibraryMask'),
     btnCloseTaskLibrary: $('#btnCloseTaskLibrary'), taskLibraryInput: $('#taskLibraryInput'), btnImportTasks: $('#btnImportTasks'),
     /* 今日已完成 */
-    btnTodayDone: $('#btnTodayDone'), todayDoneMask: $('#todayDoneMask'), todayDoneBody: $('#todayDoneBody'), btnCloseTodayDone: $('#btnCloseTodayDone')
+    btnTodayDone: $('#btnTodayDone'), todayDoneMask: $('#todayDoneMask'), todayDoneBody: $('#todayDoneBody'), btnCloseTodayDone: $('#btnCloseTodayDone'),
+    /* —— Funshop 句柄 —— */
+    btnOpenFunshop: $('#btnOpenFunshop'), funshopMask: $('#funshopMask'), btnCloseFunshop: $('#btnCloseFunshop'),
+    funshopList: $('#funshopList'),
+    btnFunshopEdit: $('#btnFunshopEdit'), funshopEditMask: $('#funshopEditMask'),
+    btnCloseFunshopEdit: $('#btnCloseFunshopEdit'), funshopInput: $('#funshopInput'), btnFunshopImport: $('#btnFunshopImport')
   };
 
   const sessionFlip = new FlipCounter($('#sessionFlip'),{digits:6,comma:true});
@@ -782,6 +870,176 @@ function save(){
   const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
   const getTask=id=>state.tasks.find(t=>t.id===id);
   function difficultyBadge(d){const map={1:"轻松",2:"较易",3:"标准",4:"较难",5:"硬仗"};return `<span class="tag">${"★".repeat(d)}${"☆".repeat(5-d)} <b style="margin-left:4px">D${d}</b> · ${map[d]}</span>`}
+  const normalizeRewardAmount = val => Math.max(1, Math.floor(Number(val) || 0));
+  function rewardLabel(reward){
+    if(!reward||!reward.type) return '';
+    const def=REWARD_TYPES[reward.type];
+    if(!def) return '';
+    const amount=normalizeRewardAmount(reward.amount||1);
+    return `${def.label} ×${amount}`;
+  }
+  function grantTaskReward(task){
+    if(!task||!task.reward||!task.reward.type) return null;
+    const def=REWARD_TYPES[task.reward.type];
+    if(!def) return null;
+    const amount=normalizeRewardAmount(task.reward.amount||1);
+    def.apply(amount);
+    return {message:`${task.title} 完成奖励：${def.label} +${amount}`, type:task.reward.type};
+  }
+
+  /* ================================
+   *           娱乐兑换所
+   * ================================ */
+  const WEAR_MAX = { rare_token:100, epic_token:140, legend_token:200 }; // 每枚徽章耐久
+  function ensureWearPool(){ meta.funshop = meta.funshop || {activities:[], wearAccum:{}}; meta.funshop.wearAccum = meta.funshop.wearAccum || {}; }
+
+  // 解析行： 名称|时长秒|需求: badge*数量[,..]|磨损: badge*磨损[,..]|时段: HH:MM-HH:MM
+  function parsePack(text, lead){
+    if(!text) return {};
+    const s = text.trim().replace(/，/g,',');
+    const t = lead && s.startsWith(lead) ? s.slice(lead.length).trim() : s;
+    if(!t) return {};
+    const out={};
+    t.split(',').map(x=>x.trim()).filter(Boolean).forEach(seg=>{
+      const m=seg.match(/^([a-zA-Z_]+)\*(\d+)$/);
+      if(!m) return;
+      const k=m[1].toLowerCase(); const v=Math.max(1,parseInt(m[2],10)||0);
+      if(BADGE_META[k]) out[k]=(out[k]||0)+v;
+    });
+    return out;
+  }
+  function parseFunshopLines(text){
+    const out=[]; (text||'').split('\n').forEach(line=>{
+      const s=line.trim(); if(!s) return; const p=s.split('|'); if(p.length<2) return;
+      const title=p[0].trim(); const seconds=Math.max(1,parseInt(p[1].trim(),10)||0);
+      const need=parsePack(p[2]||'','需求:'); const wear=parsePack(p[3]||'','磨损:');
+      let timeWindow=null; const w=(p[4]||'').trim(); if(w && w.startsWith('时段:')){ const m=w.slice(3).trim().match(/(\d{2}:\d{2})-(\d{2}:\d{2})/); if(m) timeWindow={start:m[1],end:m[2]}; }
+      out.push({ id:uid(), title, seconds, need, wear, timeWindow, running:null });
+    }); return out;
+  }
+  function withinWindow(tw){
+    if(!tw) return true;
+    const now=new Date();
+    const cur=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    return (cur>=tw.start && cur<=tw.end);
+  }
+  // 生成“需求”胶囊 HTML（含库存校验）
+  function needChipsHTML(need){
+    const parts=[];
+    const b=meta.badges||{};
+    Object.entries(need||{}).forEach(([k,v])=>{
+      const metaK = BADGE_META[k]; if(!metaK) return;
+      let have = 0;
+      if(metaK.invKey) have = b[metaK.invKey]||0;
+      else if(k==='ticket') have = meta.tickets||0;
+      else if(k==='freeze') have = meta.freeze||0;
+      const ok = have>=v;
+      const cls = ok?metaK.cls:'fb-bad';
+      parts.push(`<span class="fb-chip ${cls}">${metaK.label} ×${v}${ok?``:`（缺${v-have}）`}</span>`);
+    });
+    return parts.length?parts.join(''):'<span class="funshop-muted">无</span>';
+  }
+  // 生成“磨损”胶囊 HTML
+  function wearChipsHTML(wear){
+    const parts=[];
+    Object.entries(wear||{}).forEach(([k,v])=>{
+      const metaK = BADGE_META[k]; if(!metaK) return;
+      parts.push(`<span class="fb-chip ${metaK.cls}">${metaK.label} −${v} 耐久</span>`);
+    });
+    return parts.length?parts.join(''):'<span class="funshop-muted">无</span>';
+  }
+
+  // 校验并应用：扣减 ticket/freeze，给徽章累计磨损并按上限销毁
+  function applyWearAndConsume(need={}, wear={}){
+    ensureBadgeMeta(); ensureWearPool();
+    const b=meta.badges||{};
+    const have={ rare_token:b.rare_tokens||0, epic_token:b.epic_tokens||0, legend_token:b.legendary_tokens||0, ticket:meta.tickets||0, freeze:meta.freeze||0 };
+    for(const [k,req] of Object.entries(need)){
+      if((have[k]||0) < req) return {ok:false,msg:`${k} 不足`};
+    }
+    // 扣减需求
+    if(need.rare_token){ meta.badges.rare_tokens = Math.max(0,(meta.badges.rare_tokens||0) - need.rare_token); }
+    if(need.epic_token){ meta.badges.epic_tokens = Math.max(0,(meta.badges.epic_tokens||0) - need.epic_token); }
+    if(need.legend_token){ meta.badges.legendary_tokens = Math.max(0,(meta.badges.legendary_tokens||0) - need.legend_token); }
+    if(need.ticket){ meta.tickets = Math.max(0,(meta.tickets||0) - need.ticket); }
+    if(need.freeze){ meta.freeze  = Math.max(0,(meta.freeze||0)  - need.freeze); }
+    // 累计磨损
+    const pool=meta.funshop.wearAccum;
+    Object.entries(wear||{}).forEach(([k,v])=>{ if(WEAR_MAX[k]) pool[k]=(pool[k]||0)+Math.max(0,v); });
+    // 销毁（每满上限销毁 1 枚）
+    const report=[];
+    [['rare_token','rare_tokens'],['epic_token','epic_tokens'],['legend_token','legendary_tokens']].forEach(([k,invKey])=>{
+      const max=WEAR_MAX[k]; const have=meta.badges[invKey]||0; const w=pool[k]||0; const destroy=Math.min(have, Math.floor(w/max));
+      if(destroy>0){ meta.badges[invKey]=Math.max(0,have-destroy); pool[k]=w - destroy*max; report.push(`${k} -${destroy}`); }
+    });
+    return {ok:true,destroyed:report};
+  }
+
+  function renderFunshop(){
+    const list = el.funshopList; if(!list) return;
+    ensureBadgeMeta(); ensureWearPool();
+    const acts = meta.funshop.activities||[];
+    if(!acts.length){
+      list.innerHTML = `<div class="funshop-muted">尚未配置娱乐活动。点右上角“调试/导入”。</div>`;
+      return;
+    }
+    list.innerHTML = '';
+    acts.forEach(a=>{
+      const row=document.createElement('div'); row.className='funshop-item';
+      const inTime=withinWindow(a.timeWindow);
+      const timerHTML = a.running ? `
+        <span class="mini-timer">
+          进行中 · 剩余 <b><span class="remain" data-id="${a.id}">${fmtTime(Math.max(0,Math.ceil((a.running.until-Date.now())/1000)))}</span></b>
+          <button class="btn small" data-stop="${a.id}">停止</button>
+        </span>` : '';
+      row.innerHTML = `
+        <div class="funshop-grid-2">
+          <div><b>${a.title}</b> <span class="funshop-muted">（${fmtTime(a.seconds)}）</span></div>
+          <div>${a.timeWindow?`<span class="funshop-muted">${inTime?'时段开放':'当前不在时段'}：${a.timeWindow.start}–${a.timeWindow.end}</span>`:''}</div>
+        </div>
+        <div class="fb-line">
+          <span class="funshop-muted">需求：</span>${needChipsHTML(a.need)}
+        </div>
+        <div class="fb-line">
+          <span class="funshop-muted">磨损：</span>${wearChipsHTML(a.wear)}
+        </div>
+        <div class="funshop-row">
+          ${timerHTML}
+          <span style="flex:1"></span>
+          <button class="btn small${inTime?'':' disabled'}" data-play="${a.id}" ${inTime?'':'disabled'}>${inTime?'兑换并开始':'未到时段'}</button>
+        </div>`;
+      const play = row.querySelector(`[data-play="${a.id}"]`);
+      if(play) play.onclick=()=>startFunActivity(a.id);
+      const stop = row.querySelector(`[data-stop="${a.id}"]`);
+      if(stop) stop.onclick=()=>stopFunActivity(a.id,true);
+      list.appendChild(row);
+    });
+  }
+
+  function startFunActivity(id){
+    ensureBadgeMeta(); ensureWearPool();
+    const acts=meta.funshop.activities||[]; const a=acts.find(x=>x.id===id); if(!a) return;
+    if(a.running){ pushToast('已在进行中','warn'); return; }
+    const res = applyWearAndConsume(a.need||{}, a.wear||{});
+    if(!res.ok){ pushToast(res.msg||'条件不足','warn'); save(); renderInventory(); return; }
+    if(res.destroyed && res.destroyed.length){ pushToast(`磨损导致销毁：${res.destroyed.join('、')}`,'warn'); }
+    a.running = { until: Date.now() + Math.max(1,a.seconds)*1000 };
+    save(); renderInventory(); renderFunshop();
+  }
+  function stopFunActivity(id,byUser=false){
+    const acts=meta.funshop.activities||[]; const a=acts.find(x=>x.id===id); if(!a||!a.running) return;
+    a.running=null; save(); renderFunshop(); if(byUser) pushToast('已停止娱乐活动','info');
+  }
+  function tickFunshopTimers(){
+    const acts=meta.funshop.activities||[]; let dirty=false; const now=Date.now();
+    acts.forEach(a=>{ if(a.running && a.running.until<=now){ a.running=null; dirty=true; }});
+    if(dirty){ save(); renderFunshop(); }
+    document.querySelectorAll('.mini-timer .remain').forEach(span=>{
+      const id = span.getAttribute('data-id'); const a = acts.find(x=>x.id===id);
+      if(a && a.running){ span.textContent = fmtTime(Math.max(0,Math.ceil((a.running.until-Date.now())/1000))); }
+    });
+    setTimeout(tickFunshopTimers,1000);
+  }
 
   function renderKPI(){ kpiTotal.flipTo(Math.floor(state.agg.totalHQ || 0)); el.kpiTime.textContent = fmtTime(state.agg.totalSeconds || 0); }
 
@@ -794,6 +1052,7 @@ function save(){
         <div>${difficultyBadge(t.difficulty)}</div>
         <div><div class="task-title">${t.title}</div>
           <div class="muted" style="font-size:12px;margin-top:4px">累计豪情值：<b>${Math.floor(t.totalHQ||0)}</b> · 累计用时：<b>${fmtTime(t.totalSeconds||0)}</b></div>
+          ${t.reward&&rewardLabel(t.reward)?`<div class="reward-tag">奖励：${rewardLabel(t.reward)}</div>`:''}
         </div>
         <div class="controls"><button class="btn small" data-act="edit">编辑</button><button class="btn small danger" data-act="del">删除</button></div>
         <div><button class="btn small accent" data-act="select">${state.active&&state.active.taskId===t.id?'已选':'选择'}</button></div>`;
@@ -806,30 +1065,41 @@ function save(){
 
   function setRing(p){ const off=CIRCUM*(1-Math.max(0,Math.min(1,p))); document.querySelector('.fg')?.setAttribute('stroke-dashoffset', off.toFixed(2)); }
 function setControls(){
-  el.btnStart.disabled = true;
-  el.btnPause.disabled = true;
-  el.btnResume.disabled = true;
-  el.btnStop.disabled  = true;
+  const btnStart = el.btnStart;
+  const btnPause = el.btnPause;
+  const btnStop  = el.btnStop;
+  if(!btnStart || !btnPause || !btnStop) return;
+
+  const setStartState = (disabled, label) => {
+    btnStart.disabled = disabled;
+    btnStart.textContent = label;
+    btnStart.setAttribute('aria-label', label);
+  };
+
+  setStartState(true, '开始');
+  btnPause.disabled = true;
+  btnStop.disabled  = true;
 
   if (!state.active) return;
   const a = state.active;
 
   // 未开始：仅允许“开始”
   if (!a.startedAt) {
-    el.btnStart.disabled = false;
+    setStartState(false, '开始');
     return;
   }
 
   // 计时中：允许暂停和结束
   if (!a.isPaused) {
-    el.btnPause.disabled = false;
-    el.btnStop.disabled  = false;
+    btnPause.disabled = false;
+    btnStop.disabled  = false;
+    setStartState(true, '开始');
     return;
   }
 
-  // 暂停中：允许继续（开始）与结束
-  el.btnStart.disabled = false;
-  el.btnStop.disabled  = false;
+  // 暂停中：允许继续（开始按钮充当继续）
+  setStartState(false, '继续');
+  btnStop.disabled  = false;
 }
   function showPauseIndicator(sec){ if(!el.pauseIndicator||!el.pauseTime) return; el.pauseIndicator.style.display='flex'; el.pauseTime.textContent=fmtPause(sec); }
   function hidePauseIndicator(){ if(!el.pauseIndicator||!el.pauseTime) return; el.pauseIndicator.style.display='none'; el.pauseTime.textContent='0:00'; }
@@ -1067,12 +1337,17 @@ function setControls(){
 
     // 计算奖励基础
     const finalBase = applySessionModifiers(sessionHQ, sessionSeconds, diff);
+    const extraReward = grantTaskReward(t);
 
     // 完成即从主任务列表移除
     state.tasks = state.tasks.filter(task => task.id !== (state.active && state.active.taskId));
     save();
     renderTasks();
     renderKPI();
+    if(extraReward){
+      if(extraReward.type!=='hq'){ renderInventory(); }
+      pushToast(extraReward.message,'success');
+    }
 
     // 重置计时 UI
     el.activeHint.textContent='未选择任务';
@@ -1103,7 +1378,7 @@ function setControls(){
   let lastFrame=performance.now();
   function loop(now){
     const dt=(now-lastFrame)/1000; lastFrame=now;
-    if(state.active && !state.active.isPaused){
+    if(state.active && state.active.startedAt && !state.active.isPaused){
       const task=getTask(state.active.taskId);
       if(task){
         const rate=effectiveRate(baseRateOfTask(task), task.difficulty);
@@ -1132,7 +1407,7 @@ function setControls(){
         kpiTotal.flipTo(totalValue);
       }
     }else{
-      if(state.active && state.active.isPaused){
+      if(state.active && state.active.startedAt && state.active.isPaused){
         const pausedFor = (performance.now() - (state.active.pausedAt || performance.now())) / 1000;
         showPauseIndicator(pausedFor);
       }else{
@@ -1160,7 +1435,7 @@ function setControls(){
 
   el.btnAdd.onclick=addTask; el.taskTitle.addEventListener('keydown',e=>{ if(e.key==='Enter') addTask(); });
   el.btnClearAll.onclick=()=>{ if(confirm('清空所有任务与累计数据（不清空库存/连胜/每日/速率），确定？')){ state.tasks=[]; state.agg={totalHQ:0,totalSeconds:0}; state.active=null; save(); renderTasks(); renderKPI(); setRing(0); setControls(); el.activeHint.textContent='未选择任务'; el.taskNameText.textContent='未开始'; sessionFlip.setValue(0,true); el.sessionTime.textContent='0:00:00'; el.taskTotal.textContent='0'; el.taskTime.textContent='0:00:00'; el.rateText.textContent='0'; } };
-  el.btnStart.onclick=startTimer; el.btnPause.onclick=pauseTimer; el.btnResume.onclick=startTimer; el.btnStop.onclick=stopTimer;
+  el.btnStart.onclick=startTimer; el.btnPause.onclick=pauseTimer; el.btnStop.onclick=stopTimer;
 
   // [fix] 绑定“刷新任务”按钮
   if (el.btnDailyRefresh) {
@@ -1290,10 +1565,19 @@ function todayObj(){
     const lines = inputText.split('\n'); let imported=0;
     lines.forEach(line=>{
       const s=line.trim(); if(!s) return;
-      const parts = s.split('|'); if(parts.length!==2){ pushToast(`跳过无效行: ${s}`,'warn'); return; }
-      const title=parts[0].trim(); const difficulty=parseInt(parts[1].trim(),10);
+      const parts = s.split('|');
+      if(parts.length<2){ pushToast(`跳过无效行: ${s}`,'warn'); return; }
+      const title=parts[0].trim(); const difficulty=parseInt((parts[1]||'').trim(),10);
       if(!title || isNaN(difficulty) || difficulty<1 || difficulty>5){ pushToast(`跳过无效任务: ${s}`,'warn'); return; }
-      state.tasks.unshift({id:uid(), title, difficulty, totalHQ:0, totalSeconds:0}); imported++;
+      let reward=null;
+      const rewardTypeKey=(parts[2]||'').trim().toLowerCase();
+      if(rewardTypeKey){
+        if(!REWARD_TYPES[rewardTypeKey]){ pushToast(`未知奖励类型：${rewardTypeKey}`,'warn'); return; }
+        const amountRaw=parts[3]!==undefined?parts[3].trim():''; const amountVal=amountRaw?Number(amountRaw):1;
+        if(Number.isNaN(amountVal)){ pushToast(`奖励数量无效：${s}`,'warn'); return; }
+        reward={type:rewardTypeKey,amount:normalizeRewardAmount(amountVal||1)};
+      }
+      state.tasks.unshift({id:uid(), title, difficulty, totalHQ:0, totalSeconds:0, reward}); imported++;
     });
     if(imported>0){ save(); renderTasks(); pushToast(`成功导入 ${imported} 个任务`,'success'); el.taskLibraryInput.value=''; } else { pushToast('未导入任何任务','warn'); }
   };
@@ -1313,11 +1597,37 @@ function todayObj(){
   el.btnSpin.onclick=startNameTicker;
 
   /* 首渲染 */
-  function renderInitial(){ renderTasks(); renderKPI(); renderDaily(); renderInventory(); renderWorkshop(); hidePauseIndicator(); setControls(); }
+  function renderInitial(){ renderTasks(); renderKPI(); renderDaily(); renderInventory(); renderWorkshop(); renderFunshop(); hidePauseIndicator(); setControls(); }
   renderInitial();
 
   // 保险：确保"结束"按钮指向此最终实现
   el.btnStop.onclick = stopTimer;
+
+  /* —— Funshop 事件绑定 —— */
+  if(el.btnOpenFunshop) el.btnOpenFunshop.onclick=()=>{ renderFunshop(); el.funshopMask.style.display='flex'; };
+  if(el.btnCloseFunshop) el.btnCloseFunshop.onclick=()=>{ el.funshopMask.style.display='none'; };
+  if(el.btnFunshopEdit) el.btnFunshopEdit.onclick=()=>{
+    const acts=meta.funshop.activities||[];
+    const lines=acts.map(a=>{
+      const need=Object.entries(a.need||{}).map(([k,v])=>`${k}*${v}`).join(',');
+      const wear=Object.entries(a.wear||{}).map(([k,v])=>`${k}*${v}`).join(',');
+      const win=a.timeWindow?`${a.timeWindow.start}-${a.timeWindow.end}`:'';
+      return `${a.title}|${a.seconds}|需求: ${need}|磨损: ${wear}|时段: ${win}`;
+    }).join('\n');
+    if(el.funshopInput) el.funshopInput.value=lines;
+    el.funshopEditMask.style.display='flex';
+  };
+  if(el.btnCloseFunshopEdit) el.btnCloseFunshopEdit.onclick=()=>{ el.funshopEditMask.style.display='none'; };
+  if(el.btnFunshopImport) el.btnFunshopImport.onclick=()=>{
+    const text=(el.funshopInput.value||'').trim();
+    const acts=parseFunshopLines(text);
+    meta.funshop.activities=acts;
+    save(); renderFunshop();
+    pushToast('已导入娱乐活动','success');
+  };
+
+  // 启动 Funshop 倒计时心跳
+  tickFunshopTimers();
 });
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
