@@ -641,10 +641,21 @@
 <div id="completion-animation-container" class="completion-animation-container"></div>
 
 <!-- Sound Effects -->
-<audio id="tasksAudio" src="assets/tasks-audio.mp3" preload="auto"></audio>
-<audio id="timerAudio" src="assets/timer-audio.mp3" preload="auto"></audio>
-<audio id="backpackAudio" src="assets/backpack-audio.mp3" preload="auto"></audio>
-<audio id="clubAudio" src="assets/club-audio.mp3" preload="auto"></audio>
+<audio id="sfxNavTasks" src="assets/tasks-audio.mp3" preload="auto"></audio>
+<audio id="sfxNavTimer" src="assets/timer-audio.mp3" preload="auto"></audio>
+<audio id="sfxNavBackpack" src="assets/backpack-audio.mp3" preload="auto"></audio>
+<audio id="sfxNavClub" src="assets/club-audio.mp3" preload="auto"></audio>
+<audio id="sfxAddTask" src="assets/sfx_add.mp3" preload="auto"></audio>
+<audio id="sfxSelectTask" src="assets/sfx_select.mp3" preload="auto"></audio>
+<audio id="sfxDeleteTask" src="assets/sfx_delete.mp3" preload="auto"></audio>
+<audio id="sfxTimerStart" src="assets/sfx_timer_start.mp3" preload="auto"></audio>
+<audio id="sfxTimerPause" src="assets/sfx_timer_pause.mp3" preload="auto"></audio>
+<audio id="sfxTimerStop" src="assets/sfx_timer_stop.mp3" preload="auto"></audio>
+<audio id="sfxModalOpen" src="assets/sfx_modal_open.mp3" preload="auto"></audio>
+<audio id="sfxModalClose" src="assets/sfx_modal_close.mp3" preload="auto"></audio>
+<audio id="sfxSuccess" src="assets/sfx_success.mp3" preload="auto"></audio>
+<audio id="sfxWarn" src="assets/sfx_warn.mp3" preload="auto"></audio>
+<audio id="sfxClick" src="assets/sfx_click.mp3" preload="auto"></audio>
 
 <nav class="bottom-nav" aria-label="移动端视图切换">
   <button class="tab-btn active" data-mobile-target="tasksCard">
@@ -970,10 +981,21 @@ window.AppSync = {
 
   // === Sound Effect Handling ===
   const sfx = {
-    tasks: $('#tasksAudio'),
-    timer: $('#timerAudio'),
-    backpack: $('#backpackAudio'),
-    club: $('#clubAudio'),
+    navTasks: $('#sfxNavTasks'),
+    navTimer: $('#sfxNavTimer'),
+    navBackpack: $('#sfxNavBackpack'),
+    navClub: $('#sfxNavClub'),
+    add: $('#sfxAddTask'),
+    select: $('#sfxSelectTask'),
+    delete: $('#sfxDeleteTask'),
+    timerStart: $('#sfxTimerStart'),
+    timerPause: $('#sfxTimerPause'),
+    timerStop: $('#sfxTimerStop'),
+    modalOpen: $('#sfxModalOpen'),
+    modalClose: $('#sfxModalClose'),
+    success: $('#sfxSuccess'),
+    warn: $('#sfxWarn'),
+    click: $('#sfxClick'),
   };
 
   function playSound(audioEl) {
@@ -1061,10 +1083,10 @@ window.AppSync = {
     btn.addEventListener('click',()=>{
       const target = btn.dataset.mobileTarget;
       if(target){
-        if (target === 'tasksCard') playSound(sfx.tasks);
-        else if (target === 'timerCard') playSound(sfx.timer);
-        else if (target === 'backpackCard') playSound(sfx.backpack);
-        else if (target === 'clubCard') playSound(sfx.club);
+        if (target === 'tasksCard') playSound(sfx.navTasks);
+        else if (target === 'timerCard') playSound(sfx.navTimer);
+        else if (target === 'backpackCard') playSound(sfx.navBackpack);
+        else if (target === 'clubCard') playSound(sfx.navClub);
         
         setMobilePanel(target);
         window.scrollTo(0, 0);
@@ -1095,6 +1117,7 @@ window.AppSync = {
   }
   function startNameTicker(){
     if((meta.tickets||0)<=0){pushToast('抽卡券不足', 'warn');return;}
+    playSound(sfx.click);
     meta.tickets-=1; save(); renderInventory();
     tickerIndex = Math.floor(Math.random()*PRIZE_NAMES.length);
     if(el.prizeTicker) el.prizeTicker.textContent = PRIZE_NAMES[tickerIndex];
@@ -1143,6 +1166,9 @@ function save(){
 }
 
   function pushToast(message, variant='info'){
+    if (variant === 'success') playSound(sfx.success);
+    else if (variant === 'warn' || variant === 'err') playSound(sfx.warn);
+
     const wrap = el.toastWrap || document.getElementById('toastContainer'); if(!wrap) return;
     const toast = document.createElement('div'); toast.className = 'toast'; if(variant==='warn') toast.classList.add('warn'); if(variant==='success') toast.classList.add('success');
     toast.textContent = message; wrap.appendChild(toast);
@@ -1407,7 +1433,8 @@ function setControls(){
 
   function addTask(){
     const title=el.taskTitle.value.trim(); const diff=parseInt(el.taskDiff.value,10);
-    if(!title){alert('请输入任务标题');return}
+    if(!title){playSound(sfx.warn); alert('请输入任务标题');return}
+    playSound(sfx.add);
     state.tasks.unshift({id:uid(), title, difficulty:diff, totalHQ:0, totalSeconds:0});
     save(); renderTasks(); el.taskTitle.value='';
   }
@@ -1417,10 +1444,12 @@ function setControls(){
     let diff=prompt('编辑难度（1-5）：',t.difficulty); if(diff===null) return;
     diff=clamp(parseInt(diff,10)||t.difficulty,1,5);
     t.title=(title.trim()||t.title); t.difficulty=diff;
+    playSound(sfx.click);
     save(); renderTasks(); if(state.active&&state.active.taskId===id){ updateRate(); }
   }
   function deleteTask(id){
-    if(state.active&&state.active.taskId===id){ alert('请先结束当前任务的计时，再删除。'); return; }
+    if(state.active&&state.active.taskId===id){ playSound(sfx.warn); alert('请先结束当前任务的计时，再删除。'); return; }
+    playSound(sfx.delete);
     state.tasks=state.tasks.filter(t=>t.id!==id); save(); renderTasks();
   }
 
@@ -1443,6 +1472,7 @@ function setControls(){
 
   function selectTask(id){
     const t=getTask(id); if(!t) return;
+    playSound(sfx.select);
     state.active={taskId:id,startedAt:null,pausedAt:null,isPaused:false,sessionSeconds:0,sessionHQ:0,ringPhase:0,pauses:0,
       display:{intShown:0,flipEvery:1/Math.min(MAX_FLIPS_PER_SECOND,effectiveRate(baseRateOfTask(t),t.difficulty)||1),accTime:0}
     };
@@ -1454,8 +1484,9 @@ function setControls(){
     }
   }
   function startTimer(){
-    if(!state.active){ alert('请先选择任务'); return; }
+    if(!state.active){ playSound(sfx.warn); alert('请先选择任务'); return; }
     if(state.active.startedAt && !state.active.isPaused) return;
+    playSound(sfx.timerStart);
     const now=performance.now();
     if(!state.active.startedAt){ state.active.startedAt=now; }
     else{ const paused=(now-(state.active.pausedAt||now))/1000; state.active.startedAt+=paused*1000; }
@@ -1463,6 +1494,7 @@ function setControls(){
   }
   function pauseTimer(){
     if(state.active && !state.active.isPaused){
+      playSound(sfx.timerPause);
       state.active.isPaused=true; state.active.pausedAt=performance.now(); state.active.pauses=(state.active.pauses||0)+1; showPauseIndicator(0); setControls();
     }
   }
@@ -1517,12 +1549,14 @@ function setControls(){
     const closeBtn = el.btnCloseReward;
     if (closeBtn) {
       closeBtn.onclick = () => {
+        playSound(sfx.modalClose);
         el.rewardMask.style.display = 'none';
       };
     }
   }
 
   function openReward({baseHQ, seconds, difficulty, rawHQ}){
+    playSound(sfx.modalOpen);
     const streakMulti = 1 + (meta.streak || 0);
     const baseReward = Math.floor(baseHQ * streakMulti);
     const isArcade = !!meta.arcade;
@@ -1550,6 +1584,7 @@ function setControls(){
       const opts = body.querySelectorAll('.opt');
       opts.forEach(opt => {
         opt.onclick = () => {
+          playSound(sfx.click);
           const bet = parseFloat(opt.dataset.bet);
           if(bet === 0){
             // 不押注，直接给基础奖励
@@ -1635,6 +1670,7 @@ function setControls(){
   /* 结束计时（最终版） */
   function stopTimer(){
     if(!state.active) return;
+    playSound(sfx.timerStop);
 
     const t = getTask(state.active.taskId);
 
@@ -1750,6 +1786,7 @@ function setControls(){
   /* 事件绑定 */
   if (el.modeSwitchBtn) {
       el.modeSwitchBtn.addEventListener('click', () => {
+          playSound(sfx.click);
           meta.arcade = !meta.arcade;
           save();
           updateModeButton();
@@ -1757,13 +1794,13 @@ function setControls(){
       });
   }
   
-  el.btnCloseHelp.onclick=()=>{ el.helpMask.style.display='none'; };
-  el.btnCloseDev.onclick=()=>{ el.devMask.style.display='none'; };
-  el.btnSaveRates.onclick=()=>{ const r1=parseFloat(el.rate1.value)||0, r2=parseFloat(el.rate2.value)||0, r3=parseFloat(el.rate3.value)||0, r4=parseFloat(el.rate4.value)||0, r5=parseFloat(el.rate5.value)||0; RATE_BY_DIFFICULTY={1:Math.max(0,r1),2:Math.max(0,r2),3:Math.max(0,r3),4:Math.max(0,r4),5:Math.max(0,r5)}; save(); updateRate(); pushToast('速率已保存并应用','success'); };
-  el.btnResetRates.onclick=()=>{ RATE_BY_DIFFICULTY={...DEFAULT_RATES}; save(); updateRate(); pushToast('已恢复默认速率','success'); };
+  el.btnCloseHelp.onclick=()=>{ playSound(sfx.modalClose); el.helpMask.style.display='none'; };
+  el.btnCloseDev.onclick=()=>{ playSound(sfx.modalClose); el.devMask.style.display='none'; };
+  el.btnSaveRates.onclick=()=>{ playSound(sfx.click); const r1=parseFloat(el.rate1.value)||0, r2=parseFloat(el.rate2.value)||0, r3=parseFloat(el.rate3.value)||0, r4=parseFloat(el.rate4.value)||0, r5=parseFloat(el.rate5.value)||0; RATE_BY_DIFFICULTY={1:Math.max(0,r1),2:Math.max(0,r2),3:Math.max(0,r3),4:Math.max(0,r4),5:Math.max(0,r5)}; save(); updateRate(); pushToast('速率已保存并应用','success'); };
+  el.btnResetRates.onclick=()=>{ playSound(sfx.click); RATE_BY_DIFFICULTY={...DEFAULT_RATES}; save(); updateRate(); pushToast('已恢复默认速率','success'); };
   
   el.btnAdd.onclick=addTask; el.taskTitle.addEventListener('keydown',e=>{ if(e.key==='Enter') addTask(); });
-  el.btnClearAll.onclick=()=>{ if(confirm('清空所有任务与累计数据（不清空库存/连胜/每日/速率），确定？')){ state.tasks=[]; state.agg={totalHQ:0,totalSeconds:0}; state.active=null; save(); renderTasks(); renderKPI(); setControls(); el.activeHint.textContent='未选择任务'; sessionFlip.setValue(0,true); el.sessionTime.textContent='0:00:00'; el.taskTotal.textContent='0'; el.taskTime.textContent='0:00:00'; el.rateText.textContent='0'; } };
+  el.btnClearAll.onclick=()=>{ playSound(sfx.click); if(confirm('清空所有任务与累计数据（不清空库存/连胜/每日/速率），确定？')){ state.tasks=[]; state.agg={totalHQ:0,totalSeconds:0}; state.active=null; save(); renderTasks(); renderKPI(); setControls(); el.activeHint.textContent='未选择任务'; sessionFlip.setValue(0,true); el.sessionTime.textContent='0:00:00'; el.taskTotal.textContent='0'; el.taskTime.textContent='0:00:00'; el.rateText.textContent='0'; } };
   el.btnStart.onclick=startTimer; el.btnPause.onclick=pauseTimer; el.btnStop.onclick=stopTimer;
 
   // 统一处理桌面版和移动版按钮的点击事件
@@ -1775,6 +1812,7 @@ function setControls(){
   }
   
   const refreshMissionsAction = () => {
+    playSound(sfx.click);
     const ok = rollMissions(false, false);
     if (ok) {
       save();
@@ -1838,7 +1876,7 @@ function todayObj(){
             <button class="btn small" ${(!ok || done) ? 'disabled' : ''}>${buttonText}</button>
         </div>`;
       
-      row.querySelector('button').onclick=()=>{ if(done||!ok)return; d.done[m.id]=true; if(m.reward.ticket)meta.tickets=(meta.tickets||0)+m.reward.ticket; if(m.reward.freeze)meta.freeze=(meta.freeze||0)+m.reward.freeze; save(); renderDaily(); renderInventory(); };
+      row.querySelector('button').onclick=()=>{ if(done||!ok)return; playSound(sfx.success); d.done[m.id]=true; if(m.reward.ticket)meta.tickets=(meta.tickets||0)+m.reward.ticket; if(m.reward.freeze)meta.freeze=(meta.freeze||0)+m.reward.freeze; save(); renderDaily(); renderInventory(); };
       fragment.appendChild(row);
     });
     el.dailyList.innerHTML = '';
@@ -1898,10 +1936,10 @@ function todayObj(){
     bind('wsSpeedChip', applySpeedChip);
   }
 
-  function forgeFreeze(){ if((meta.badges.rare_gem||0)<15){alert('稀有碎片不足');return;} meta.badges.rare_gem-=15; meta.freeze=(meta.freeze||0)+1; save(); renderInventory(); pushToast('锻造成功，获得冻结卡×1','success'); }
-  function rareRefresh(){ if(rollMissions(false,true)){ save(); renderInventory(); pushToast('已使用稀有碎片刷新每日任务','success'); } }
-  function activateWheelBoost(){ if((meta.badges.rare_gem||0)<10){alert('稀有碎片不足');return;} meta.badges.rare_gem-=10; meta.nextWheelBoost=Math.min((meta.nextWheelBoost||1)*1.5,3); save(); renderInventory(); pushToast('已注入强运，下一次幸运轮提升','success'); }
-  function applySpeedChip(){ if((meta.badges.rare_gem||0)<20){alert('稀有碎片不足');return;} const buff=todayBuff(); if(buff.rateBuff>=0.20){alert('今日加成已达上限');return;} meta.badges.rare_gem-=20; buff.rateBuff=+(Math.min(0.20,(buff.rateBuff||0)+0.05).toFixed(2)); save(); renderInventory(); updateRate(); pushToast('当日基础速率 +5%','success'); }
+  function forgeFreeze(){ playSound(sfx.click); if((meta.badges.rare_gem||0)<15){alert('稀有碎片不足');return;} meta.badges.rare_gem-=15; meta.freeze=(meta.freeze||0)+1; save(); renderInventory(); pushToast('锻造成功，获得冻结卡×1','success'); }
+  function rareRefresh(){ playSound(sfx.click); if(rollMissions(false,true)){ save(); renderInventory(); pushToast('已使用稀有碎片刷新每日任务','success'); } }
+  function activateWheelBoost(){ playSound(sfx.click); if((meta.badges.rare_gem||0)<10){alert('稀有碎片不足');return;} meta.badges.rare_gem-=10; meta.nextWheelBoost=Math.min((meta.nextWheelBoost||1)*1.5,3); save(); renderInventory(); pushToast('已注入强运，下一次幸运轮提升','success'); }
+  function applySpeedChip(){ playSound(sfx.click); if((meta.badges.rare_gem||0)<20){alert('稀有碎片不足');return;} const buff=todayBuff(); if(buff.rateBuff>=0.20){alert('今日加成已达上限');return;} meta.badges.rare_gem-=20; buff.rateBuff=+(Math.min(0.20,(buff.rateBuff||0)+0.05).toFixed(2)); save(); renderInventory(); updateRate(); pushToast('当日基础速率 +5%','success'); }
   
   setupButtonPair('btnForgeFreeze', 'btnForgeFreeze_desktop', forgeFreeze);
   setupButtonPair('btnRareRefresh', 'btnRareRefresh_desktop', rareRefresh);
@@ -1909,11 +1947,12 @@ function todayObj(){
   setupButtonPair('btnSpeedChip', 'btnSpeedChip_desktop', applySpeedChip);
 
   /* 任务库逻辑 */
-  const openTaskLibrary = () => { el.taskLibraryMask.style.display = 'flex'; };
+  const openTaskLibrary = () => { playSound(sfx.modalOpen); el.taskLibraryMask.style.display = 'flex'; };
   setupButtonPair('btnTaskLibrary', 'btnTaskLibrary_desktop', openTaskLibrary);
 
-  if(el.btnCloseTaskLibrary) el.btnCloseTaskLibrary.onclick=()=>{ el.taskLibraryMask.style.display='none'; };
+  if(el.btnCloseTaskLibrary) el.btnCloseTaskLibrary.onclick=()=>{ playSound(sfx.modalClose); el.taskLibraryMask.style.display='none'; };
   if(el.btnImportTasks) el.btnImportTasks.onclick=()=>{
+    playSound(sfx.click);
     const inputText = (el.taskLibraryInput.value||'').trim(); if(!inputText){ pushToast('任务库输入为空','warn'); return; }
     const lines = inputText.split('\n'); let imported=0;
     lines.forEach(line=>{
@@ -1937,11 +1976,13 @@ function todayObj(){
 
   /* 今日已完成 */
   const openTodayDone = () => {
+    playSound(sfx.modalOpen);
     renderTodayDone();
     el.todayDoneMask.style.display = 'flex';
   };
   setupButtonPair('btnTodayDone', 'btnTodayDone_desktop', openTodayDone);
   el.btnCloseTodayDone.onclick = () => {
+    playSound(sfx.modalClose);
     el.todayDoneMask.style.display = 'none';
   };
 
@@ -1954,6 +1995,7 @@ function todayObj(){
 
   /* —— Funshop 事件绑定 —— */
   if(el.btnFunshopEdit) el.btnFunshopEdit.onclick=()=>{
+    playSound(sfx.modalOpen);
     const acts=meta.funshop.activities||[];
     const lines=acts.map(a=>{
       const need=Object.entries(a.need||{}).map(([k,v])=>`${k}*${v}`).join(',');
@@ -1964,8 +2006,9 @@ function todayObj(){
     if(el.funshopInput) el.funshopInput.value=lines;
     el.funshopEditMask.style.display='flex';
   };
-  if(el.btnCloseFunshopEdit) el.btnCloseFunshopEdit.onclick=()=>{ el.funshopEditMask.style.display='none'; };
+  if(el.btnCloseFunshopEdit) el.btnCloseFunshopEdit.onclick=()=>{ playSound(sfx.modalClose); el.funshopEditMask.style.display='none'; };
   if(el.btnFunshopImport) el.btnFunshopImport.onclick=()=>{
+    playSound(sfx.click);
     const text=(el.funshopInput.value||'').trim();
     const acts=parseFunshopLines(text);
     meta.funshop.activities=acts;
@@ -1976,6 +2019,7 @@ function todayObj(){
   const btnCopyFunshopFormat = document.getElementById('btnCopyFunshopFormat');
   if(btnCopyFunshopFormat) {
     btnCopyFunshopFormat.onclick = () => {
+      playSound(sfx.click);
       const textToCopy = `放松呼吸训练|300|需求: rare_token*1|磨损: rare_token*5|
 豪情轮盘挑战|180|需求: epic_token*1|磨损: epic_token*8|时段: 19:00-23:00
 街机小游园|120|需求: rare_token*1|磨损: rare_token*3,ticket*1|`;
@@ -1993,6 +2037,7 @@ function todayObj(){
   const navBtnHelp = document.getElementById('navBtnHelp');
   if (navBtnHelp) {
     navBtnHelp.addEventListener('click', () => {
+      playSound(sfx.modalOpen);
       if (el.helpMask) el.helpMask.style.display = 'flex';
     });
   }
@@ -2012,6 +2057,7 @@ function todayObj(){
         
         // Populate and show the debug modal
         if (el.devMask) {
+            playSound(sfx.modalOpen);
             el.rate1.value=RATE_BY_DIFFICULTY[1]; el.rate2.value=RATE_BY_DIFFICULTY[2]; el.rate3.value=RATE_BY_DIFFICULTY[3]; el.rate4.value=RATE_BY_DIFFICULTY[4]; el.rate5.value=RATE_BY_DIFFICULTY[5];
             
             el.devRewardBaseChance.value = REWARD_PARAMS.baseChance;
@@ -2039,6 +2085,7 @@ function todayObj(){
   // Dev Panel Actions
   if (el.btnSaveResources) {
     el.btnSaveResources.onclick = () => {
+      playSound(sfx.click);
       const p = s => parseInt(s, 10) || 0;
       state.agg.totalHQ = p(el.devTotalHQ.value);
       meta.tickets = p(el.devTickets.value);
@@ -2058,6 +2105,7 @@ function todayObj(){
 
   if (el.btnSaveRewardParams) {
     el.btnSaveRewardParams.onclick = () => {
+      playSound(sfx.click);
       const p = s => parseFloat(s) || 0;
       REWARD_PARAMS.baseChance = p(el.devRewardBaseChance.value);
       REWARD_PARAMS.betCoefficient = p(el.devRewardBetCoeff.value);
@@ -2070,6 +2118,7 @@ function todayObj(){
   
   if (el.btnResetRewardParams) {
     el.btnResetRewardParams.onclick = () => {
+      playSound(sfx.click);
       REWARD_PARAMS = { ...DEFAULT_REWARD_PARAMS };
       el.devRewardBaseChance.value = REWARD_PARAMS.baseChance;
       el.devRewardBetCoeff.value = REWARD_PARAMS.betCoefficient;
@@ -2082,6 +2131,7 @@ function todayObj(){
 
   if (el.btnSimulateNextDay) {
     el.btnSimulateNextDay.onclick = () => {
+        playSound(sfx.click);
         window._debugDateOffset = (window._debugDateOffset || 0) + 1;
         renderInitial();
         pushToast(`已模拟到下一天 (${getToday().toLocaleDateString()})`, 'success');
@@ -2090,6 +2140,7 @@ function todayObj(){
   
   if (el.btnResetDaily) {
       el.btnResetDaily.onclick = () => {
+          playSound(sfx.click);
           const d = todayObj();
           d.progressSec = 0; d.hardSec = 0; d.sessions = 0; d.zeroPauseSessions = 0; d.missions = null; d.refreshUsed = false; d.done = {};
           rollMissions(true);
@@ -2101,6 +2152,7 @@ function todayObj(){
   
   if (el.btnHardReset) {
       el.btnHardReset.onclick = () => {
+          playSound(sfx.warn);
           if (confirm('危险操作：这将清除此浏览器中的所有应用数据，确定吗？')) {
               Object.values(LS_KEYS).forEach(k => {
                   storage.removeItem(k);
@@ -2114,6 +2166,7 @@ function todayObj(){
   
   if (el.btnExportState) {
     el.btnExportState.onclick = () => {
+      playSound(sfx.click);
       const fullState = {
           tasks: state.tasks,
           agg: state.agg,
@@ -2129,6 +2182,7 @@ function todayObj(){
   
   if (el.btnImportState) {
     el.btnImportState.onclick = () => {
+      playSound(sfx.click);
       const json = el.devStateText.value;
       if (!json) {
         pushToast('导入框为空。', 'warn');
