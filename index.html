@@ -11,14 +11,21 @@
   *{box-sizing:border-box} html,body{height:100%}
   body{margin:0;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;color:var(--text);
     background:linear-gradient(160deg,var(--bg),#0b0d12 60%)}
-  .app{max-width:1200px;margin:20px auto 60px;padding:0 16px}
+  .app{max-width:1220px;margin:20px auto 60px;padding:0 16px}
   header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
   h1{font-size:18px;margin:0;font-weight:700}
-  .grid{display:grid;gap:16px;grid-template-columns:1.1fr .9fr}
-  @media (max-width:980px){.grid{grid-template-columns:1fr}}
+  .workspace{display:grid;gap:18px;grid-template-columns:minmax(0,1.35fr) minmax(320px,0.65fr)}
+  .column{display:flex;flex-direction:column;gap:16px}
+  @media (max-width:1100px){.workspace{grid-template-columns:1fr}}
   .card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:16px;box-shadow:var(--shadow)}
+  .card.compact .bd{padding:12px 16px}
   .card .hd{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
   .card .bd{padding:14px 16px}
+  .control-dock{display:grid;gap:14px}
+  .control-group{border:1px dashed var(--border);border-radius:12px;padding:12px;background:rgba(255,255,255,.02)}
+  .control-group h4{margin:0 0 8px;font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+  .dock-buttons{display:flex;flex-wrap:wrap;gap:8px}
+  .dock-buttons .btn{flex:1;min-width:120px;text-align:center}
   .muted{color:var(--muted)}
   .row{display:flex;gap:10px;flex-wrap:wrap}
   input,select{background:#0d1016;color:var(--text);border:1px solid var(--border);border-radius:10px;padding:10px 12px;outline:none}
@@ -42,6 +49,11 @@
   .task{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;padding:12px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.02)}
   .task.selected{border-color:var(--primary);box-shadow:0 0 0 2px rgba(122,162,255,.25) inset;background:rgba(122,162,255,.05)}
   .task .reward-tag{margin-top:4px;display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid var(--border);background:rgba(122,162,255,.08);color:var(--primary-2)}
+  .compose-grid{display:grid;grid-template-columns:minmax(0,1fr) 160px minmax(0,220px);gap:12px;align-items:end;margin-bottom:12px}
+  .compose-grid .field{display:flex;flex-direction:column;gap:6px}
+  .compose-grid label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .compose-grid .actions{display:flex;gap:8px}
+  .compose-grid .actions .btn{flex:1}
   .section-2col{display:grid;grid-template-columns:1fr 1fr;gap:16px}
   .pane{border:1px dashed var(--border);border-radius:12px;padding:12px}
   .timer{display:grid;grid-template-rows:auto 1fr auto;min-height:520px}
@@ -111,6 +123,7 @@
   .modal .note{font-size:12px;color:var(--muted)}
   @media (max-width:720px){
     .app{padding:0 12px;margin:16px auto 48px}
+    .workspace{grid-template-columns:1fr}
     header{flex-direction:column;align-items:flex-start;gap:12px}
     h1{font-size:16px}
     .kpi{width:100%;gap:8px}
@@ -120,11 +133,13 @@
     .auth-chip .btn{flex:1}
     .auth-chip .auth-status{justify-content:flex-start}
     .mobile-tabs{display:flex;position:sticky;top:8px;z-index:20;padding:4px 0;backdrop-filter:blur(10px);background:rgba(14,17,23,.88);border-radius:12px}
-    .grid{gap:12px}
+    .workspace{gap:12px}
     .card .bd{padding:12px}
     .row{flex-direction:column;align-items:stretch}
     .row > *{width:100%}
     .tasks{gap:12px}
+    .compose-grid{grid-template-columns:1fr}
+    .compose-grid .actions{flex-direction:column}
     .task{display:flex;flex-direction:column;align-items:stretch;gap:8px}
     .task .controls{display:flex;gap:8px}
     .task .controls .btn{flex:1}
@@ -162,105 +177,132 @@
     <button class="tab-btn" data-mobile-target="timerCard">计时面板</button>
   </div>
 
-  <div class="grid">
-    <section class="card mobile-panel" id="tasksCard">
-      <div class="hd">
-        <h2 style="margin:0;font-size:16px">任务清单</h2>
-        <span class="muted">创建 → 选择 → 继续/暂停/开始/结束</span>
-      </div>
-      <div class="bd">
-        <div class="row" style="margin-bottom:10px">
-          <input id="taskTitle" type="text" placeholder="任务标题（如：论文引言改写）" />
-          <select id="taskDiff" style="max-width:140px">
-            <option value="1">难度 1 · 轻松</option>
-            <option value="2">难度 2</option>
-            <option value="3" selected>难度 3 · 标准</option>
-            <option value="4">难度 4</option>
-            <option value="5">难度 5 · 硬仗</option>
-          </select>
-          <button class="btn primary" id="btnAdd">添加任务</button>
-          <button class="btn" id="btnClearAll">清空数据</button>
+  <div class="workspace">
+    <div class="column column-main">
+      <section class="card mobile-panel" id="tasksCard">
+        <div class="hd">
+          <h2 style="margin:0;font-size:16px">任务清单</h2>
+          <span class="muted">创建 → 选择 → 继续/暂停/开始/结束</span>
         </div>
-        <div class="tasks" id="taskList"></div>
-        <div class="muted" id="emptyTask" style="display:none;padding:18px;text-align:center">暂无任务，先在上方添加一个。</div>
-      </div>
-
-      <div class="bd">
-        <div class="section-2col">
-          <div class="pane">
-            <h3>每日任务</h3>
-            <div id="dailyList"></div>
-            <div class="row" style="margin-top:8px">
-              <button class="btn small" id="btnDailyRefresh">刷新任务</button>
-              <button class="btn small" id="btnTaskLibrary">任务库</button>
-              <small class="muted">每日首次免费，之后每次消耗抽卡券×1</small>
+        <div class="bd">
+          <div class="compose-grid">
+            <div class="field">
+              <label for="taskTitle">任务标题</label>
+              <input id="taskTitle" type="text" placeholder="任务标题（如：论文引言改写）" />
             </div>
-            <div class="row" style="margin-top:8px">
-              <button class="btn small" id="btnTodayDone">今日已完成</button>
-              <small class="muted">查看今天完成过的所有任务</small>
+            <div class="field" style="max-width:160px">
+              <label for="taskDiff">难度</label>
+              <select id="taskDiff">
+                <option value="1">难度 1 · 轻松</option>
+                <option value="2">难度 2</option>
+                <option value="3" selected>难度 3 · 标准</option>
+                <option value="4">难度 4</option>
+                <option value="5">难度 5 · 硬仗</option>
+              </select>
+            </div>
+            <div class="field actions">
+              <button class="btn primary" id="btnAdd">添加任务</button>
+              <button class="btn" id="btnClearAll">清空数据</button>
             </div>
           </div>
-          <div class="pane">
-            <h3>库存 / 幸运轮</h3>
-            <div class="badge-row" id="invRow"></div>
-            <div class="row" style="margin-top:8px">
-              <button class="btn" id="btnWheel">幸运轮（消耗抽卡券×1）</button>
+          <div class="tasks" id="taskList"></div>
+          <div class="muted" id="emptyTask" style="display:none;padding:18px;text-align:center">暂无任务，先在上方添加一个。</div>
+        </div>
+
+        <div class="bd">
+          <div class="section-2col">
+            <div class="pane">
+              <h3>每日任务</h3>
+              <div id="dailyList"></div>
+              <small class="muted">每日首刷免费，可在右侧操作面板快速刷新或导入任务。</small>
             </div>
-            <div class="row" style="margin-top:8px">
-              <button class="btn small" id="btnForgeFreeze">锻造冻结卡（稀有×15）</button>
-              <button class="btn small" id="btnRareRefresh">稀有刷新每日（稀有×6）</button>
-              <button class="btn small" id="btnWheelBoost">幸运轮强运（稀有×10）</button>
-              <button class="btn small" id="btnSpeedChip">调速芯片 +5%（稀有×20）</button>
+            <div class="pane">
+              <h3>库存快照</h3>
+              <div class="badge-row" id="invRow"></div>
+              <details class="workshop" id="badgeWorkshop">
+                <summary>徽章工坊</summary>
+                <div class="workshop-body" id="badgeWorkshopBody"></div>
+              </details>
             </div>
-            <div class="row" style="margin-top:8px">
-              <button class="btn" id="btnOpenFunshop">娱乐兑换所</button>
-            </div>
-            <details class="workshop" id="badgeWorkshop">
-              <summary>徽章工坊</summary>
-              <div class="workshop-body" id="badgeWorkshopBody"></div>
-            </details>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
 
-    <section class="card timer mobile-panel" id="timerCard">
-      <div class="hd">
-        <h2 style="margin:0;font-size:16px">计时与豪情值</h2>
-        <span class="muted" id="activeHint">未选择任务</span>
-      </div>
-      <div class="bd" style="position:relative">
-        <div class="ring-wrap">
-          <svg viewBox="0 0 220 220" class="ring" aria-label="进度环">
-            <defs>
-              <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stop-color="var(--primary)"/>
-                <stop offset="100%" stop-color="var(--primary-2)"/>
-              </linearGradient>
-            </defs>
-            <circle class="bg" cx="110" cy="110" r="90"></circle>
-            <circle class="fg" cx="110" cy="110" r="90" stroke-dasharray="565.48" stroke-dashoffset="565.48"></circle>
-            <text x="110" y="78" class="cap">豪情值（本次）</text>
-            <text x="110" y="158" class="cap">速率：<tspan id="rateText">0</tspan> / 秒</text>
-            <text x="110" y="178" class="task-name" id="taskNameText">未开始</text>
-          </svg>
-          <div class="centerFlip"><div id="sessionFlip"></div></div>
+    <div class="column column-side">
+      <section class="card timer mobile-panel" id="timerCard">
+        <div class="hd">
+          <h2 style="margin:0;font-size:16px">计时与豪情值</h2>
+          <span class="muted" id="activeHint">未选择任务</span>
         </div>
-        <div class="timer-kpis">
-          <div class="pill">当前任务累计豪情值：<strong id="taskTotal">0</strong></div>
-          <div class="pill">本次用时：<strong id="sessionTime">0:00:00</strong></div>
-          <div class="pill">任务总用时：<strong id="taskTime">0:00:00</strong></div>
-          <div class="pill warn" id="pauseIndicator" style="display:none">已暂停：<strong id="pauseTime">0:00</strong></div>
+        <div class="bd" style="position:relative">
+          <div class="ring-wrap">
+            <svg viewBox="0 0 220 220" class="ring" aria-label="进度环">
+              <defs>
+                <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stop-color="var(--primary)"/>
+                  <stop offset="100%" stop-color="var(--primary-2)"/>
+                </linearGradient>
+              </defs>
+              <circle class="bg" cx="110" cy="110" r="90"></circle>
+              <circle class="fg" cx="110" cy="110" r="90" stroke-dasharray="565.48" stroke-dashoffset="565.48"></circle>
+              <text x="110" y="78" class="cap">豪情值（本次）</text>
+              <text x="110" y="158" class="cap">速率：<tspan id="rateText">0</tspan> / 秒</text>
+              <text x="110" y="178" class="task-name" id="taskNameText">未开始</text>
+            </svg>
+            <div class="centerFlip"><div id="sessionFlip"></div></div>
+          </div>
+          <div class="timer-kpis">
+            <div class="pill">当前任务累计豪情值：<strong id="taskTotal">0</strong></div>
+            <div class="pill">本次用时：<strong id="sessionTime">0:00:00</strong></div>
+            <div class="pill">任务总用时：<strong id="taskTime">0:00:00</strong></div>
+            <div class="pill warn" id="pauseIndicator" style="display:none">已暂停：<strong id="pauseTime">0:00</strong></div>
+          </div>
         </div>
-      </div>
-      <div class="bd" style="padding-top:0">
-        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
-          <button class="btn accent" id="btnStart"  aria-label="开始" disabled>开始</button>
-          <button class="btn"         id="btnPause"  aria-label="暂停" disabled>暂停</button>
-          <button class="btn danger"  id="btnStop"   aria-label="结束"  disabled>结束</button>
+        <div class="bd" style="padding-top:0">
+          <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center">
+            <button class="btn accent" id="btnStart"  aria-label="开始" disabled>开始</button>
+            <button class="btn"         id="btnPause"  aria-label="暂停" disabled>暂停</button>
+            <button class="btn danger"  id="btnStop"   aria-label="结束"  disabled>结束</button>
+          </div>
         </div>
-      </div>
-    </section>
+      </section>
+
+      <section class="card compact" aria-label="操作面板">
+        <div class="hd">
+          <h2 style="margin:0;font-size:16px">操作面板</h2>
+          <span class="muted">常用动作集中在此</span>
+        </div>
+        <div class="bd">
+          <div class="control-dock">
+            <div class="control-group">
+              <h4>任务流程</h4>
+              <div class="dock-buttons">
+                <button class="btn small" id="btnDailyRefresh">刷新任务</button>
+                <button class="btn small" id="btnTaskLibrary">任务库</button>
+                <button class="btn small" id="btnTodayDone">今日已完成</button>
+              </div>
+            </div>
+            <div class="control-group">
+              <h4>奖励与娱乐</h4>
+              <div class="dock-buttons">
+                <button class="btn" id="btnWheel">幸运轮（消耗抽卡券×1）</button>
+                <button class="btn" id="btnOpenFunshop">娱乐兑换所</button>
+              </div>
+            </div>
+            <div class="control-group">
+              <h4>库存动作</h4>
+              <div class="dock-buttons">
+                <button class="btn small" id="btnForgeFreeze">锻造冻结卡（稀有×15）</button>
+                <button class="btn small" id="btnRareRefresh">稀有刷新每日（稀有×6）</button>
+                <button class="btn small" id="btnWheelBoost">幸运轮强运（稀有×10）</button>
+                <button class="btn small" id="btnSpeedChip">调速芯片 +5%（稀有×20）</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
   </div>
 </div>
 
@@ -518,7 +560,13 @@ const MAX_FLIPS_PER_SECOND=8, CYCLE_SECONDS_BASE=20, CIRCUM=2*Math.PI*90;
 
 /* ========== 主逻辑 ========== */
 document.addEventListener('DOMContentLoaded',()=>{
-const LS_KEY="haoqing_tasks_v1", LS_AGG="haoqing_agg_v1", LS_META="haoqing_meta_v1", LS_RATES="haoqing_rates_v1";
+const LS_KEYS = {
+    TASKS: "haoqing_tasks_v1",
+    AGG: "haoqing_agg_v1",
+    META: "haoqing_meta_v1",
+    RATES: "haoqing_rates_v1",
+    FUNSHOP: "haoqing_funshop_v1"
+};
 
 // === Cloud Sync（Firestore 适配） ===
 let CLOUD = { 
@@ -526,10 +574,11 @@ let CLOUD = {
   uid: null,
   col: null,
   docIdMap: { 
-    [LS_KEY]: LS_KEY,
-    [LS_AGG]: LS_AGG,
-    [LS_META]: LS_META,
-    [LS_RATES]: LS_RATES
+    [LS_KEYS.TASKS]: LS_KEYS.TASKS,
+    [LS_KEYS.AGG]: LS_KEYS.AGG,
+    [LS_KEYS.META]: LS_KEYS.META,
+    [LS_KEYS.RATES]: LS_KEYS.RATES,
+    [LS_KEYS.FUNSHOP]: LS_KEYS.FUNSHOP
   },
   async get(key){
     if(!this.enabled || !this.col) return null;
@@ -582,15 +631,30 @@ function writeWithUpdatedAt(key, value, updatedAt){
 
 // ———— 首次登录后的：合并 + 订阅 ————
 async function initialCloudMergeAndSubscribe(){
-  const keys = [LS_KEY, LS_AGG, LS_META, LS_RATES];
+  const keys = Object.values(LS_KEYS);
+  const stateUpdaters = {
+      [LS_KEYS.TASKS]: (v) => { state.tasks = Array.isArray(v) ? v : []; },
+      [LS_KEYS.AGG]: (v) => { state.agg = v || { totalHQ: 0, totalSeconds: 0 }; },
+      [LS_KEYS.META]: (v) => { meta = v || meta; ensureBadgeMeta(); },
+      [LS_KEYS.RATES]: (v) => { RATE_BY_DIFFICULTY = { ...DEFAULT_RATES, ...(v || {}) }; },
+      [LS_KEYS.FUNSHOP]: (v) => { FUNSHOP = v || FUNSHOP; }
+  };
+  const subscriptions = {
+      [LS_KEYS.TASKS]: (v) => { state.tasks = Array.isArray(v) ? v : []; renderTasks(); },
+      [LS_KEYS.AGG]: (v) => { state.agg = v || { totalHQ: 0, totalSeconds: 0 }; renderKPI(); },
+      [LS_KEYS.META]: (v) => { meta = v || meta; ensureBadgeMeta(); renderDaily(); renderInventory(); renderWorkshop(); setControls(); },
+      [LS_KEYS.RATES]: (v) => { RATE_BY_DIFFICULTY = { ...DEFAULT_RATES, ...(v || {}) }; updateRate(); },
+      [LS_KEYS.FUNSHOP]: (v) => { FUNSHOP = v || FUNSHOP; renderFunshop(); }
+  };
+
   for(const key of keys){
-    // 准备本地默认
-    const localDefault = key===LS_KEY ? [] : 
-                         key===LS_AGG ? {totalHQ:0,totalSeconds:0} : 
-                         key===LS_META ? meta : 
-                         key===LS_RATES ? RATE_BY_DIFFICULTY : null;
+    const localDefault = key===LS_KEYS.TASKS ? [] : 
+                         key===LS_KEYS.AGG ? {totalHQ:0,totalSeconds:0} : 
+                         key===LS_KEYS.META ? meta : 
+                         key===LS_KEYS.RATES ? RATE_BY_DIFFICULTY :
+                         key===LS_KEYS.FUNSHOP ? FUNSHOP : null;
     const local = readWithUpdatedAt(key, localDefault);
-    let remote = await CLOUD.get(key); // { value, updatedAt }
+    let remote = await CLOUD.get(key);
 
     if(!remote){
       await CLOUD.set(key, local.value);
@@ -599,23 +663,9 @@ async function initialCloudMergeAndSubscribe(){
       const ru = remote.updatedAt || 0;
       const lu = local.updatedAt || 0;
       if(ru > lu){
-        // 远端更新 → 覆盖内存与本地
-        if(key===LS_KEY){
-          state.tasks = Array.isArray(remote.value)?remote.value:[]; 
-        }
-        if(key===LS_AGG){
-          state.agg = remote.value || {totalHQ:0,totalSeconds:0};
-        }
-        if(key===LS_META){
-          meta = remote.value || meta;
-          ensureBadgeMeta();
-        }
-        if(key===LS_RATES){
-          RATE_BY_DIFFICULTY = {...RATE_BY_DIFFICULTY, ...(remote.value||{})};
-        }
+        if (stateUpdaters[key]) stateUpdaters[key](remote.value);
         writeWithUpdatedAt(key, remote.value, ru);
-      }else{
-        // 本地更新 → 推上远端
+      } else if (lu > ru) {
         await CLOUD.set(key, local.value);
         writeWithUpdatedAt(key, local.value, Date.now());
       }
@@ -623,52 +673,19 @@ async function initialCloudMergeAndSubscribe(){
   }
 
   // 合并完刷新一次
-  renderTasks();
-  renderKPI();
-  renderDaily();
-  renderInventory();
-  renderWorkshop();
-  hidePauseIndicator();
-  setControls();
+  renderTasks(); renderKPI(); renderDaily(); renderInventory(); renderWorkshop(); renderFunshop(); hidePauseIndicator(); setControls();
 
   // 远端订阅：跨设备/多标签页实时同步
   CLOUD.unsubscribeAll();
-  CLOUD.subscribe(LS_KEY, ({value,updatedAt})=>{
-    const localU = readJSON(LS_KEY+'__updatedAt',0);
-    if((updatedAt||0) > (localU||0)){
-      state.tasks = Array.isArray(value)?value:[]; 
-      writeWithUpdatedAt(LS_KEY, state.tasks, updatedAt);
-      renderTasks();
-    }
-  });
-  CLOUD.subscribe(LS_AGG, ({value,updatedAt})=>{
-    const localU = readJSON(LS_AGG+'__updatedAt',0);
-    if((updatedAt||0) > (localU||0)){
-      state.agg = value || {totalHQ:0,totalSeconds:0};
-      writeWithUpdatedAt(LS_AGG, state.agg, updatedAt);
-      renderKPI();
-    }
-  });
-  CLOUD.subscribe(LS_META, ({value,updatedAt})=>{
-    const localU = readJSON(LS_META+'__updatedAt',0);
-    if((updatedAt||0) > (localU||0)){
-      meta = value || meta;
-      ensureBadgeMeta();
-      writeWithUpdatedAt(LS_META, meta, updatedAt);
-      renderDaily();
-      renderInventory();
-      renderWorkshop();
-      setControls();
-    }
-  });
-  CLOUD.subscribe(LS_RATES, ({value,updatedAt})=>{
-    const localU = readJSON(LS_RATES+'__updatedAt',0);
-    if((updatedAt||0) > (localU||0)){
-      RATE_BY_DIFFICULTY = {...DEFAULT_RATES, ...(value||{})};
-      writeWithUpdatedAt(LS_RATES, RATE_BY_DIFFICULTY, updatedAt);
-      updateRate();
-    }
-  });
+  for (const key of keys) {
+      CLOUD.subscribe(key, ({ value, updatedAt }) => {
+          const localU = readJSON(key + '__updatedAt', 0);
+          if ((updatedAt || 0) > (localU || 0)) {
+              if (subscriptions[key]) subscriptions[key](value);
+              writeWithUpdatedAt(key, value, updatedAt);
+          }
+      });
+  }
 }
 
 // ———— 暴露给最底部 Firebase 登录脚本调用 ————
@@ -688,13 +705,20 @@ window.AppSync = {
   }
 };
   const DEFAULT_RATES={1:1,2:2,3:4,4:7,5:11};
-  let RATE_BY_DIFFICULTY = (()=>{ const r=readJSON(LS_RATES,{}); return {...DEFAULT_RATES,...r} })();
-  let state = { tasks: readJSON(LS_KEY, []), agg: readJSON(LS_AGG, {totalHQ:0,totalSeconds:0}), active:null };
-  let meta = readJSON(LS_META, {
+  let RATE_BY_DIFFICULTY = (()=>{ const r=readJSON(LS_KEYS.RATES,{}); return {...DEFAULT_RATES,...r} })();
+  let state = { tasks: readJSON(LS_KEYS.TASKS, []), agg: readJSON(LS_KEYS.AGG, {totalHQ:0,totalSeconds:0}), active:null };
+  let meta = readJSON(LS_KEYS.META, {
     streak:0,pity:0,arcade:false,freeze:0,badges:{},tickets:0,
     daily:{},dailyBuff:{},multDayCount:{},guardUsedToday:0,guardDay:null,nextWheelBoost:1,
     completed:{}, /* 今日已完成持久化容器（date->[]） */
     funshop:{ activities:[], wearAccum:{} } /* —— 娱乐兑换所 —— */
+  });
+  let FUNSHOP = readJSON(LS_KEYS.FUNSHOP, {
+    items: [
+      {name:'放松呼吸训练', seconds:300, need:{rare_token:1}, wear:{rare_token:5}},
+      {name:'豪情轮盘挑战', seconds:180, need:{epic_token:1}, wear:{epic_token:8}, window:{start:'19:00', end:'23:00'}},
+      {name:'街机小游园', seconds:120, need:{rare_token:1}, wear:{rare_token:3, ticket:1}}
+    ]
   });
 
   function ensureBadgeMeta(){
@@ -832,10 +856,11 @@ window.AppSync = {
 function save(){
   // 本地：写值 + 写时间戳（用于首轮合并时的胜出判断）
   const now = Date.now();
-  writeWithUpdatedAt(LS_KEY,   state.tasks,           now);
-  writeWithUpdatedAt(LS_AGG,   state.agg,             now);
-  writeWithUpdatedAt(LS_META,  meta,                  now);
-  writeWithUpdatedAt(LS_RATES, RATE_BY_DIFFICULTY,    now);
+  writeWithUpdatedAt(LS_KEYS.TASKS,   state.tasks,           now);
+  writeWithUpdatedAt(LS_KEYS.AGG,   state.agg,             now);
+  writeWithUpdatedAt(LS_KEYS.META,  meta,                  now);
+  writeWithUpdatedAt(LS_KEYS.RATES, RATE_BY_DIFFICULTY,    now);
+  writeWithUpdatedAt(LS_KEYS.FUNSHOP, FUNSHOP,              now);
 
   // 云：若已登录则在空闲时段推送，不阻塞 UI 帧
   if (CLOUD.enabled) {
@@ -843,10 +868,11 @@ function save(){
     idle(async () => {
       try {
         await Promise.all([
-          CLOUD.set(LS_KEY,   state.tasks),
-          CLOUD.set(LS_AGG,   state.agg),
-          CLOUD.set(LS_META,  meta),
-          CLOUD.set(LS_RATES, RATE_BY_DIFFICULTY),
+          CLOUD.set(LS_KEYS.TASKS,      state.tasks),
+          CLOUD.set(LS_KEYS.AGG,      state.agg),
+          CLOUD.set(LS_KEYS.META,     meta),
+          CLOUD.set(LS_KEYS.RATES,    RATE_BY_DIFFICULTY),
+          CLOUD.set(LS_KEYS.FUNSHOP,  FUNSHOP),
         ]);
       } catch (e) {
         console.warn('Cloud save error:', e);
@@ -955,7 +981,7 @@ function save(){
     const b=meta.badges||{};
     const have={ rare_token:b.rare_tokens||0, epic_token:b.epic_tokens||0, legend_token:b.legendary_tokens||0, ticket:meta.tickets||0, freeze:meta.freeze||0 };
     for(const [k,req] of Object.entries(need)){
-      if((have[k]||0) < req) return {ok:false,msg:`${k} 不足`};
+      if((have[k]||0) < req) return {ok:false,msg:`${BADGE_META[k]?.label || k} 不足`};
     }
     // 扣减需求
     if(need.rare_token){ meta.badges.rare_tokens = Math.max(0,(meta.badges.rare_tokens||0) - need.rare_token); }
@@ -970,7 +996,7 @@ function save(){
     const report=[];
     [['rare_token','rare_tokens'],['epic_token','epic_tokens'],['legend_token','legendary_tokens']].forEach(([k,invKey])=>{
       const max=WEAR_MAX[k]; const have=meta.badges[invKey]||0; const w=pool[k]||0; const destroy=Math.min(have, Math.floor(w/max));
-      if(destroy>0){ meta.badges[invKey]=Math.max(0,have-destroy); pool[k]=w - destroy*max; report.push(`${k} -${destroy}`); }
+      if(destroy>0){ meta.badges[invKey]=Math.max(0,have-destroy); pool[k]=w - destroy*max; report.push(`${BADGE_META[k]?.label || k} -${destroy}`); }
     });
     return {ok:true,destroyed:report};
   }
@@ -979,11 +1005,13 @@ function save(){
     const list = el.funshopList; if(!list) return;
     ensureBadgeMeta(); ensureWearPool();
     const acts = meta.funshop.activities||[];
+    const fragment = document.createDocumentFragment();
+
     if(!acts.length){
       list.innerHTML = `<div class="funshop-muted">尚未配置娱乐活动。点右上角“调试/导入”。</div>`;
       return;
     }
-    list.innerHTML = '';
+
     acts.forEach(a=>{
       const row=document.createElement('div'); row.className='funshop-item';
       const inTime=withinWindow(a.timeWindow);
@@ -1012,8 +1040,10 @@ function save(){
       if(play) play.onclick=()=>startFunActivity(a.id);
       const stop = row.querySelector(`[data-stop="${a.id}"]`);
       if(stop) stop.onclick=()=>stopFunActivity(a.id,true);
-      list.appendChild(row);
+      fragment.appendChild(row);
     });
+    list.innerHTML = '';
+    list.appendChild(fragment);
   }
 
   function startFunActivity(id){
@@ -1044,7 +1074,8 @@ function save(){
   function renderKPI(){ kpiTotal.flipTo(Math.floor(state.agg.totalHQ || 0)); el.kpiTime.textContent = fmtTime(state.agg.totalSeconds || 0); }
 
   function renderTasks(){
-    el.taskList.innerHTML=''; el.emptyTask.style.display = state.tasks.length?'none':'block';
+    el.emptyTask.style.display = state.tasks.length?'none':'block';
+    const fragment = document.createDocumentFragment();
     state.tasks.forEach(t=>{
       const row=document.createElement('div'); row.className='task';
       if(state.active && state.active.taskId===t.id) row.classList.add('selected');
@@ -1059,8 +1090,10 @@ function save(){
       row.querySelector('[data-act="edit"]').onclick=()=>editTask(t.id);
       row.querySelector('[data-act="del"]').onclick=()=>deleteTask(t.id);
       row.querySelector('[data-act="select"]').onclick=()=>selectTask(t.id);
-      el.taskList.appendChild(row);
+      fragment.appendChild(row);
     });
+    el.taskList.innerHTML = '';
+    el.taskList.appendChild(fragment);
   }
 
   function setRing(p){ const off=CIRCUM*(1-Math.max(0,Math.min(1,p))); document.querySelector('.fg')?.setAttribute('stroke-dashoffset', off.toFixed(2)); }
@@ -1164,16 +1197,6 @@ function setControls(){
   }
 
   /* —— 今日已完成：核心 —— */
-
-  // [fix] 确保今日对象正确初始化completed数组
-  function todayObj() {
-    const k = todayKey();
-    if (!meta.daily[k]) meta.daily[k] = {progressSec:0,hardSec:0,sessions:0,zeroPauseSessions:0,missions:null,refreshUsed:false,done:{}, completed:[]};
-    if (!Array.isArray(meta.daily[k].completed)) meta.daily[k].completed = [];
-    return meta.daily[k];
-  }
-
-  // [fix] 确保今日已完成数据正确写入并保存
   function pushTodayDone(entry){
     const d = todayObj();
     d.completed.unshift(entry);
@@ -1185,22 +1208,29 @@ function setControls(){
     const list = d.completed || [];
     const box = document.getElementById('todayDoneBody');
     if(!box) return;
+
     if(list.length === 0){
       box.innerHTML = '<div class="muted">今天还没有完成的任务。</div>';
       return;
     }
-    // [fix] 倒序显示（最新在前）
-    box.innerHTML = list.map(it => `
-      <div class="pane">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-          <div style="font-weight:600">${it.title}</div>
-          <span class="tag">D${it.difficulty}</span>
-        </div>
-        <div class="muted" style="margin-top:6px;font-size:12px">
-          用时：<b>${fmtTime(it.seconds)}</b> · 本次豪情值：<b>${Math.floor(it.hq)}</b> · 完成于：${new Date(it.ts).toLocaleTimeString()}
-        </div>
-      </div>
-    `).join('');
+
+    const fragment = document.createDocumentFragment();
+    list.forEach(it => {
+        const item = document.createElement('div');
+        item.className = 'pane';
+        item.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+              <div style="font-weight:600">${it.title}</div>
+              <span class="tag">D${it.difficulty}</span>
+            </div>
+            <div class="muted" style="margin-top:6px;font-size:12px">
+              用时：<b>${fmtTime(it.seconds)}</b> · 本次豪情值：<b>${Math.floor(it.hq)}</b> · 完成于：${new Date(it.ts).toLocaleTimeString()}
+            </div>
+        `;
+        fragment.appendChild(item);
+    });
+    box.innerHTML = '';
+    box.appendChild(fragment);
   }
 
   /* 奖励计算与弹窗 */
@@ -1255,7 +1285,6 @@ function setControls(){
             state.agg.totalHQ = (state.agg.totalHQ || 0) + baseReward;
             save(); renderKPI();
             body.innerHTML += `<div class="result-bar result-ok" style="margin-top:16px">已领取基础奖励 +${baseReward}</div>`;
-            // [fix] 统一绑定关闭事件
             bindRewardClose();
           }else{
             // 押注逻辑
@@ -1290,7 +1319,6 @@ function setControls(){
             }
             save(); renderKPI();
           }
-          // [fix] 确保押注完成后始终可以关闭弹窗
           bindRewardClose();
         };
       });
@@ -1299,10 +1327,8 @@ function setControls(){
       state.agg.totalHQ = (state.agg.totalHQ || 0) + baseReward;
       save(); renderKPI();
       body.innerHTML += `<div class="result-bar result-ok" style="margin-top:16px">已领取基础奖励 +${baseReward}</div>`;
-      // [fix] 统一绑定关闭事件
       bindRewardClose();
     }
-
     el.rewardMask.style.display = 'flex';
   }
 
@@ -1312,13 +1338,13 @@ function setControls(){
 
     const t = getTask(state.active.taskId);
 
-    // 会话快照（先取，避免后续 UI/状态清理影响数据）
+    // 1. 会话快照（先取，避免后续 UI/状态清理影响数据）
     const sessionHQ = Math.floor(state.active.sessionHQ || 0);
     const sessionSeconds = state.active.sessionSeconds || 0;
     const pauses = state.active.pauses || 0;
     const diff = t ? t.difficulty : 3;
 
-    // 写入任务与全局累计
+    // 2. 写入任务与全局累计
     if(t){
       t.totalHQ = (t.totalHQ || 0) + sessionHQ;
       t.totalSeconds = (t.totalSeconds || 0) + sessionSeconds;
@@ -1326,7 +1352,7 @@ function setControls(){
     state.agg.totalHQ = (state.agg.totalHQ || 0) + sessionHQ;
     state.agg.totalSeconds = (state.agg.totalSeconds || 0) + sessionSeconds;
 
-    // 写入"今日已完成"列表
+    // 3. 写入"今日已完成"列表
     pushTodayDone({
       title: t ? t.title : '未知任务',
       difficulty: t ? t.difficulty : 3,
@@ -1335,13 +1361,13 @@ function setControls(){
       ts: Date.now()
     });
 
-    // 计算奖励基础
+    // 4. 计算奖励基础
     const finalBase = applySessionModifiers(sessionHQ, sessionSeconds, diff);
     const extraReward = grantTaskReward(t);
 
-    // 完成即从主任务列表移除
+    // 5. 完成即从主任务列表移除，并更新UI
     state.tasks = state.tasks.filter(task => task.id !== (state.active && state.active.taskId));
-    save();
+    save(); // 保存移除后的任务列表和累计值
     renderTasks();
     renderKPI();
     if(extraReward){
@@ -1349,7 +1375,7 @@ function setControls(){
       pushToast(extraReward.message,'success');
     }
 
-    // 重置计时 UI
+    // 6. 重置计时 UI
     el.activeHint.textContent='未选择任务';
     el.taskNameText.textContent='未开始';
     sessionFlip.setValue(0,true);
@@ -1360,18 +1386,15 @@ function setControls(){
     setRing(0);
     hidePauseIndicator();
 
-    // 每日统计 + 奖励弹窗
+    // 7. 每日统计 + 奖励弹窗
     onSegmentEnd_base(sessionSeconds, diff, pauses);
     singleMissionJudge(sessionSeconds, diff, pauses);
     openReward({ baseHQ: finalBase, seconds: sessionSeconds, difficulty: diff, rawHQ: sessionHQ });
 
-    // 清空活动态并存盘
+    // 8. 清空活动态并存盘
     state.active = null;
-    save();
+    save(); // 再次保存以清除 active 状态
     setControls();
-
-    // 保险：确保"结束"按钮指向此最终实现
-    el.btnStop.onclick = stopTimer;
   }
 
   /* 动画主循环（保留） */
@@ -1486,7 +1509,7 @@ function todayObj(){
   }
   function renderDaily(){
     const d=todayObj(); if(!d.missions){rollMissions(true);return}
-    el.dailyList.innerHTML='';
+    const fragment = document.createDocumentFragment();
     d.missions.forEach(m=>{
       const row=document.createElement('div');row.style='display:flex;align-items:center;justify-content:space-between;margin:6px 0';
       const progress=(()=>{if(m.type==='totalSec')return `${fmtTime(Math.min(d.progressSec,m.need))}/${fmtTime(m.need)}`; if(m.type==='hardSec')return `${fmtTime(Math.min(d.hardSec,m.need))}/${fmtTime(m.need)}`; if(m.type==='sessions')return `${Math.min(d.sessions,m.need)}/${m.need}`; if(m.type==='singleSec')return `完成一次 ≥ ${fmtTime(m.need)}`; if(m.type==='noPauseSingle')return `完成一次 ≥ ${fmtTime(m.need)}(0暂停)`; return ''})();
@@ -1494,8 +1517,10 @@ function todayObj(){
       const ok=(()=>{if(m.type==='totalSec')return d.progressSec>=m.need; if(m.type==='hardSec')return d.hardSec>=m.need; if(m.type==='sessions')return d.sessions>=m.need; return false})();
       row.innerHTML=`<div class="muted">${m.label} ${progress?`（${progress}）`:''}</div><div><button class="btn small" ${(!ok||done)?'disabled':''}>领取</button></div>`;
       row.querySelector('button').onclick=()=>{ if(done||!ok)return; d.done[m.id]=true; if(m.reward.ticket)meta.tickets=(meta.tickets||0)+m.reward.ticket; if(m.reward.freeze)meta.freeze=(meta.freeze||0)+m.reward.freeze; save(); renderDaily(); renderInventory(); };
-      el.dailyList.appendChild(row);
+      fragment.appendChild(row);
     });
+    el.dailyList.innerHTML = '';
+    el.dailyList.appendChild(fragment);
   }
 
   function renderInventory(){
@@ -1600,9 +1625,6 @@ function todayObj(){
   function renderInitial(){ renderTasks(); renderKPI(); renderDaily(); renderInventory(); renderWorkshop(); renderFunshop(); hidePauseIndicator(); setControls(); }
   renderInitial();
 
-  // 保险：确保"结束"按钮指向此最终实现
-  el.btnStop.onclick = stopTimer;
-
   /* —— Funshop 事件绑定 —— */
   if(el.btnOpenFunshop) el.btnOpenFunshop.onclick=()=>{ renderFunshop(); el.funshopMask.style.display='flex'; };
   if(el.btnCloseFunshop) el.btnCloseFunshop.onclick=()=>{ el.funshopMask.style.display='none'; };
@@ -1635,6 +1657,7 @@ function todayObj(){
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
 
 <script>
+// Firebase Initialization
 const firebaseConfig = {
   apiKey: "AIzaSyBjcUD9nAGxg5mgTA2v7mMcfD5dcWU9nTw",
   authDomain: "haoqing-af64d.firebaseapp.com",
@@ -1646,12 +1669,14 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 
 const auth = firebase.auth();
-const db   = firebase.firestore();
+const db = firebase.firestore();
 
+// UI Elements for Auth
 const loginBtn = document.getElementById('login');
 const statusEl = document.getElementById('status');
 const authChip = document.getElementById('authChip');
 
+// Function to update authentication UI
 function updateAuthUI(user){
   if(!authChip || !statusEl || !loginBtn) return;
   if(user){
@@ -1662,179 +1687,32 @@ function updateAuthUI(user){
     statusEl.textContent = '未登录';
   }
 }
-window.updateAuthUI = updateAuthUI;
-updateAuthUI(null);
 
+// Attach login button event
 if(loginBtn){
   loginBtn.onclick = () => {
     const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider).catch(console.error);
+    auth.signInWithPopup(provider).catch(error => {
+        console.error("Google Sign-In Error:", error);
+        // Optional: show a user-facing error message
+        alert("登录失败，请稍后再试或检查浏览器设置。");
+    });
   };
 }
 
-// 登录状态监听
- auth.onAuthStateChanged(async user => {
-   updateAuthUI(user);
-   if(user){
-     // 启用云同步（把 db 传入）
-     if (window.AppSync && typeof window.AppSync.setUser === 'function') {
-       window.AppSync.setUser(user, db);
-     } else {
-       window.AppSync && window.AppSync.setUser && window.AppSync.setUser(user, db);
-     }
-    // 启用云同步（把 db 传入）
-    if (window.AppSync && typeof window.AppSync.setUser === 'function') {
-      window.AppSync.setUser(user, db);
-    } else {
-      window.AppSync && window.AppSync.setUser && window.AppSync.setUser(user, db);
-    }
-    const hqEl  = document.getElementById('hq');
-    const addBt = document.getElementById('hq-add');
-    const subBt = document.getElementById('hq-sub');
-
-    async function load(){
-      const snap = await db.collection('users').doc(user.uid)
-                    .collection('data').doc('haoqing').get();
-      return snap.exists ? snap.data().value : 0;
-    }
-
-    async function save(v){
-      await db.collection('users').doc(user.uid)
-        .collection('data').doc('haoqing')
-        .set({ value:v, updatedAt:Date.now() });
-    }
-
-    let val = await load();
-    hqEl.textContent = val;
-
-    addBt.onclick = async()=>{ val++; hqEl.textContent = val; await save(val); };
-    subBt.onclick = async()=>{ val=Math.max(0,val-1); hqEl.textContent = val; await save(val); };
-   }else{
-     // 关闭云同步
-     if (window.AppSync && typeof window.AppSync.setUser === 'function') {
-       window.AppSync.setUser(null, null);
-     } else {
-       window.AppSync && window.AppSync.setUser && window.AppSync.setUser(null, null);
-     }
-    // 关闭云同步
-    if (window.AppSync && typeof window.AppSync.setUser === 'function') {
-      window.AppSync.setUser(null, null);
-    } else {
-      window.AppSync && window.AppSync.setUser && window.AppSync.setUser(null, null);
+// Single, definitive listener for authentication state changes
+auth.onAuthStateChanged(async user => {
+  updateAuthUI(user);
+  
+  // Call the main app's sync handler
+  if (window.AppSync && typeof window.AppSync.setUser === 'function') {
+    try {
+      // Pass user and db instance if logged in, or nulls if logged out.
+      await window.AppSync.setUser(user, user ? db : null);
+    } catch (e) {
+      console.error('AppSync operation failed:', e);
     }
   }
 });
-</script>
-
-<script>
-(() => {
-  // 使用全局 firebase 实例，避免重复声明现有 const 变量
-  const auth = firebase.auth();
-  const db   = firebase.firestore();
-
-  // 安全获取 DOM
-  const hqEl  = document.getElementById('hq');
-  const addBt = document.getElementById('hq-add');
-  const subBt = document.getElementById('hq-sub');
-
-  // 工具：对演示区进行对齐至 haoqing_agg_v1（与主应用一致）
-  function wireDemoToAgg(user) {
-    if (!hqEl || !addBt || !subBt) return;
-
-    const AGG_DOC_ID = 'haoqing_agg_v1';
-    const aggDocRef = db.collection('users')
-                        .doc(user.uid)
-                        .collection('haoqing')
-                        .doc(AGG_DOC_ID);
-
-    async function loadAggTotalHQ() {
-      const snap = await aggDocRef.get();
-      if (!snap.exists) return 0;
-      const d = snap.data();
-      return (d && d.value && typeof d.value.totalHQ === 'number') ? d.value.totalHQ : 0;
-    }
-
-    async function saveAggTotalHQ(newTotalHQ) {
-      const now = Date.now();
-      let totalSeconds = 0;
-      try {
-        const snap = await aggDocRef.get();
-        if (snap.exists && snap.data() && snap.data().value) {
-          const v = snap.data().value;
-          totalSeconds = typeof v.totalSeconds === 'number' ? v.totalSeconds : 0;
-        }
-      } catch (e) {
-        console.warn('readAgg before save error:', e);
-      }
-      await aggDocRef.set({
-        value: { totalHQ: newTotalHQ, totalSeconds },
-        updatedAt: now
-      }, { merge: true });
-    }
-
-    // 初次加载并订阅实时变化
-    loadAggTotalHQ().then(val => { hqEl.textContent = val; }).catch(console.warn);
-
-    // 去抖：先清空旧 onclick，再重绑
-    addBt.onclick = null;
-    subBt.onclick = null;
-
-    // 实时订阅，跨端同步可见
-    aggDocRef.onSnapshot(snap => {
-      if (!snap.exists) return;
-      const d = snap.data();
-      if (d && d.value && typeof d.value.totalHQ === 'number') {
-        hqEl.textContent = d.value.totalHQ;
-      }
-    });
-
-    // 重绑按钮逻辑到聚合文档
-    addBt.onclick = async () => {
-      const current = parseInt(hqEl.textContent || '0', 10) || 0;
-      const next = current + 1;
-      hqEl.textContent = next;
-      await saveAggTotalHQ(next);
-    };
-    subBt.onclick = async () => {
-      const current = parseInt(hqEl.textContent || '0', 10) || 0;
-      const next = Math.max(0, current - 1);
-      hqEl.textContent = next;
-      await saveAggTotalHQ(next);
-    };
-  }
-
-  // 追加一个独立的 auth 监听器，不替换原有监听器
-  auth.onAuthStateChanged(async (user) => {
-    if (typeof window.updateAuthUI === 'function') {
-      window.updateAuthUI(user);
-    }
-    if (user) {
-      // 关键：接上你的 AppSync，用于 LS_META/LS_AGG/LS_KEY/LS_RATES 的合并与订阅
-      if (window.AppSync && typeof window.AppSync.setUser === 'function') {
-        try {
-          await window.AppSync.setUser(user, db);
-        } catch (e) {
-          console.warn('AppSync.setUser error:', e);
-        }
-      }
-
-      // 对齐演示区到底层聚合文档（含 onSnapshot 实时）
-      wireDemoToAgg(user);
-
-    } else {
-      // 关闭订阅
-      if (window.AppSync && typeof window.AppSync.setUser === 'function') {
-        try {
-          await window.AppSync.setUser(null);
-        } catch (e) {
-          console.warn('AppSync.clear error:', e);
-        }
-      }
-      if (hqEl) hqEl.textContent = '0';
-      if (addBt) addBt.onclick = null;
-      if (subBt) subBt.onclick = null;
-    }
-  });
-})();
 </script>
 </html>
