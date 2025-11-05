@@ -17,6 +17,7 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
 <style>
   :root{
     --bg: #f5f5f7;
@@ -875,7 +876,7 @@ if ('serviceWorker' in navigator) {
     apiKey: "AIzaSyBjcUD9nAGxg5mgTA2v7mMcfD5dcWU9nTw", // <-- REPLACE
     authDomain: "haoqing-af64d.firebaseapp.com",
     projectId: "haoqing-af64d",
-    storageBucket: "haoqing-af64d.firebasestorage.app",
+    storageBucket: "haoqing-af64d.appspot.com",
     messagingSenderId: "1025278981441", // <-- REPLACE
     appId: "1:1025278981441:web:edaf5f1aa9446246c0ddc0" // <-- REPLACE
   };
@@ -883,6 +884,7 @@ if ('serviceWorker' in navigator) {
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
   const db = firebase.firestore();
+  const storageService = firebase.storage();
 </script>
 <script>
 /* ========== 存储兜底层 ========== */
@@ -1257,7 +1259,7 @@ window.AppSync = {
         meta.character = {
             name: '',
             title: '',
-            avatar: null // base64 string
+            avatar: null // base64 string or url
         };
     }
     // Buffs data
@@ -2472,13 +2474,41 @@ function todayObj(){
     el.avatarInput.onchange = e => {
         const file = e.target.files[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            meta.character.avatar = reader.result;
-            save();
-            renderYou();
-        };
-        reader.readAsDataURL(file);
+
+        // If user is logged in, upload to Firebase Storage
+        if (CLOUD.enabled && CLOUD.uid) {
+            el.avatarUploader.innerHTML = '上传中...';
+            const filePath = `avatars/${CLOUD.uid}/${file.name}`;
+            const storageRef = storageService.ref(filePath);
+            const uploadTask = storageRef.put(file);
+
+            uploadTask.on('state_changed', 
+                (snapshot) => { /* can be used for progress bar */ }, 
+                (error) => {
+                    console.error("Avatar upload failed:", error);
+                    pushToast('头像上传失败', 'warn');
+                    renderYou(); // Restore previous avatar state
+                }, 
+                () => {
+                    uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
+                        meta.character.avatar = downloadURL;
+                        save();
+                        renderYou();
+                        pushToast('头像已更新并同步', 'success');
+                    });
+                }
+            );
+
+        } else { // User is not logged in, save as base64 locally
+            const reader = new FileReader();
+            reader.onload = () => {
+                meta.character.avatar = reader.result; // This is a base64 string
+                save(); // Saves to localStorage
+                renderYou();
+                pushToast('头像已在本地更新', 'success');
+            };
+            reader.readAsDataURL(file);
+        }
     };
   }
 
