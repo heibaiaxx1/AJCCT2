@@ -967,6 +967,8 @@ async function initialCloudMergeAndSubscribe(){
 
   // 订阅实时计时器状态
   CLOUD.subscribe(LS_KEYS.LIVE_TIMER, ({ value }) => {
+      const wasRunning = state.active && !state.active.isPaused;
+
       if (value && value.taskId) {
           const wasInactive = !state.active;
           state.active = value;
@@ -978,6 +980,21 @@ async function initialCloudMergeAndSubscribe(){
               state.selectedTaskId = task.id; // Keep selection synced
               renderTasks();
               updateRate();
+          }
+
+          // If a running timer was just paused, authoritative sync of UI values
+          if (state.active.isPaused && wasRunning) {
+              const task = getTask(state.active.taskId);
+              if (task) {
+                  const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
+                  const finalSessionHQ = (state.active.accumulatedSeconds || 0) * rate;
+                  const finalSessionSeconds = state.active.accumulatedSeconds || 0;
+                  
+                  sessionFlip.setValue(Math.floor(finalSessionHQ), true); // instant update
+                  el.sessionTime.textContent = fmtTime(finalSessionSeconds);
+                  el.taskTotal.textContent = Math.floor((task.totalHQ || 0) + finalSessionHQ);
+                  el.taskTime.textContent = fmtTime((task.totalSeconds || 0) + finalSessionSeconds);
+              }
           }
       } else {
           if (state.active) {
@@ -1685,6 +1702,23 @@ function setControls(){
         pauseTime: now,
         startTime: null,
     };
+    
+    // Optimistic local update of state and UI
+    state.active = newTimerState;
+    setControls();
+
+    // Immediately update UI to final state to prevent animation desync
+    const task = getTask(state.active.taskId);
+    if(task) {
+      const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
+      const finalSessionHQ = (state.active.accumulatedSeconds || 0) * rate;
+      const finalSessionSeconds = state.active.accumulatedSeconds || 0;
+      
+      sessionFlip.setValue(Math.floor(finalSessionHQ), true); // instant update
+      el.sessionTime.textContent = fmtTime(finalSessionSeconds);
+      el.taskTotal.textContent = Math.floor((task.totalHQ || 0) + finalSessionHQ);
+      el.taskTime.textContent = fmtTime((task.totalSeconds || 0) + finalSessionSeconds);
+    }
 
     await CLOUD.set(LS_KEYS.LIVE_TIMER, newTimerState);
   }
@@ -1727,13 +1761,6 @@ function setControls(){
   }
 
   /* 奖励计算与弹窗 */
-  function applySessionModifiers(baseHQ, seconds, diff){
-    // 基础奖励 × 难度系数 × 时间系数
-    const diffMulti = {1:0.6,2:0.8,3:1,4:1.3,5:1.7}[diff] || 1;
-    const timeMulti = Math.min(3, Math.max(0.5, seconds / 600)); // 10分钟基准
-    return baseHQ * diffMulti * timeMulti;
-  }
-
   // [fix] 统一绑定奖励弹窗关闭事件，防止押注后关闭失效
   function bindRewardClose() {
     const closeBtn = el.btnCloseReward;
@@ -1893,7 +1920,6 @@ function setControls(){
     });
 
     triggerCompletionAnimation();
-    const finalBase = applySessionModifiers(sessionHQ, sessionSeconds, diff);
     const extraReward = grantTaskReward(t);
     state.tasks = state.tasks.filter(task => task.id !== activeSession.taskId);
     if(state.selectedTaskId === activeSession.taskId) state.selectedTaskId = null;
@@ -1909,7 +1935,7 @@ function setControls(){
     setTimeout(() => {
         onSegmentEnd_base(sessionSeconds, diff, pauses);
         singleMissionJudge(sessionSeconds, diff, pauses);
-        openReward({ baseHQ: finalBase, seconds: sessionSeconds, difficulty: diff, rawHQ: sessionHQ });
+        openReward({ baseHQ: sessionHQ, seconds: sessionSeconds, difficulty: diff, rawHQ: sessionHQ });
     }, 1800);
 
     // No need to reset UI here, subscription handler will do it.
