@@ -1235,10 +1235,9 @@ function save(){
   writeWithUpdatedAt(LS_KEYS.FUNSHOP, FUNSHOP,              now);
   writeWithUpdatedAt(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS, now);
 
-  // 云：若已登录则在空闲时段推送，不阻塞 UI 帧
+  // 云：若已登录则立即推送，不阻塞 UI 帧
   if (CLOUD.enabled) {
-    const idle = window.requestIdleCallback || (fn => setTimeout(fn, 200));
-    idle(async () => {
+    (async () => {
       try {
         await Promise.all([
           CLOUD.set(LS_KEYS.TASKS,      state.tasks),
@@ -1251,7 +1250,7 @@ function save(){
       } catch (e) {
         console.warn('Cloud save error:', e);
       }
-    });
+    })();
   }
 }
 
