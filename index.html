@@ -13,6 +13,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <style>
   :root{
     --bg: #f5f5f7;
@@ -865,6 +869,22 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <script>
+  // --- Firebase Initialization ---
+  // IMPORTANT: Replace with your web app's Firebase project configuration
+  const firebaseConfig = {
+    apiKey: "AIzaSyBjcUD9nAGxg5mgTA2v7mMcfD5dcWU9nTw", // <-- REPLACE
+    authDomain: "haoqing-af64d.firebaseapp.com",
+    projectId: "haoqing-af64d",
+    storageBucket: "haoqing-af64d.firebasestorage.app",
+    messagingSenderId: "1025278981441", // <-- REPLACE
+    appId: "1:1025278981441:web:edaf5f1aa9446246c0ddc0" // <-- REPLACE
+  };
+  // Initialize Firebase
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+</script>
+<script>
 /* ========== 存储兜底层 ========== */
 const storage = (() => {
   try {
@@ -1166,6 +1186,34 @@ window.AppSync = {
     }
   }
 };
+
+  const loginBtn = document.getElementById('login');
+  const authStatusEl = document.getElementById('status');
+  const authChip = document.getElementById('authChip');
+  
+  if (loginBtn) {
+    loginBtn.addEventListener('click', () => {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider)
+        .catch((error) => {
+            console.error("Authentication failed:", error);
+            pushToast(`登录失败: ${error.message}`, 'warn');
+        });
+    });
+  }
+
+  auth.onAuthStateChanged(user => {
+    if (user) {
+        authStatusEl.textContent = `已登录: ${user.displayName || user.email}`;
+        authChip.classList.add('logged-in');
+        window.AppSync.setUser(user, db);
+    } else {
+        authStatusEl.textContent = '未登录';
+        authChip.classList.remove('logged-in');
+        window.AppSync.setUser(null, null);
+    }
+  });
+  
   const DEFAULT_RATES={1:1,2:2,3:4,4:7,5:11};
   let RATE_BY_DIFFICULTY = (()=>{ const r=readJSON(LS_KEYS.RATES,{}); return {...DEFAULT_RATES,...r} })();
   
