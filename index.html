@@ -44,7 +44,6 @@
   h4{font-weight:700}
   .workspace{display:grid;gap:28px;grid-template-columns:minmax(0,1.3fr) minmax(380px,0.7fr)}
   .column{display:flex;flex-direction:column;gap:24px}
-  @media (max-width:1100px){.workspace{grid-template-columns:1fr}}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
   .card.compact .bd{padding:16px 24px}
   .card .hd{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--panel);}
@@ -101,7 +100,6 @@
   .timer-kpis .pill{border:1px solid var(--border);padding:10px 16px;border-radius:999px;color:var(--muted);font-size:14px;background:var(--panel-2)}
   .timer-kpis .pill strong { color: var(--text); font-weight: 600; margin-left: 6px; }
   .timer-kpis .pill.warn{border-color:var(--danger);color:var(--danger);background:color-mix(in srgb, var(--danger) 10%, transparent)}
-  /* FlipCounter */
   .flip{display:inline-flex;gap:6px;align-items:flex-end}
   .flip .col{position:relative;width:24px;height:32px;overflow:hidden;border-radius:6px;background:#f0f0f2;border:1px solid var(--border)}
   .flip.large .col{width:36px;height:48px;border-radius:8px}
@@ -112,12 +110,10 @@
   .flip.small .digit{height:24px;font-size:14px}
   .flip .sep{width:6px;text-align:center;color:var(--muted);font-weight:800;user-select:none}
   .flip.large .sep{width:10px}
-  /* Modal */
   .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:110;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
   .modal{width:min(640px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);color:var(--text)}
   .modal .mh{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
   .modal .mb{padding:24px}
-  /* 奖励条 */
   .result-bar{margin-top:10px;padding:12px 14px;border-radius:8px;border:1px solid transparent;}
   .result-ok{border-color:var(--success);background-color:color-mix(in srgb,var(--success) 10%,transparent)}
   .result-warn{border-color:var(--warning);background-color:color-mix(in srgb,var(--warning) 10%,transparent)}
@@ -128,7 +124,6 @@
   .choice .opt:hover{border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
   .loots{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}
   .loot{padding:4px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px; background:var(--panel);}
-  /* 徽章工坊 */
   details.workshop{margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:12px;background:#fafafd;transition:background .2s ease}
   details[open]{background:#fdfdfd}
   summary{cursor:pointer;font-weight:600}
@@ -144,7 +139,6 @@
   .toast-container{position:fixed;top:calc(16px + env(safe-area-inset-top));right:16px;display:flex;flex-direction:column;gap:10px;z-index:120;pointer-events:none}
   .toast{background:rgba(250,250,250,.9);border:1px solid var(--border);border-left:4px solid var(--accent);padding:12px 16px;border-radius:8px;color:var(--text);min-width:240px;max-width:320px;box-shadow:var(--shadow);opacity:0;transform:translateY(14px);transition:opacity .3s ease,transform .3s ease;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
   .toast.show{opacity:1;transform:translateY(0)}
-  /* —— Funshop —— */
   .funshop-list{display:grid;gap:12px}
   .funshop-item{border:1px solid var(--border);border-radius:10px;padding:12px;background:#fdfdfd;display:grid;gap:8px}
   .funshop-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -164,7 +158,6 @@
   pre.note { background: #f5f5f7 !important; border-color: var(--border) !important; color: #555; }
   textarea { background: #fafafa !important; color: var(--text) !important; border-color: var(--border) !important; }
 
-  /* Completion Animation */
   .completion-animation-container{position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden}
   .completion-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(.5);font-size:clamp(3rem,12vw,5rem);font-weight:900;color:var(--primary);text-shadow:0 0 20px color-mix(in srgb, var(--primary) 30%, transparent);opacity:0;white-space:nowrap;animation:complete-anim 1.8s cubic-bezier(.18,.89,.32,1.28) forwards}
   @keyframes complete-anim{0%{opacity:0;transform:translate(-50%,-50%) scale(.5) rotate(-15deg)}40%,60%{opacity:1;transform:translate(-50%,-50%) scale(1.1) rotate(5deg)}100%{opacity:0;transform:translate(-50%,-50%) scale(.8) rotate(-10deg) translateY(40px)}}
@@ -172,7 +165,6 @@
   @keyframes confetti-fall{0%{opacity:1;transform:translateY(-10vh) rotate(0deg)}100%{opacity:0;transform:translateY(110vh) rotate(720deg)}}
 
   .column-backpack, .column-club { display: none; }
-  /* Bottom Nav (Mobile Only) */
   .bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:calc(55px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:rgba(249,249,249,.9);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-top:1px solid #c7c7c9;z-index:100}
   .bottom-nav .tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);background:none;border:none;font-size:10px;cursor:pointer;transition:color .2s ease;padding-top:4px}
   .bottom-nav .tab-btn svg{width:24px;height:24px;stroke-width:2}
@@ -206,6 +198,50 @@
   }
 
   @keyframes modal-slide-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+
+  .desktop-tabs { display: none; }
+  
+  @media (min-width: 1101px) {
+    .card .desktop-tabs {
+      display: flex;
+      gap: 8px;
+      padding: 12px 24px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .desktop-tab {
+      padding: 10px 16px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--muted);
+      border-bottom: 3px solid transparent;
+      transition: all .2s ease;
+    }
+    .desktop-tab:hover { color: var(--text); }
+    .desktop-tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+    .workspace {
+      align-items: stretch;
+    }
+    .column > .card {
+      flex-grow: 1;
+    }
+    .bottom-nav {
+      display: none !important;
+    }
+    .column-backpack, .column-club {
+      display: none;
+    }
+  }
+
+  @media (max-width:1100px){
+    .workspace{grid-template-columns:1fr}
+    .desktop-tabs { display: none; }
+  }
 
   @media (max-width: 767px) or (max-height: 500px){
     :root{--panel:#ffffff;--panel-2:#fdfdfd;--border:#e5e5e5;--bg:#f0f0f2}
@@ -241,8 +277,7 @@
     .auth-chip .btn{flex:1}
     .auth-chip .auth-status{justify-content:flex-start}
     .bottom-nav{display:flex}
-    .column-main.mobile-hidden, .column-side.mobile-hidden, .column-backpack.mobile-hidden, .column-club.mobile-hidden {display:none}
-    .column-backpack, .column-club { display: flex; }
+    .column-main.mobile-hidden, .column-side.mobile-hidden {display:none}
     .card{border-radius:12px;border:1px solid var(--border);background:var(--panel);box-shadow:none;}
     .card .hd { padding: 18px 20px; }
     .card .hd h2 { font-size: 22px; }
@@ -311,53 +346,58 @@
   </header>
 
   <div class="workspace">
-    <div class="column column-main mobile-panel" id="tasksCard">
+    <div class="column column-main" id="mainColumn">
       <section class="card">
-        <div class="hd">
-          <h2>任务清单</h2>
-          <span class="muted">创建 → 选择 → 开始</span>
+        <div class="desktop-tabs">
+            <button class="desktop-tab active" data-desktop-target="tasks-pane" data-sound-id="sfxNavTasks">任务</button>
+            <button class="desktop-tab" data-desktop-target="backpack-pane" data-sound-id="sfxNavBackpack">背包</button>
+            <button class="desktop-tab" data-desktop-target="club-pane" data-sound-id="sfxNavClub">俱乐部</button>
         </div>
-        <div class="bd">
-          <div class="compose-grid">
-            <div class="field">
-              <label for="taskTitle">任务标题</label>
-              <input id="taskTitle" type="text" placeholder="任务标题（如：论文引言改写）" />
-            </div>
-            <div class="field" style="max-width:160px">
-              <label for="taskDiff">难度</label>
-              <select id="taskDiff">
-                <option value="1">难度 1 · 轻松</option>
-                <option value="2">难度 2</option>
-                <option value="3" selected>难度 3 · 标准</option>
-                <option value="4">难度 4</option>
-                <option value="5">难度 5 · 硬仗</option>
-              </select>
-            </div>
-            <div class="field actions">
-              <button class="btn primary" id="btnAdd">添加任务</button>
-              <button class="btn" id="btnClearAll">清空数据</button>
-            </div>
-          </div>
-          <div class="tasks" id="taskList"></div>
-          <div class="muted" id="emptyTask" style="display:none;padding:18px;text-align:center">暂无任务，先在上方添加一个。</div>
-          
-          <div id="dailyTasksSection" style="margin-top: 24px;">
-             <h3 style="margin:0 0 12px;font-size:14px;border-top:1px solid var(--border);padding-top:16px;">每日任务</h3>
-             <div id="dailyList"></div>
-             <small class="muted" style="display: block; margin-top: 10px;font-size:12px;">每日首刷免费，可在下方按钮区快速刷新或导入任务。</small>
-          </div>
 
-          <div class="task-actions-footer">
-            <button class="btn small" id="btnDailyRefresh">刷新任务</button>
-            <button class="btn small" id="btnTaskLibrary">任务库</button>
-            <button class="btn small" id="btnTodayDone">今日已完成</button>
-          </div>
+        <div class="tab-pane" id="tasks-pane">
+            <div class="hd">
+              <h2>任务清单</h2>
+              <span class="muted">创建 → 选择 → 开始</span>
+            </div>
+            <div class="bd">
+              <div class="compose-grid">
+                <div class="field">
+                  <label for="taskTitle">任务标题</label>
+                  <input id="taskTitle" type="text" placeholder="任务标题（如：论文引言改写）" />
+                </div>
+                <div class="field" style="max-width:160px">
+                  <label for="taskDiff">难度</label>
+                  <select id="taskDiff">
+                    <option value="1">难度 1 · 轻松</option>
+                    <option value="2">难度 2</option>
+                    <option value="3" selected>难度 3 · 标准</option>
+                    <option value="4">难度 4</option>
+                    <option value="5">难度 5 · 硬仗</option>
+                  </select>
+                </div>
+                <div class="field actions">
+                  <button class="btn primary" id="btnAdd">添加任务</button>
+                  <button class="btn" id="btnClearAll">清空数据</button>
+                </div>
+              </div>
+              <div class="tasks" id="taskList"></div>
+              <div class="muted" id="emptyTask" style="display:none;padding:18px;text-align:center">暂无任务，先在上方添加一个。</div>
+              
+              <div id="dailyTasksSection" style="margin-top: 24px;">
+                 <h3 style="margin:0 0 12px;font-size:14px;border-top:1px solid var(--border);padding-top:16px;">每日任务</h3>
+                 <div id="dailyList"></div>
+                 <small class="muted" style="display: block; margin-top: 10px;font-size:12px;">每日首刷免费，可在下方按钮区快速刷新或导入任务。</small>
+              </div>
+
+              <div class="task-actions-footer">
+                <button class="btn small" id="btnDailyRefresh">刷新任务</button>
+                <button class="btn small" id="btnTaskLibrary">任务库</button>
+                <button class="btn small" id="btnTodayDone">今日已完成</button>
+              </div>
+            </div>
         </div>
-      </section>
-    </div>
 
-    <div class="column column-backpack mobile-panel mobile-hidden" id="backpackCard">
-        <section class="card">
+        <div class="tab-pane" id="backpack-pane" style="display: none;">
             <div class="hd">
               <h2>背包</h2>
               <span class="muted">库存与工坊</span>
@@ -381,44 +421,43 @@
                 </div>
               </div>
             </div>
-        </section>
-    </div>
-    
-    <div class="column column-club mobile-panel mobile-hidden" id="clubCard">
-      <section class="card">
-        <div class="hd">
-          <h2>俱乐部</h2>
-          <span class="muted">奖励与娱乐</span>
         </div>
-        <div class="bd" style="display: flex; flex-direction: column; gap: 16px;">
-            <div class="control-group">
-              <h4>幸运轮</h4>
-              <div style="display:grid;place-items:center;gap:10px">
-                <div id="prizeTicker" style="min-height:48px;font-size:20px;font-weight:800;letter-spacing:1px;padding:12px 16px;border:1px dashed var(--border);border-radius:8px;background:#fdfdfd;width:100%;text-align:center">
-                  点击“开始抽奖”
-                </div>
-                <div class="muted" style="font-size:12px">消耗抽卡券×1，名称将快速跳动，停止即为结果</div>
-              </div>
-              <div style="display:flex;gap:8px;justify-content:center;margin-top:8px">
-                <button class="btn primary" id="btnSpin">开始抽奖</button>
-              </div>
-              <div id="wheelResult" class="wheel-result muted" aria-live="polite" style="text-align:center;margin-top:6px"></div>
+
+        <div class="tab-pane" id="club-pane" style="display: none;">
+            <div class="hd">
+              <h2>俱乐部</h2>
+              <span class="muted">奖励与娱乐</span>
             </div>
-            <div class="control-group">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-                  <h4 style="margin:0">娱乐活动</h4>
-                  <button class="btn small" id="btnFunshopEdit">调试/导入</button>
+            <div class="bd" style="display: flex; flex-direction: column; gap: 16px;">
+                <div class="control-group">
+                  <h4>幸运轮</h4>
+                  <div style="display:grid;place-items:center;gap:10px">
+                    <div id="prizeTicker" style="min-height:48px;font-size:20px;font-weight:800;letter-spacing:1px;padding:12px 16px;border:1px dashed var(--border);border-radius:8px;background:#fdfdfd;width:100%;text-align:center">
+                      点击“开始抽奖”
+                    </div>
+                    <div class="muted" style="font-size:12px">消耗抽卡券×1，名称将快速跳动，停止即为结果</div>
+                  </div>
+                  <div style="display:flex;gap:8px;justify-content:center;margin-top:8px">
+                    <button class="btn primary" id="btnSpin">开始抽奖</button>
+                  </div>
+                  <div id="wheelResult" class="wheel-result muted" aria-live="polite" style="text-align:center;margin-top:6px"></div>
                 </div>
-                <div class="note" style="margin-bottom:8px;font-size:12px">
-                  点“兑换”将检验并消耗所需徽章数量；若配置了磨损，将累计到对应徽章的磨损池，达到上限会按倍数销毁徽章。
+                <div class="control-group">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                      <h4 style="margin:0">娱乐活动</h4>
+                      <button class="btn small" id="btnFunshopEdit">调试/导入</button>
+                    </div>
+                    <div class="note" style="margin-bottom:8px;font-size:12px">
+                      点“兑换”将检验并消耗所需徽章数量；若配置了磨损，将累计到对应徽章的磨损池，达到上限会按倍数销毁徽章。
+                    </div>
+                    <div id="funshopList" class="funshop-list"></div>
                 </div>
-                <div id="funshopList" class="funshop-list"></div>
             </div>
         </div>
       </section>
     </div>
 
-    <div class="column column-side mobile-panel" id="timerCard">
+    <div class="column column-side" id="timerCard">
       <section class="card timer">
         <div class="hd">
           <h2>计时与豪情值</h2>
@@ -658,7 +697,7 @@
 <audio id="sfxClick" src="assets/sfx_click.mp3" preload="auto"></audio>
 
 <nav class="bottom-nav" aria-label="移动端视图切换">
-  <button class="tab-btn active" data-mobile-target="tasksCard">
+  <button class="tab-btn active" data-mobile-target="tasks-pane">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6.5l-3.5 3.5-3.5-3.5"></path><path d="M15 11.5l-3.5 3.5-3.5-3.5"></path><path d="M15 16.5l-3.5 3.5-3.5-3.5"></path><line x1="10" y1="6" x2="4" y2="6"></line><line x1="10" y1="11" x2="4" y2="11"></line><line x1="10" y1="16" x2="4" y2="16"></line></svg>
     <span>任务</span>
   </button>
@@ -666,11 +705,11 @@
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
     <span>计时</span>
   </button>
-  <button class="tab-btn" data-mobile-target="backpackCard">
+  <button class="tab-btn" data-mobile-target="backpack-pane">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
     <span>背包</span>
   </button>
-   <button class="tab-btn" data-mobile-target="clubCard">
+   <button class="tab-btn" data-mobile-target="club-pane">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h12M12 18V6"/></svg>
     <span>俱乐部</span>
   </button>
@@ -1058,54 +1097,92 @@ window.AppSync = {
   };
 
   const sessionFlip = new FlipCounter($('#sessionFlip'),{digits:6,comma:true,large:true});
+  
+  // === Unified Navigation Logic ===
   const mobileTabButtons = document.querySelectorAll('.bottom-nav .tab-btn');
-  const mobilePanels = document.querySelectorAll('.workspace > .column');
+  const desktopTabButtons = document.querySelectorAll('.desktop-tab');
+  const mainColumn = $('#mainColumn');
+  const timerColumn = $('#timerCard');
+  const allPanes = {
+    'tasks-pane': $('#tasks-pane'),
+    'backpack-pane': $('#backpack-pane'),
+    'club-pane': $('#club-pane')
+  };
   const mobileMedia = window.matchMedia('(max-width: 767px) or (max-height: 500px)');
-  let activeMobilePanel = 'tasksCard';
+  let activeView = 'tasks-pane';
 
-  function setMobilePanel(id){
-    activeMobilePanel = id;
-    mobilePanels.forEach(panel=>{
-      if(!panel) return;
-      const hidden = mobileMedia.matches && panel.id !== id;
-      panel.classList.toggle('mobile-hidden', hidden);
-    });
-    mobileTabButtons.forEach(btn=>{
-      if(!btn.dataset.mobileTarget) return;
-      btn.classList.toggle('active', btn.dataset.mobileTarget === id);
-    });
-  }
+  function setView(targetId) {
+    activeView = targetId;
+    
+    // Update active state on buttons
+    mobileTabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.mobileTarget === targetId));
+    desktopTabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.desktopTarget === targetId));
+    
+    const isMainContent = allPanes.hasOwnProperty(targetId);
 
-  function applyMobileLayout(){
-    if(mobileMedia.matches){
-      setMobilePanel(activeMobilePanel || 'tasksCard');
-    }else{
-      mobilePanels.forEach(panel=>panel.classList.remove('mobile-hidden'));
-      mobileTabButtons.forEach(btn=>btn.classList.remove('active'));
+    // Show/hide main vs timer columns (for mobile)
+    if (mobileMedia.matches) {
+        mainColumn.classList.toggle('mobile-hidden', !isMainContent);
+        timerColumn.classList.toggle('mobile-hidden', targetId !== 'timerCard');
     }
+
+    // Show/hide the correct content pane within the main column
+    Object.keys(allPanes).forEach(paneId => {
+      if (allPanes[paneId]) {
+        allPanes[paneId].style.display = (paneId === targetId) ? '' : 'none';
+      }
+    });
+
+    window.scrollTo(0, 0);
   }
 
-  mobileTabButtons.forEach(btn=>{
-    btn.addEventListener('click',()=>{
+  function handleLayoutChange() {
+      if (mobileMedia.matches) {
+        // Mobile view: show/hide columns based on active view
+        const isMainContent = allPanes.hasOwnProperty(activeView);
+        mainColumn.classList.toggle('mobile-hidden', !isMainContent);
+        timerColumn.classList.toggle('mobile-hidden', activeView !== 'timerCard');
+      } else {
+        // Desktop view: ensure both columns are visible, active pane is correct
+        mainColumn.classList.remove('mobile-hidden');
+        timerColumn.classList.remove('mobile-hidden');
+        if (activeView === 'timerCard') {
+            setView('tasks-pane'); // Default to tasks on desktop if timer was active
+        }
+      }
+  }
+  
+  mobileTabButtons.forEach(btn => {
+    btn.addEventListener('click', () => {
       const target = btn.dataset.mobileTarget;
-      if(target){
-        if (target === 'tasksCard') playSound(sfx.navTasks);
+      if (target) {
+        if (target === 'tasks-pane') playSound(sfx.navTasks);
         else if (target === 'timerCard') playSound(sfx.navTimer);
-        else if (target === 'backpackCard') playSound(sfx.navBackpack);
-        else if (target === 'clubCard') playSound(sfx.navClub);
-        
-        setMobilePanel(target);
-        window.scrollTo(0, 0);
+        else if (target === 'backpack-pane') playSound(sfx.navBackpack);
+        else if (target === 'club-pane') playSound(sfx.navClub);
+        setView(target);
       }
     });
   });
 
+  desktopTabButtons.forEach(tab => {
+      tab.addEventListener('click', () => {
+          const targetId = tab.dataset.desktopTarget;
+          const soundId = tab.dataset.soundId;
+          const soundKey = soundId ? soundId.replace('sfx', '').charAt(0).toLowerCase() + soundId.slice(4) : null;
+          if (soundKey && sfx[soundKey]) {
+              playSound(sfx[soundKey]);
+          }
+          setView(targetId);
+      });
+  });
+
   if(mobileMedia.addEventListener){
-    mobileMedia.addEventListener('change',applyMobileLayout);
+    mobileMedia.addEventListener('change', handleLayoutChange);
   }else if(mobileMedia.addListener){
-    mobileMedia.addListener(applyMobileLayout);
+    mobileMedia.addListener(handleLayoutChange);
   }
-  applyMobileLayout();
+  handleLayoutChange(); // Initial check
 
   /* 幸运轮名称跳动器（简化） */
   let tickerTimer = null, tickerTimeout = null, tickerIndex = 0;
@@ -1486,7 +1563,7 @@ function setControls(){
     sessionFlip.setValue(0,true); el.sessionTime.textContent='0:00:00'; el.taskTotal.textContent=Math.floor(t.totalHQ||0); el.taskTime.textContent=fmtTime(t.totalSeconds||0);
     hidePauseIndicator(); updateRate(); renderTasks(); setControls();
     if (mobileMedia.matches) {
-        setMobilePanel('timerCard');
+        setView('timerCard');
     }
   }
   function startTimer(){
@@ -2213,7 +2290,6 @@ function todayObj(){
       }
     };
   }
-
 
   // 启动 Funshop 倒计时心跳
   tickFunshopTimers();
