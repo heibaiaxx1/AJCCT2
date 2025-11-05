@@ -805,6 +805,7 @@ class FlipCounter{
   flipTo(n){
     const s=this._str(n);
     [...s].forEach((ch,i)=>{const v=ch.charCodeAt(0)-48;const c=this.cols[i];
+      if(c.value===v) return;
       if(c.value===9&&v===0){
         const wrapPos=c.wrapPos??10;
         c.pos=wrapPos;c.stack.style.transform=`translateY(${-c.pos*this.cellHeight}px)`;
@@ -837,7 +838,8 @@ const LS_KEYS = {
     META: "haoqing_meta_v1",
     RATES: "haoqing_rates_v1",
     FUNSHOP: "haoqing_funshop_v1",
-    REWARD_PARAMS: "haoqing_reward_params_v1"
+    REWARD_PARAMS: "haoqing_reward_params_v1",
+    LIVE_TIMER: "haoqing_live_timer_v1"
 };
 
 // === Cloud Sync（Firestore 适配） ===
@@ -851,7 +853,8 @@ let CLOUD = {
     [LS_KEYS.META]: LS_KEYS.META,
     [LS_KEYS.RATES]: LS_KEYS.RATES,
     [LS_KEYS.FUNSHOP]: LS_KEYS.FUNSHOP,
-    [LS_KEYS.REWARD_PARAMS]: LS_KEYS.REWARD_PARAMS
+    [LS_KEYS.REWARD_PARAMS]: LS_KEYS.REWARD_PARAMS,
+    [LS_KEYS.LIVE_TIMER]: LS_KEYS.LIVE_TIMER
   },
   async get(key){
     if(!this.enabled || !this.col) return null;
@@ -870,8 +873,7 @@ let CLOUD = {
     if(!this.enabled || !this.col) return () => {};
     const ref = this.col.doc(this.docIdMap[key] || key);
     const unsub = ref.onSnapshot(snap=>{
-      if(!snap.exists) return;
-      const d = snap.data();
+      const d = snap.exists ? snap.data() : { value: null };
       cb({ 
         key,
         value: d.value,
@@ -904,7 +906,7 @@ function writeWithUpdatedAt(key, value, updatedAt){
 
 // ———— 首次登录后的：合并 + 订阅 ————
 async function initialCloudMergeAndSubscribe(){
-  const keys = Object.values(LS_KEYS);
+  const keys = Object.values(LS_KEYS).filter(k => k !== LS_KEYS.LIVE_TIMER);
   const stateUpdaters = {
       [LS_KEYS.TASKS]: (v) => { state.tasks = Array.isArray(v) ? v : []; },
       [LS_KEYS.AGG]: (v) => { state.agg = v || { totalHQ: 0, totalSeconds: 0 }; },
@@ -962,6 +964,37 @@ async function initialCloudMergeAndSubscribe(){
           }
       });
   }
+
+  // 订阅实时计时器状态
+  CLOUD.subscribe(LS_KEYS.LIVE_TIMER, ({ value }) => {
+      if (value && value.taskId) {
+          const wasInactive = !state.active;
+          state.active = value;
+          if (wasInactive) playSound(sfx.timerStart);
+          
+          const task = getTask(state.active.taskId);
+          if(task) {
+              el.activeHint.textContent = `进行中：${task.title}（难度 ${task.difficulty}）`;
+              state.selectedTaskId = task.id; // Keep selection synced
+              renderTasks();
+              updateRate();
+          }
+      } else {
+          if (state.active) {
+              state.active = null;
+              el.activeHint.textContent='未选择任务';
+              sessionFlip.setValue(0,true);
+              el.sessionTime.textContent='0:00:00';
+              const lastTask = getTask(state.selectedTaskId);
+              el.taskTotal.textContent = lastTask ? Math.floor(lastTask.totalHQ||0) : '0';
+              el.taskTime.textContent  = lastTask ? fmtTime(lastTask.totalSeconds||0) : '0:00:00';
+              el.rateText.textContent='0';
+              hidePauseIndicator();
+              renderTasks();
+          }
+      }
+      setControls();
+  });
 }
 
 // ———— 暴露给最底部 Firebase 登录脚本调用 ————
@@ -986,7 +1019,12 @@ window.AppSync = {
   const DEFAULT_REWARD_PARAMS = { baseChance: 0.4, betCoefficient: 0.25, maxChance: 0.9, pityIncrement: 0.015 };
   let REWARD_PARAMS = readJSON(LS_KEYS.REWARD_PARAMS, { ...DEFAULT_REWARD_PARAMS });
 
-  let state = { tasks: readJSON(LS_KEYS.TASKS, []), agg: readJSON(LS_KEYS.AGG, {totalHQ:0,totalSeconds:0}), active:null };
+  let state = { 
+    tasks: readJSON(LS_KEYS.TASKS, []), 
+    agg: readJSON(LS_KEYS.AGG, {totalHQ:0,totalSeconds:0}), 
+    active: null, // This will be driven by Firestore
+    selectedTaskId: null // For UI selection before starting
+  };
   let meta = readJSON(LS_KEYS.META, {
     streak:0,pity:0,arcade:false,freeze:0,badges:{},tickets:0,
     daily:{},dailyBuff:{},multDayCount:{},guardUsedToday:0,guardDay:null,nextWheelBoost:1,
@@ -1288,7 +1326,7 @@ function save(){
     if(!task||!task.reward||!task.reward.type) return null;
     const def=REWARD_TYPES[task.reward.type];
     if(!def) return null;
-    const amount=normalizeRewardAmount(reward.amount||1);
+    const amount=normalizeRewardAmount(task.reward.amount||1);
     def.apply(amount);
     return {message:`${task.title} 完成奖励：${def.label} +${amount}`, type:task.reward.type};
   }
@@ -1459,9 +1497,11 @@ function save(){
   function renderTasks(){
     el.emptyTask.style.display = state.tasks.length?'none':'block';
     const fragment = document.createDocumentFragment();
+    const currentDisplayTaskId = (state.active && state.active.taskId) || state.selectedTaskId;
+
     state.tasks.forEach(t=>{
       const row=document.createElement('div'); row.className='task';
-      if(state.active && state.active.taskId===t.id) row.classList.add('selected');
+      if(currentDisplayTaskId ===t.id) row.classList.add('selected');
       row.innerHTML = `
         <div>${difficultyBadge(t.difficulty)}</div>
         <div>
@@ -1470,7 +1510,7 @@ function save(){
           ${t.reward&&rewardLabel(t.reward)?`<div class="reward-tag">奖励：${rewardLabel(t.reward)}</div>`:''}
         </div>
         <div class="controls"><button class="btn small" data-act="edit">编辑</button><button class="btn small danger" data-act="del">删除</button></div>
-        <div><button class="btn small accent" data-act="select">${state.active&&state.active.taskId===t.id?'已选':'选择'}</button></div>`;
+        <div><button class="btn small accent" data-act="select">${currentDisplayTaskId === t.id ? '已选':'选择'}</button></div>`;
       row.querySelector('[data-act="edit"]').onclick=()=>editTask(t.id);
       row.querySelector('[data-act="del"]').onclick=()=>deleteTask(t.id);
       row.querySelector('[data-act="select"]').onclick=()=>selectTask(t.id);
@@ -1491,31 +1531,28 @@ function setControls(){
     btnStart.textContent = label;
     btnStart.setAttribute('aria-label', label);
   };
-
+  
+  // Default state
   setStartState(true, '开始');
   btnPause.disabled = true;
   btnStop.disabled  = true;
-
-  if (!state.active) return;
-  const a = state.active;
-
-  // 未开始：仅允许“开始”
-  if (!a.startedAt) {
+  
+  if (state.active) {
+    // Timer is active (running or paused)
+    const a = state.active;
+    if (!a.isPaused) { // Running
+      setStartState(true, '开始');
+      btnPause.disabled = false;
+      btnStop.disabled = false;
+    } else { // Paused
+      setStartState(false, '继续');
+      btnPause.disabled = true; // Can't pause a paused timer
+      btnStop.disabled = false;
+    }
+  } else if (state.selectedTaskId) {
+    // A task is selected but not active
     setStartState(false, '开始');
-    return;
   }
-
-  // 计时中：允许暂停和结束
-  if (!a.isPaused) {
-    btnPause.disabled = false;
-    btnStop.disabled  = false;
-    setStartState(true, '开始');
-    return;
-  }
-
-  // 暂停中：允许继续（开始按钮充当继续）
-  setStartState(false, '继续');
-  btnStop.disabled  = false;
 }
   function showPauseIndicator(sec){ if(!el.pauseIndicator||!el.pauseTime) return; el.pauseIndicator.style.display='flex'; el.pauseTime.textContent=fmtPause(sec); }
   function hidePauseIndicator(){ if(!el.pauseIndicator||!el.pauseTime) return; el.pauseIndicator.style.display='none'; el.pauseTime.textContent='0:00'; }
@@ -1534,10 +1571,11 @@ function setControls(){
     diff=clamp(parseInt(diff,10)||t.difficulty,1,5);
     t.title=(title.trim()||t.title); t.difficulty=diff;
     playSound(sfx.click);
-    save(); renderTasks(); if(state.active&&state.active.taskId===id){ updateRate(); }
+    save(); renderTasks(); if((state.active && state.active.taskId === id) || state.selectedTaskId === id){ updateRate(); }
   }
   function deleteTask(id){
     if(state.active&&state.active.taskId===id){ playSound(sfx.warn); alert('请先结束当前任务的计时，再删除。'); return; }
+    if(state.selectedTaskId === id) { state.selectedTaskId = null; }
     playSound(sfx.delete);
     state.tasks=state.tasks.filter(t=>t.id!==id); save(); renderTasks();
   }
@@ -1546,46 +1584,109 @@ function setControls(){
   function todayBuff(){const day=todayKey(); meta.dailyBuff=meta.dailyBuff||{}; meta.dailyBuff[day]=meta.dailyBuff[day]||{rateBuff:0}; return meta.dailyBuff[day];}
   function effectiveRate(baseRate, difficulty){
     let rate=baseRate;
-    // 可在此叠加徽章/当日加成（简化保留）
     const chip = todayBuff().rateBuff || 0; rate *= (1 + chip);
     return rate;
   }
   function rateOfActive(){ if(!state.active) return 0; const task=getTask(state.active.taskId); if(!task) return 0; return effectiveRate(baseRateOfTask(task), task.difficulty); }
+  
   function updateRate(){
-    if(!state.active){ el.rateText.textContent='0'; return; }
-    const task=getTask(state.active.taskId); if(!task){el.rateText.textContent='0';return;}
+    let task;
+    if (state.active) {
+      task = getTask(state.active.taskId);
+    } else if (state.selectedTaskId) {
+      task = getTask(state.selectedTaskId);
+    }
+    
+    if(!task){ el.rateText.textContent='0'; return; }
     const eff=effectiveRate(baseRateOfTask(task), task.difficulty);
     el.rateText.textContent=eff.toFixed(2);
-    if(state.active.display){ state.active.display.flipEvery = eff>0?1/Math.min(MAX_FLIPS_PER_SECOND, eff):1; }
   }
 
   function selectTask(id){
     const t=getTask(id); if(!t) return;
+    if(state.active && state.active.taskId !== id) {
+        pushToast('当前有任务正在计时，请先结束。', 'warn'); return;
+    }
+    if(state.active && state.active.taskId === id) return;
+
     playSound(sfx.select);
-    state.active={taskId:id,startedAt:null,pausedAt:null,isPaused:false,sessionSeconds:0,sessionHQ:0,ringPhase:0,pauses:0,
-      display:{intShown:0,flipEvery:1/Math.min(MAX_FLIPS_PER_SECOND,effectiveRate(baseRateOfTask(t),t.difficulty)||1),accTime:0}
-    };
+    state.selectedTaskId = id;
+    
     el.activeHint.textContent=`已选择：${t.title}（难度 ${t.difficulty}）`;
-    sessionFlip.setValue(0,true); el.sessionTime.textContent='0:00:00'; el.taskTotal.textContent=Math.floor(t.totalHQ||0); el.taskTime.textContent=fmtTime(t.totalSeconds||0);
-    hidePauseIndicator(); updateRate(); renderTasks(); setControls();
+    sessionFlip.setValue(0,true); 
+    el.sessionTime.textContent='0:00:00'; 
+    el.taskTotal.textContent=Math.floor(t.totalHQ||0); 
+    el.taskTime.textContent=fmtTime(t.totalSeconds||0);
+    hidePauseIndicator(); 
+    updateRate(); 
+    renderTasks(); 
+    setControls();
     if (mobileMedia.matches) {
         setView('timerCard');
     }
   }
-  function startTimer(){
-    if(!state.active){ playSound(sfx.warn); alert('请先选择任务'); return; }
-    if(state.active.startedAt && !state.active.isPaused) return;
-    playSound(sfx.timerStart);
-    const now=performance.now();
-    if(!state.active.startedAt){ state.active.startedAt=now; }
-    else{ const paused=(now-(state.active.pausedAt||now))/1000; state.active.startedAt+=paused*1000; }
-    state.active.isPaused=false; state.active.pausedAt=null; hidePauseIndicator(); setControls();
-  }
-  function pauseTimer(){
-    if(state.active && !state.active.isPaused){
-      playSound(sfx.timerPause);
-      state.active.isPaused=true; state.active.pausedAt=performance.now(); state.active.pauses=(state.active.pauses||0)+1; showPauseIndicator(0); setControls();
+  
+  async function startTimer(){
+    if (state.active && !state.active.isPaused) return; // Already running
+
+    const taskId = state.active ? state.active.taskId : state.selectedTaskId;
+    if (!taskId) {
+        playSound(sfx.warn);
+        alert('请先选择任务');
+        return;
     }
+    
+    const task = getTask(taskId);
+    if (!task || !CLOUD.enabled) {
+      if(!CLOUD.enabled) pushToast('请先登录以使用计时器。', 'warn');
+      return;
+    }
+
+    playSound(sfx.timerStart);
+
+    let newTimerState;
+    const now = Date.now();
+
+    if (state.active && state.active.isPaused) { // Resuming
+        const pausedDurationSec = (now - state.active.pauseTime) / 1000;
+        newTimerState = {
+            ...state.active,
+            startTime: now,
+            isPaused: false,
+            pauseTime: null,
+            pauses: (state.active.pauses || 0) + (pausedDurationSec > ECON.pauseBreakSec ? 1 : 0),
+        };
+    } else { // Starting fresh
+        newTimerState = {
+            taskId: taskId,
+            startTime: now,
+            accumulatedSeconds: 0,
+            isPaused: false,
+            pauseTime: null,
+            pauses: 0,
+        };
+    }
+
+    state.selectedTaskId = null;
+    await CLOUD.set(LS_KEYS.LIVE_TIMER, newTimerState);
+  }
+
+  async function pauseTimer(){
+    if(!state.active || state.active.isPaused || !CLOUD.enabled) return;
+    
+    playSound(sfx.timerPause);
+    const now = Date.now();
+    const elapsedSec = (now - state.active.startTime) / 1000;
+
+    const newTimerState = {
+        ...state.active,
+        accumulatedSeconds: (state.active.accumulatedSeconds || 0) + elapsedSec,
+        isPaused: true,
+        pauseTime: now,
+        startTime: null,
+    };
+
+    await CLOUD.set(LS_KEYS.LIVE_TIMER, newTimerState);
   }
 
   /* —— 今日已完成：核心 —— */
@@ -1757,44 +1858,47 @@ function setControls(){
   }
 
   /* 结束计时（最终版） */
-  function stopTimer(){
+  async function stopTimer(){
     if(!state.active) return;
     playSound(sfx.timerStop);
 
-    const t = getTask(state.active.taskId);
+    const activeSession = { ...state.active };
+    await CLOUD.set(LS_KEYS.LIVE_TIMER, null); // Signal other clients
 
-    // 1. 会话快照
-    const sessionHQ = Math.floor(state.active.sessionHQ || 0);
-    const sessionSeconds = state.active.sessionSeconds || 0;
-    const pauses = state.active.pauses || 0;
+    const t = getTask(activeSession.taskId);
+
+    let sessionSeconds = activeSession.accumulatedSeconds || 0;
+    if (!activeSession.isPaused && activeSession.startTime) {
+        sessionSeconds += (Date.now() - activeSession.startTime) / 1000;
+    }
+    sessionSeconds = Math.floor(sessionSeconds);
+    const taskRate = t ? effectiveRate(baseRateOfTask(t), t.difficulty) : 0;
+    const sessionHQ = Math.floor(sessionSeconds * taskRate);
+    
+    const pauses = activeSession.pauses || 0;
     const diff = t ? t.difficulty : 3;
 
-    // 2. 写入任务与全局累计 (BUGFIX: removed double-counting of totalHQ)
     if(t){
       t.totalHQ = (t.totalHQ || 0) + sessionHQ;
       t.totalSeconds = (t.totalSeconds || 0) + sessionSeconds;
     }
     state.agg.totalSeconds = (state.agg.totalSeconds || 0) + sessionSeconds;
 
-    // 3. 写入"今日已完成"列表
     pushTodayDone({
       title: t ? t.title : '未知任务',
-      difficulty: t ? t.difficulty : 3,
+      difficulty: diff,
       seconds: sessionSeconds,
       hq: sessionHQ,
       ts: Date.now()
     });
 
-    // 4. 触发完成动画
     triggerCompletionAnimation();
-
-    // 5. 计算奖励基础
     const finalBase = applySessionModifiers(sessionHQ, sessionSeconds, diff);
     const extraReward = grantTaskReward(t);
+    state.tasks = state.tasks.filter(task => task.id !== activeSession.taskId);
+    if(state.selectedTaskId === activeSession.taskId) state.selectedTaskId = null;
 
-    // 6. 完成即从主任务列表移除，并更新UI
-    state.tasks = state.tasks.filter(task => task.id !== (state.active && state.active.taskId));
-    save(); 
+    save();
     renderTasks();
     renderKPI();
     if(extraReward){
@@ -1802,67 +1906,46 @@ function setControls(){
       pushToast(extraReward.message,'success');
     }
 
-    // 7. 重置计时 UI
-    el.activeHint.textContent='未选择任务';
-    sessionFlip.setValue(0,true);
-    el.sessionTime.textContent='0:00:00';
-    el.taskTotal.textContent = t ? Math.floor(t.totalHQ||0) : '0';
-    el.taskTime.textContent  = t ? fmtTime(t.totalSeconds||0) : '0:00:00';
-    el.rateText.textContent='0';
-    hidePauseIndicator();
-    
-    // 8. 延迟弹出奖励窗口
     setTimeout(() => {
         onSegmentEnd_base(sessionSeconds, diff, pauses);
         singleMissionJudge(sessionSeconds, diff, pauses);
         openReward({ baseHQ: finalBase, seconds: sessionSeconds, difficulty: diff, rawHQ: sessionHQ });
     }, 1800);
 
-    // 9. 清空活动态并存盘
-    state.active = null;
-    save();
-    setControls();
+    // No need to reset UI here, subscription handler will do it.
   }
 
-  /* 动画主循环（保留） */
-  let lastFrame=performance.now();
-  function loop(now){
-    const dt=(now-lastFrame)/1000; lastFrame=now;
-    if(state.active && state.active.startedAt && !state.active.isPaused){
-      const task=getTask(state.active.taskId);
-      if(task){
-        const rate=effectiveRate(baseRateOfTask(task), task.difficulty);
-        state.active.sessionSeconds += dt || 0;
-        state.active.sessionHQ += (rate || 0) * (dt || 0);
-
-        // 翻牌显示
-        const d=state.active.display; d.accTime += dt || 0;
-        while(d.accTime>=d.flipEvery && d.flipEvery>0){
-          d.accTime-=d.flipEvery;
-          const realInt=Math.floor(state.active.sessionHQ);
-          if(d.intShown<realInt){ sessionFlip.flipBy(1); d.intShown+=1; } else break;
-        }
-
-        el.sessionTime.textContent=fmtTime(state.active.sessionSeconds);
-        el.taskTotal.textContent=Math.floor((task.totalHQ||0)+(state.active.sessionHQ||0));
-        el.taskTime.textContent=fmtTime((task.totalSeconds||0)+(state.active.sessionSeconds||0));
-
-        // 总值即时显示
-        const totalValue = Math.floor((state.agg.totalHQ||0) + (state.active.sessionHQ||0));
-        if (el.kpiTotalValue) el.kpiTotalValue.textContent = totalValue.toLocaleString('en-US');
+  let lastKnownTotalHQForDisplay = 0;
+  function loop(){
+      if (state.active && !state.active.isPaused) {
+          const a = state.active;
+          const task = getTask(a.taskId);
+          if (task) {
+              const rate = rateOfActive();
+              const elapsedSinceStart = (Date.now() - a.startTime) / 1000;
+              const currentSessionSeconds = (a.accumulatedSeconds || 0) + elapsedSinceStart;
+              const currentSessionHQ = currentSessionSeconds * rate;
+              
+              sessionFlip.flipTo(Math.floor(currentSessionHQ));
+              el.sessionTime.textContent = fmtTime(currentSessionSeconds);
+              el.taskTotal.textContent = Math.floor((task.totalHQ || 0) + currentSessionHQ);
+              el.taskTime.textContent = fmtTime((task.totalSeconds || 0) + currentSessionSeconds);
+              
+              lastKnownTotalHQForDisplay = Math.floor((state.agg.totalHQ || 0) + currentSessionHQ);
+              el.kpiTotalValue.textContent = lastKnownTotalHQForDisplay.toLocaleString('en-US');
+          }
+      } else if (state.active && state.active.isPaused) {
+          const pausedFor = (Date.now() - (state.active.pauseTime || Date.now())) / 1000;
+          showPauseIndicator(pausedFor);
+          el.kpiTotalValue.textContent = lastKnownTotalHQForDisplay.toLocaleString('en-US');
+      } else {
+          hidePauseIndicator();
+          lastKnownTotalHQForDisplay = Math.floor(state.agg.totalHQ || 0);
+          el.kpiTotalValue.textContent = lastKnownTotalHQForDisplay.toLocaleString('en-US');
       }
-    }else{
-      if(state.active && state.active.startedAt && state.active.isPaused){
-        const pausedFor = (performance.now() - (state.active.pausedAt || performance.now())) / 1000;
-        showPauseIndicator(pausedFor);
-      }else{
-        hidePauseIndicator();
-      }
-      if (el.kpiTotalValue) el.kpiTotalValue.textContent = Math.floor(state.agg.totalHQ || 0).toLocaleString('en-US');
-    }
-    requestAnimationFrame(loop);
+      requestAnimationFrame(loop);
   }
-  requestAnimationFrame(ts=>{lastFrame=ts; loop(ts);});
+  
   document.addEventListener('visibilitychange',()=>{ if(document.hidden && state.active && !state.active.isPaused){ pauseTimer(); }});
   
   function updateModeButton() {
@@ -2299,6 +2382,8 @@ function todayObj(){
 
   // 启动 Funshop 倒计时心跳
   tickFunshopTimers();
+  // 启动主渲染循环
+  loop();
 });
 </script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
