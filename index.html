@@ -697,19 +697,19 @@
 <audio id="sfxClick" src="assets/sfx_click.mp3" preload="auto"></audio>
 
 <nav class="bottom-nav" aria-label="移动端视图切换">
-  <button class="tab-btn active" data-mobile-target="tasks-pane">
+  <button class="tab-btn active" data-mobile-target="tasks-pane" data-sound-id="sfxNavTasks">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M15 6.5l-3.5 3.5-3.5-3.5"></path><path d="M15 11.5l-3.5 3.5-3.5-3.5"></path><path d="M15 16.5l-3.5 3.5-3.5-3.5"></path><line x1="10" y1="6" x2="4" y2="6"></line><line x1="10" y1="11" x2="4" y2="11"></line><line x1="10" y1="16" x2="4" y2="16"></line></svg>
     <span>任务</span>
   </button>
-  <button class="tab-btn" data-mobile-target="timerCard">
+  <button class="tab-btn" data-mobile-target="timerCard" data-sound-id="sfxNavTimer">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
     <span>计时</span>
   </button>
-  <button class="tab-btn" data-mobile-target="backpack-pane">
+  <button class="tab-btn" data-mobile-target="backpack-pane" data-sound-id="sfxNavBackpack">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
     <span>背包</span>
   </button>
-   <button class="tab-btn" data-mobile-target="club-pane">
+   <button class="tab-btn" data-mobile-target="club-pane" data-sound-id="sfxNavClub">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h12M12 18V6"/></svg>
     <span>俱乐部</span>
   </button>
@@ -1156,10 +1156,14 @@ window.AppSync = {
     btn.addEventListener('click', () => {
       const target = btn.dataset.mobileTarget;
       if (target) {
-        if (target === 'tasks-pane') playSound(sfx.navTasks);
-        else if (target === 'timerCard') playSound(sfx.navTimer);
-        else if (target === 'backpack-pane') playSound(sfx.navBackpack);
-        else if (target === 'club-pane') playSound(sfx.navClub);
+        const soundId = btn.dataset.soundId;
+        if (soundId) {
+          // 'sfxNavTasks' -> 'navTasks'
+          const soundKey = soundId.substring(3).replace(/^\w/, c => c.toLowerCase());
+          if (sfx[soundKey]) {
+            playSound(sfx[soundKey]);
+          }
+        }
         setView(target);
       }
     });
@@ -1169,9 +1173,12 @@ window.AppSync = {
       tab.addEventListener('click', () => {
           const targetId = tab.dataset.desktopTarget;
           const soundId = tab.dataset.soundId;
-          const soundKey = soundId ? soundId.replace('sfx', '').charAt(0).toLowerCase() + soundId.slice(4) : null;
-          if (soundKey && sfx[soundKey]) {
+          if (soundId) {
+            // 'sfxNavTasks' -> 'navTasks'
+            const soundKey = soundId.substring(3).replace(/^\w/, c => c.toLowerCase());
+            if (sfx[soundKey]) {
               playSound(sfx[soundKey]);
+            }
           }
           setView(targetId);
       });
