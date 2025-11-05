@@ -211,6 +211,88 @@
     font-size: 14px;
   }
   
+  /* "You" Page Styles */
+  .you-pane-workspace { display: flex; gap: 24px; }
+  .you-right-col { flex: 1; min-width: 0; }
+  .char-card { display: flex; flex-direction: column; gap: 16px; }
+  .avatar-container { display: flex; align-items: center; gap: 20px; }
+  .avatar-uploader {
+    width: 120px; height: 120px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background-color: var(--ring-bg);
+    background-size: cover;
+    background-position: center;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+    transition: all .2s ease;
+  }
+  .avatar-uploader:hover { border-color: var(--primary); background-color: #e0e0e0; }
+  .char-info-grid { display: grid; gap: 12px; flex: 1; }
+  .char-info-grid .field { display: flex; flex-direction: column; gap: 4px; }
+  .char-info-grid label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .char-info-grid input { padding: 10px 12px; font-size: 14px; }
+
+  .char-status-card, .char-buffs-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-2);
+    padding: 16px;
+  }
+  .char-status-card h3, .char-buffs-card h3 { margin: 0 0 10px; font-size: 14px; }
+  .char-status-tag { display: inline-block; padding: 4px 10px; background: var(--ring-bg); border-radius: 8px; font-size: 13px; font-weight: 600; }
+  .char-buffs-list { display: flex; flex-direction: column; gap: 6px; }
+  .char-buff-item { font-size: 13px; }
+
+  /* New Block EXP Bar Styles */
+  .exp-bar-container {
+    margin-top: 14px;
+    user-select: none;
+    font-family: ui-monospace, monospace;
+  }
+  .exp-bar-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: #9aa0b0;
+    margin-bottom: 4px;
+  }
+  .exp-bar {
+    position: relative;
+    width: 100%;
+    height: 10px;
+    background-color: #1e2433;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .exp-bar-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background-color: #5f80f8;
+    border-radius: 6px;
+    width: 0%;
+    transition: width 0.15s linear;
+    box-shadow: inset 0 -1px 0 rgba(255,255,255,0.15);
+  }
+  .exp-bar-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #9aa0b0;
+    margin-top: 4px;
+  }
+  .exp-gap {
+    opacity: 0.8;
+  }
+
   /* Desktop and Tablet Styles */
   @media (min-width: 768px) {
     .card .desktop-tabs {
@@ -339,6 +421,17 @@
     .daily-task-label { font-size: 15px; }
     #modeSwitchWrapper { padding: 0; border: none; background: transparent; }
     #modeSwitchBtn { width: 100%; }
+    
+    .you-pane-workspace { flex-direction: column; gap: 16px; }
+    .avatar-container { flex-direction: column; align-items: stretch; text-align: center; }
+    .avatar-uploader {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1/1;
+    }
+    .you-page-actions .btn {
+      width: 100%;
+    }
   }
 </style>
 </head>
@@ -364,6 +457,7 @@
             <button class="desktop-tab active" data-desktop-target="tasks-pane" data-sound-id="sfxNavTasks">任务</button>
             <button class="desktop-tab" data-desktop-target="backpack-pane" data-sound-id="sfxNavBackpack">背包</button>
             <button class="desktop-tab" data-desktop-target="club-pane" data-sound-id="sfxNavClub">俱乐部</button>
+            <button class="desktop-tab" data-desktop-target="you-pane" data-sound-id="sfxNavYou">你</button>
         </div>
 
         <div class="tab-pane" id="tasks-pane">
@@ -454,6 +548,68 @@
                       点“兑换”将检验并消耗所需徽章数量；若配置了磨损，将累计到对应徽章的磨损池，达到上限会按倍数销毁徽章。
                     </div>
                     <div id="funshopList" class="funshop-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane" id="you-pane" style="display: none;">
+            <div class="hd">
+              <h2>你</h2>
+              <span class="muted">角色状态</span>
+            </div>
+            <div class="bd">
+                <div class="you-pane-workspace">
+                    <div class="you-right-col">
+                        <div class="char-card">
+                            <div class="avatar-container">
+                                <div class="avatar-uploader" id="avatarUploader">点击<br>上传头像</div>
+                                <input type="file" id="avatarInput" accept="image/*" style="display: none;">
+                            </div>
+                            
+                            <div class="exp-bar-container">
+                              <div class="exp-bar-header">
+                                <span class="exp-level">Lv.<span id="expLevelNow">1</span></span>
+                                <span class="exp-level exp-next">Lv.<span id="expLevelNext">2</span></span>
+                              </div>
+                              <div class="exp-bar">
+                                <div class="exp-bar-fill" id="expBarFill"></div>
+                              </div>
+                              <div class="exp-bar-info">
+                                <span id="expValueText">0 / 1000</span>
+                                <span class="exp-gap">距下级：1000 豪情值</span>
+                              </div>
+                            </div>
+                            
+                            <div class="char-info-grid">
+                                <div class="field">
+                                    <label for="charNameInput">名称</label>
+                                    <input type="text" id="charNameInput" placeholder="输入你的名称">
+                                </div>
+                                 <div class="field">
+                                    <label for="charTitleInput">称号</label>
+                                    <input type="text" id="charTitleInput" placeholder="输入你的称号">
+                                </div>
+                            </div>
+
+                            <div class="char-status-card">
+                                <h3>状态</h3>
+                                <div class="row" style="gap: 16px; align-items: center;">
+                                    <span class="char-status-tag" id="charStatusTag">离线</span>
+                                    <div class="muted" style="font-size: 13px;">等级：<b id="charLevelText">Lv. 1</b></div>
+                                    <div class="muted" style="font-size: 13px;">总豪情值：<b id="charTotalHQText">0 HQ</b></div>
+                                </div>
+                            </div>
+                            <div class="char-buffs-card">
+                                <h3>Buff 与持续时间</h3>
+                                <div class="char-buffs-list" id="charBuffsList">
+                                    <div class="char-buff-item muted">无</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="you-page-actions" style="margin-top: 24px;">
+                            <button class="btn" id="youPageHelpBtn">帮助</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -662,6 +818,7 @@
 <audio id="sfxNavTimer" src="assets/timer-audio.mp3" preload="auto"></audio>
 <audio id="sfxNavBackpack" src="assets/backpack-audio.mp3" preload="auto"></audio>
 <audio id="sfxNavClub" src="assets/club-audio.mp3" preload="auto"></audio>
+<audio id="sfxNavYou" src="assets/sfx_click.mp3" preload="auto"></audio>
 <audio id="sfxAddTask" src="assets/sfx_add.mp3" preload="auto"></audio>
 <audio id="sfxSelectTask" src="assets/sfx_select.mp3" preload="auto"></audio>
 <audio id="sfxDeleteTask" src="assets/sfx_delete.mp3" preload="auto"></audio>
@@ -683,6 +840,10 @@
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
     <span>计时</span>
   </button>
+  <button class="tab-btn" data-mobile-target="you-pane" data-sound-id="sfxNavYou">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M17.6 17.6C16.4 19.2 14.4 20 12 20s-4.4-.8-5.6-2.4C7.6 16.4 8.8 15 12 15s4.4 1.4 5.6 2.6z"></path><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2z"></path></svg>
+    <span>你</span>
+  </button>
   <button class="tab-btn" data-mobile-target="backpack-pane" data-sound-id="sfxNavBackpack">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
     <span>背包</span>
@@ -690,10 +851,6 @@
    <button class="tab-btn" data-mobile-target="club-pane" data-sound-id="sfxNavClub">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 12h12M12 18V6"/></svg>
     <span>俱乐部</span>
-  </button>
-  <button class="tab-btn" id="navBtnHelp">
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-    <span>帮助</span>
   </button>
 </nav>
 
@@ -896,8 +1053,8 @@ async function initialCloudMergeAndSubscribe(){
   };
   const subscriptions = {
       [LS_KEYS.TASKS]: (v) => { state.tasks = Array.isArray(v) ? v : []; renderTasks(); },
-      [LS_KEYS.AGG]: (v) => { state.agg = v || { totalHQ: 0, totalSeconds: 0 }; renderKPI(); },
-      [LS_KEYS.META]: (v) => { meta = v || meta; ensureBadgeMeta(); renderDaily(); renderInventory(); renderWorkshop(); setControls(); updateModeButton(); },
+      [LS_KEYS.AGG]: (v) => { state.agg = v || { totalHQ: 0, totalSeconds: 0 }; renderKPI(); renderYou(); },
+      [LS_KEYS.META]: (v) => { meta = v || meta; ensureBadgeMeta(); renderDaily(); renderInventory(); renderWorkshop(); renderYou(); setControls(); updateModeButton(); },
       [LS_KEYS.RATES]: (v) => { RATE_BY_DIFFICULTY = { ...DEFAULT_RATES, ...(v || {}) }; updateRate(); },
       [LS_KEYS.FUNSHOP]: (v) => { FUNSHOP = v || FUNSHOP; renderFunshop(); },
       [LS_KEYS.REWARD_PARAMS]: (v) => { REWARD_PARAMS = { ...DEFAULT_REWARD_PARAMS, ...(v || {}) }; }
@@ -930,7 +1087,7 @@ async function initialCloudMergeAndSubscribe(){
   }
 
   // 合并完刷新一次
-  renderTasks(); renderKPI(); renderDaily(); renderInventory(); renderWorkshop(); renderFunshop(); hidePauseIndicator(); setControls(); updateModeButton();
+  renderInitial();
 
   // 远端订阅：跨设备/多标签页实时同步
   CLOUD.unsubscribeAll();
@@ -1047,6 +1204,18 @@ window.AppSync = {
     meta.badges.loadoutCooldownUntil = meta.badges.loadoutCooldownUntil || 0;
     meta.nextWheelBoost = meta.nextWheelBoost || 1;
     meta.funshop = meta.funshop || { activities:[], wearAccum:{} };
+    // Character data
+    if (!meta.character) {
+        meta.character = {
+            name: '',
+            title: '',
+            avatar: null // base64 string
+        };
+    }
+    // Buffs data
+    if (!meta.buffs) {
+        meta.buffs = [];
+    }
   }
   ensureBadgeMeta();
 
@@ -1060,6 +1229,7 @@ window.AppSync = {
     navTimer: $('#sfxNavTimer'),
     navBackpack: $('#sfxNavBackpack'),
     navClub: $('#sfxNavClub'),
+    navYou: $('#sfxNavYou'),
     add: $('#sfxAddTask'),
     select: $('#sfxSelectTask'),
     delete: $('#sfxDeleteTask'),
@@ -1121,6 +1291,11 @@ window.AppSync = {
     funshopList: $('#funshopList'),
     btnFunshopEdit: $('#btnFunshopEdit'), funshopEditMask: $('#funshopEditMask'),
     btnCloseFunshopEdit: $('#btnCloseFunshopEdit'), funshopInput: $('#funshopInput'), btnFunshopImport: $('#btnFunshopImport'),
+    // "You" Page elements
+    avatarUploader: $('#avatarUploader'), avatarInput: $('#avatarInput'),
+    charNameInput: $('#charNameInput'), charTitleInput: $('#charTitleInput'),
+    charStatusTag: $('#charStatusTag'), charLevelText: $('#charLevelText'), charTotalHQText: $('#charTotalHQText'),
+    charBuffsList: $('#charBuffsList'),
     // Dev Panel
     devTotalHQ: $('#devTotalHQ'), devTickets: $('#devTickets'), devFreeze: $('#devFreeze'),
     devRareGem: $('#devRareGem'), devEpicGem: $('#devEpicGem'),
@@ -1143,7 +1318,8 @@ window.AppSync = {
   const allPanes = {
     'tasks-pane': $('#tasks-pane'),
     'backpack-pane': $('#backpack-pane'),
-    'club-pane': $('#club-pane')
+    'club-pane': $('#club-pane'),
+    'you-pane': $('#you-pane'),
   };
   const mobileMedia = window.matchMedia('(max-width: 767px) or (max-height: 500px)');
   let activeView = 'tasks-pane';
@@ -1169,6 +1345,10 @@ window.AppSync = {
         allPanes[paneId].style.display = (paneId === targetId) ? '' : 'none';
       }
     });
+
+    if (targetId === 'you-pane') {
+        renderYou();
+    }
 
     window.scrollTo(0, 0);
   }
@@ -1951,6 +2131,33 @@ function setControls(){
           lastKnownTotalHQForDisplay = Math.floor(state.agg.totalHQ || 0);
           el.kpiTotalValue.textContent = lastKnownTotalHQForDisplay.toLocaleString('en-US');
       }
+      
+      // "You" page dynamic elements
+      if (activeView === 'you-pane') {
+        let statusText = '离线';
+        if (state.active) {
+            statusText = state.active.isPaused ? '休息中' : '专注中';
+        }
+        if (el.charStatusTag) el.charStatusTag.textContent = statusText;
+
+        const now = Date.now();
+        meta.buffs = (meta.buffs || []).filter(b => b.expiresAt > now);
+        
+        const buffList = el.charBuffsList;
+        if (buffList) {
+            if (meta.buffs.length === 0) {
+                buffList.innerHTML = `<div class="char-buff-item muted">无</div>`;
+            } else {
+                buffList.innerHTML = meta.buffs.map(buff => {
+                    const remainingSec = Math.max(0, Math.floor((buff.expiresAt - now) / 1000));
+                    const m = Math.floor(remainingSec / 60).toString().padStart(2, '0');
+                    const s = (remainingSec % 60).toString().padStart(2, '0');
+                    return `<div class="char-buff-item">${buff.name}（剩余 ${m}:${s}）</div>`;
+                }).join('');
+            }
+        }
+      }
+
       requestAnimationFrame(loop);
   }
   
@@ -2164,9 +2371,85 @@ function todayObj(){
 
   /* 幸运轮入口 */
   el.btnSpin.onclick=startNameTicker;
+  
+  /* ================================
+   *           "你" 页面逻辑
+   * ================================ */
+  function renderYou() {
+    ensureBadgeMeta();
+    const {
+      avatarUploader, charNameInput, charTitleInput, charStatusTag,
+      charLevelText, charTotalHQText
+    } = el;
+    
+    // Data calculation
+    const totalHQ = state.agg.totalHQ || 0;
+    const hqForLevelUp = 1000;
+    const currentLevel = Math.floor(totalHQ / hqForLevelUp) + 1;
+    const nextLevel = currentLevel + 1;
+    const currentLevelBaseHQ = (currentLevel - 1) * hqForLevelUp;
+    const hqInCurrentLevel = totalHQ - currentLevelBaseHQ;
+    const hqNeeded = hqForLevelUp - hqInCurrentLevel;
+    
+    // New Block EXP Bar Logic
+    const expLevelNowEl = document.getElementById("expLevelNow");
+    const expLevelNextEl = document.getElementById("expLevelNext");
+    const expBarFillEl = document.getElementById("expBarFill");
+    const expValueTextEl = document.getElementById("expValueText");
+    const expGapEl = document.querySelector(".exp-bar-info .exp-gap");
+
+    if (expLevelNowEl) expLevelNowEl.textContent = currentLevel;
+    if (expLevelNextEl) expLevelNextEl.textContent = nextLevel;
+    
+    if (expBarFillEl) {
+        const percent = Math.min(99.5, (hqInCurrentLevel / hqForLevelUp) * 100);
+        expBarFillEl.style.width = `${percent}%`;
+    }
+    
+    if (expValueTextEl) expValueTextEl.textContent = `${Math.floor(hqInCurrentLevel)} / ${hqForLevelUp}`;
+    if (expGapEl) expGapEl.textContent = `距下级：${Math.ceil(hqNeeded)} 豪情值`;
+    
+    // Render Character Card
+    avatarUploader.style.backgroundImage = meta.character.avatar ? `url(${meta.character.avatar})` : 'none';
+    if (!meta.character.avatar) avatarUploader.innerHTML = '点击<br>上传头像'; else avatarUploader.innerHTML = '';
+    
+    charNameInput.value = meta.character.name;
+    charTitleInput.value = meta.character.title;
+    charLevelText.textContent = `Lv. ${currentLevel}`;
+    charTotalHQText.textContent = `${Math.floor(totalHQ).toLocaleString()} HQ`;
+  }
+  
+  if (el.avatarUploader) {
+    el.avatarUploader.onclick = () => el.avatarInput.click();
+    el.avatarInput.onchange = e => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+            meta.character.avatar = reader.result;
+            save();
+            renderYou();
+        };
+        reader.readAsDataURL(file);
+    };
+  }
+
+  if (el.charNameInput) {
+    el.charNameInput.onblur = () => {
+      meta.character.name = el.charNameInput.value.trim();
+      save();
+    };
+  }
+  if (el.charTitleInput) {
+    el.charTitleInput.onblur = () => {
+      meta.character.title = el.charTitleInput.value.trim();
+      save();
+    };
+  }
+
 
   /* 首渲染 */
-  function renderInitial(){ renderTasks(); renderKPI(); renderDaily(); renderInventory(); renderWorkshop(); renderFunshop(); hidePauseIndicator(); setControls(); updateModeButton();}
+  function renderInitial(){ renderTasks(); renderKPI(); renderDaily(); renderInventory(); renderWorkshop(); renderFunshop(); renderYou(); hidePauseIndicator(); setControls(); updateModeButton();}
   renderInitial();
 
   /* —— Funshop 事件绑定 —— */
@@ -2209,13 +2492,13 @@ function todayObj(){
   }
   
   /* --- 新增的移动端交互 --- */
-  // 帮助按钮
-  const navBtnHelp = document.getElementById('navBtnHelp');
-  if (navBtnHelp) {
-    navBtnHelp.addEventListener('click', () => {
-      playSound(sfx.modalOpen);
-      if (el.helpMask) el.helpMask.style.display = 'flex';
-    });
+  // "你"页面的帮助按钮（移动端）
+  const youPageHelpBtn = document.getElementById('youPageHelpBtn');
+  if (youPageHelpBtn) {
+    youPageHelpBtn.onclick = () => {
+        playSound(sfx.modalOpen);
+        if (el.helpMask) el.helpMask.style.display = 'flex';
+    };
   }
   
   // 调试后门
