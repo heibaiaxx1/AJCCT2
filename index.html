@@ -207,7 +207,7 @@
 
   @keyframes modal-slide-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
 
-  @media (max-width:720px){
+  @media (max-width: 767px) or (max-height: 500px){
     :root{--panel:#ffffff;--panel-2:#fdfdfd;--border:#e5e5e5;--bg:#f0f0f2}
     body{-webkit-tap-highlight-color:transparent; overscroll-behavior-y: contain;}
     .app{padding:env(safe-area-inset-top) 16px calc(60px + env(safe-area-inset-bottom));margin:0 auto}
@@ -1000,8 +1000,14 @@ window.AppSync = {
 
   function playSound(audioEl) {
     if (audioEl) {
+      audioEl.pause();
       audioEl.currentTime = 0;
-      audioEl.play().catch(e => console.warn("Audio playback failed:", e));
+      const playPromise = audioEl.play();
+      if (playPromise !== undefined) {
+        playPromise.catch(error => {
+          console.warn(`Audio playback for ${audioEl.id} was prevented. This is a common browser restriction on mobile.`);
+        });
+      }
     }
   }
 
@@ -1054,7 +1060,7 @@ window.AppSync = {
   const sessionFlip = new FlipCounter($('#sessionFlip'),{digits:6,comma:true,large:true});
   const mobileTabButtons = document.querySelectorAll('.bottom-nav .tab-btn');
   const mobilePanels = document.querySelectorAll('.workspace > .column');
-  const mobileMedia = window.matchMedia('(max-width: 720px)');
+  const mobileMedia = window.matchMedia('(max-width: 767px) or (max-height: 500px)');
   let activeMobilePanel = 'tasksCard';
 
   function setMobilePanel(id){
