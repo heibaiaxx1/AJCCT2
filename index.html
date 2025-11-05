@@ -4,11 +4,12 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>豪情在天 · 任务与计时</title>
-<meta name="theme-color" content="#007aff">
+<meta name="theme-color" content="#f5f5f7">
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="豪情计时">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23007aff'/%3E%3Cpath d='M25 50 L45 70 L75 30' stroke='white' stroke-width='10' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -2385,90 +2386,4 @@ function todayObj(){
     };
   }
   
-  // 音效开关逻辑
-  const btnToggleSound = document.getElementById('btnToggleSound');
-  function updateSoundButtonText() {
-      if (btnToggleSound) {
-          btnToggleSound.textContent = `音效：${isSoundMuted ? '关闭' : '开启'}`;
-      }
-  }
-  if (btnToggleSound) {
-      btnToggleSound.addEventListener('click', () => {
-          isSoundMuted = !isSoundMuted;
-          writeJSON(LS_KEYS.SOUND_MUTED, isSoundMuted);
-          updateSoundButtonText();
-          if (!isSoundMuted) playSound(sfx.click);
-      });
-  }
-  updateSoundButtonText(); // Initial state
-
-  // 启动 Funshop 倒计时心跳
-  tickFunshopTimers();
-  // 启动主渲染循环
-  loop();
-});
-</script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
-
-<script>
-// Firebase Initialization
-const firebaseConfig = {
-  apiKey: "AIzaSyBjcUD9nAGxg5mgTA2v7mMcfD5dcWU9nTw",
-  authDomain: "haoqing-af64d.firebaseapp.com",
-  projectId: "haoqing-af64d",
-  storageBucket: "haoqing-af64d.firebasestorage.app",
-  messagingSenderId: "1025278981441",
-  appId: "1:1025278981441:web:edaf5f1aa9446246c0ddc0"
-};
-firebase.initializeApp(firebaseConfig);
-
-const auth = firebase.auth();
-const db = firebase.firestore();
-
-// UI Elements for Auth
-const loginBtn = document.getElementById('login');
-const statusEl = document.getElementById('status');
-const authChip = document.getElementById('authChip');
-
-// Function to update authentication UI
-function updateAuthUI(user){
-  if(!authChip || !statusEl || !loginBtn) return;
-  if(user){
-    authChip.classList.add('logged-in');
-    statusEl.textContent = `已登录：${user.displayName || 'Google 用户'}`;
-  }else{
-    authChip.classList.remove('logged-in');
-    statusEl.textContent = '未登录';
-  }
-}
-
-// Attach login button event
-if(loginBtn){
-  loginBtn.onclick = () => {
-    const provider = new firebase.auth.GoogleAuthProvider();
-    auth.signInWithPopup(provider).catch(error => {
-        console.error("Google Sign-In Error:", error);
-        // Optional: show a user-facing error message
-        alert("登录失败，请稍后再试或检查浏览器设置。");
-    });
-  };
-}
-
-// Single, definitive listener for authentication state changes
-auth.onAuthStateChanged(async user => {
-  updateAuthUI(user);
   
-  // Call the main app's sync handler
-  if (window.AppSync && typeof window.AppSync.setUser === 'function') {
-    try {
-      // Pass user and db instance if logged in, or nulls if logged out.
-      await window.AppSync.setUser(user, user ? db : null);
-    } catch (e) {
-      console.error('AppSync operation failed:', e);
-    }
-  }
-});
-</script>
-</html>
