@@ -167,7 +167,6 @@
   .confetti{position:absolute;width:8px;height:16px;opacity:0;animation:confetti-fall 2.5s ease-out forwards}
   @keyframes confetti-fall{0%{opacity:1;transform:translateY(-10vh) rotate(0deg)}100%{opacity:0;transform:translateY(110vh) rotate(720deg)}}
 
-  .column-backpack, .column-club { display: none; }
   .bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:calc(55px + env(safe-area-inset-bottom));padding-bottom:env(safe-area-inset-bottom);background:rgba(249,249,249,.9);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-top:1px solid #c7c7c9;z-index:100}
   .bottom-nav .tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);background:none;border:none;font-size:10px;cursor:pointer;transition:color .2s ease;padding-top:4px}
   .bottom-nav .tab-btn svg{width:24px;height:24px;stroke-width:2}
@@ -212,7 +211,8 @@
     font-size: 14px;
   }
   
-  @media (min-width: 1101px) {
+  /* Desktop and Tablet Styles */
+  @media (min-width: 768px) {
     .card .desktop-tabs {
       display: flex;
       gap: 8px;
@@ -244,19 +244,17 @@
     .bottom-nav {
       display: none !important;
     }
-    .column-backpack, .column-club {
-      display: none;
-    }
     .tab-pane > .hd {
         display: none;
     }
   }
-
-  @media (max-width:1100px){
+  
+  /* Tablet: Single Column Layout */
+  @media (max-width: 1100px) {
     .workspace{grid-template-columns:1fr}
-    .desktop-tabs { display: none; }
   }
 
+  /* Mobile Styles */
   @media (max-width: 767px) or (max-height: 500px){
     :root{--panel:#ffffff;--panel-2:#fdfdfd;--border:#e5e5e5;--bg:#f0f0f2}
     body{-webkit-tap-highlight-color:transparent; overscroll-behavior-y: contain;}
@@ -269,7 +267,7 @@
     .kpi{width:100%;gap:12px;flex-direction:column;align-items:stretch}
     .kpi .chip{width:100%;justify-content:space-between;border-radius:10px;background:var(--panel);padding:14px;font-size:18px}
     #helpBtnWrapper { display: none; }
-    #controlPanelCard { display: none; }
+    .desktop-tabs { display: none; }
     .kpi-row {
       display: flex;
       flex-direction: column;
@@ -2386,4 +2384,43 @@ function todayObj(){
     };
   }
   
+  const btnToggleSound = document.getElementById('btnToggleSound');
+  function updateSoundButton() {
+    if (btnToggleSound) {
+        btnToggleSound.textContent = `音效：${isSoundMuted ? '关闭' : '开启'}`;
+    }
+  }
+  if(btnToggleSound){
+      btnToggleSound.onclick = () => {
+          isSoundMuted = !isSoundMuted;
+          writeJSON(LS_KEYS.SOUND_MUTED, isSoundMuted);
+          updateSoundButton();
+          if (!isSoundMuted) {
+              playSound(sfx.click);
+          }
+      };
+      updateSoundButton();
+  }
   
+  // Global click sound for non-specific buttons
+  document.addEventListener('click', (e) => {
+    if (e.target.matches('.btn:not([data-sound-id])')) {
+      const parentNav = e.target.closest('.bottom-nav');
+      if (!parentNav) { // Avoid double-playing sounds for nav buttons
+        // Add more specific selectors to exclude if needed
+        const excludedIds = ['btnToggleSound'];
+        if (!excludedIds.includes(e.target.id)) {
+           // playSound(sfx.click); // This can be too noisy, enable if desired
+        }
+      }
+    }
+  }, true);
+
+  // Initialize all loops and intervals
+  loop();
+  tickFunshopTimers();
+});
+</script>
+
+</body>
+</html>
