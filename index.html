@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>豪情在天 · 任务与计时</title>
 <meta name="theme-color" content="#007aff">
-<link rel="manifest" href="/manifest.json">
+<link rel="manifest" href="manifest.json">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="豪情计时">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -47,7 +50,6 @@
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
   .card.compact .bd{padding:16px 24px}
   .card .hd{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--panel);}
-  .card .hd h2{margin:0;font-size:16px;font-weight:600}
   .card .bd{padding:24px}
   .control-dock{display:grid;gap:16px}
   .control-group{border:1px solid var(--border);border-radius:10px;padding:14px;background:#fdfdfd}
@@ -84,6 +86,7 @@
   .task-title { font-weight: 600; font-size: 15px; }
   .task-meta { font-size: 12px; margin-top: 4px; color: var(--muted); }
   .task-meta b { font-weight: 600; color: var(--text); }
+  .task-actions-footer { display: flex; gap: 10px; margin-top: 16px; }
   .task .reward-tag{margin-top:8px;display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid transparent;background:color-mix(in srgb,var(--accent) 15%,transparent);color:var(--accent)}
   .compose-grid{display:grid;grid-template-columns:minmax(0,1fr) 160px minmax(0,220px);gap:14px;align-items:end;margin-bottom:20px}
   .compose-grid .field{display:flex;flex-direction:column;gap:6px}
@@ -412,24 +415,15 @@
               <h2>背包</h2>
               <span class="muted">库存与工坊</span>
             </div>
-            <div class="bd">
+            <div class="bd" style="display: flex; flex-direction: column; gap: 16px;">
                <div class="pane">
                 <h3>库存快照</h3>
                 <div class="badge-row" id="invRow"></div>
-                <details class="workshop" id="badgeWorkshop">
-                  <summary>徽章工坊</summary>
-                  <div class="workshop-body" id="badgeWorkshopBody"></div>
-                </details>
                </div>
-               <div class="control-group" id="inventoryActionsModule" style="margin-top: 16px;">
-                <h4>库存动作</h4>
-                <div class="dock-buttons">
-                  <button class="btn small" id="btnForgeFreeze">锻造冻结卡（稀有×15）</button>
-                  <button class="btn small" id="btnRareRefresh">稀有刷新每日（稀有×6）</button>
-                  <button class="btn small" id="btnWheelBoost">幸运轮强运（稀有×10）</button>
-                  <button class="btn small" id="btnSpeedChip">调速芯片 +5%（稀有×20）</button>
-                </div>
-              </div>
+               <div class="pane">
+                <h3>徽章工坊</h3>
+                <div class="workshop-body" id="badgeWorkshopBody"></div>
+               </div>
             </div>
         </div>
 
@@ -491,34 +485,6 @@
             <button class="btn accent" id="btnStart"  aria-label="开始" disabled>开始</button>
             <button class="btn"         id="btnPause"  aria-label="暂停" disabled>暂停</button>
             <button class="btn danger"  id="btnStop"   aria-label="结束"  disabled>结束</button>
-          </div>
-        </div>
-      </section>
-
-      <section class="card compact" id="controlPanelCard" aria-label="操作面板">
-        <div class="hd">
-          <h2>操作面板</h2>
-          <span class="muted">常用动作集中在此</span>
-        </div>
-        <div class="bd">
-          <div class="control-dock">
-            <div class="control-group">
-              <h4>任务流程</h4>
-              <div class="dock-buttons">
-                <button class="btn small" id="btnDailyRefresh_desktop">刷新任务</button>
-                <button class="btn small" id="btnTaskLibrary_desktop">任务库</button>
-                <button class="btn small" id="btnTodayDone_desktop">今日已完成</button>
-              </div>
-            </div>
-            <div class="control-group">
-              <h4>库存动作</h4>
-              <div class="dock-buttons">
-                <button class="btn small" id="btnForgeFreeze_desktop">锻造冻结卡（稀有×15）</button>
-                <button class="btn small" id="btnRareRefresh_desktop">稀有刷新每日（稀有×6）</button>
-                <button class="btn small" id="btnWheelBoost_desktop">幸运轮强运（稀有×10）</button>
-                <button class="btn small" id="btnSpeedChip_desktop">调速芯片 +5%（稀有×20）</button>
-              </div>
-            </div>
           </div>
         </div>
       </section>
@@ -736,7 +702,7 @@
 // PWA Service Worker Registration
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js')
+    navigator.serviceWorker.register('sw.js')
       .then(reg => console.log('Service worker registered.', reg))
       .catch(err => console.error('Service worker registration failed.', err));
   });
@@ -2038,7 +2004,7 @@ function setControls(){
     }
   };
   
-  setupButtonPair('btnDailyRefresh', 'btnDailyRefresh_desktop', refreshMissionsAction);
+  el.btnDailyRefresh.onclick = refreshMissionsAction;
 
 /* 每日任务/库存（保留核心） */
 function todayObj(){
@@ -2157,14 +2123,9 @@ function todayObj(){
   function activateWheelBoost(){ playSound(sfx.click); if((meta.badges.rare_gem||0)<10){alert('稀有碎片不足');return;} meta.badges.rare_gem-=10; meta.nextWheelBoost=Math.min((meta.nextWheelBoost||1)*1.5,3); save(); renderInventory(); pushToast('已注入强运，下一次幸运轮提升','success'); }
   function applySpeedChip(){ playSound(sfx.click); if((meta.badges.rare_gem||0)<20){alert('稀有碎片不足');return;} const buff=todayBuff(); if(buff.rateBuff>=0.20){alert('今日加成已达上限');return;} meta.badges.rare_gem-=20; buff.rateBuff=+(Math.min(0.20,(buff.rateBuff||0)+0.05).toFixed(2)); save(); renderInventory(); updateRate(); pushToast('当日基础速率 +5%','success'); }
   
-  setupButtonPair('btnForgeFreeze', 'btnForgeFreeze_desktop', forgeFreeze);
-  setupButtonPair('btnRareRefresh', 'btnRareRefresh_desktop', rareRefresh);
-  setupButtonPair('btnWheelBoost', 'btnWheelBoost_desktop', activateWheelBoost);
-  setupButtonPair('btnSpeedChip', 'btnSpeedChip_desktop', applySpeedChip);
-
   /* 任务库逻辑 */
   const openTaskLibrary = () => { playSound(sfx.modalOpen); el.taskLibraryMask.style.display = 'flex'; };
-  setupButtonPair('btnTaskLibrary', 'btnTaskLibrary_desktop', openTaskLibrary);
+  el.btnTaskLibrary.onclick = openTaskLibrary;
 
   if(el.btnCloseTaskLibrary) el.btnCloseTaskLibrary.onclick=()=>{ playSound(sfx.modalClose); el.taskLibraryMask.style.display='none'; };
   if(el.btnImportTasks) el.btnImportTasks.onclick=()=>{
@@ -2196,7 +2157,7 @@ function todayObj(){
     renderTodayDone();
     el.todayDoneMask.style.display = 'flex';
   };
-  setupButtonPair('btnTodayDone', 'btnTodayDone_desktop', openTodayDone);
+  el.btnTodayDone.onclick = openTodayDone;
   el.btnCloseTodayDone.onclick = () => {
     playSound(sfx.modalClose);
     el.todayDoneMask.style.display = 'none';
