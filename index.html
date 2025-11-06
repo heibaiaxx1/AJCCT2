@@ -13,6 +13,12 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- Firebase SDKs -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+
 <style>
   :root{
     --bg: #f5f5f7;
@@ -77,8 +83,10 @@
   .kpi-main-chip strong{font-size:1.6em;font-weight:700;color:var(--text);margin-left:6px;font-variant-numeric:tabular-nums}
   .auth-chip .btn{white-space:nowrap}
   .auth-status{display:none;font-size:12px;color:var(--muted);font-weight:600}
-  .auth-chip.logged-in .auth-status{display:inline-flex;align-items:center;color:var(--success)}
-  .auth-chip.logged-in .btn{display:none}
+  .auth-chip.logged-in .auth-status{display:inline-flex;align-items:center;gap:8px; color:var(--success)}
+  .auth-chip.logged-in .auth-status .user-avatar { width: 24px; height: 24px; border-radius: 999px; background-size: cover; background-position: center; background-color: var(--ring-bg); }
+  .auth-chip.logged-in .btn-login{display:none}
+  .auth-chip:not(.logged-in) .btn-logout {display: none;}
   .tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:5px 10px;border-radius:999px;background-color:#f0f0f2;border:1px solid transparent;color:var(--muted)}
   .tasks{display:flex;flex-direction:column;gap:12px}
   .task{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:16px;border:1px solid var(--border);border-radius:10px;background:var(--panel-2);transition:all .2s ease}
@@ -203,10 +211,10 @@
 
   .desktop-tabs { display: none; }
   
-  #modeSwitchWrapper, #helpBtnWrapper, #devBtnWrapper, #syncBtnWrapper {
+  #modeSwitchWrapper, #helpBtnWrapper, #devBtnWrapper, #authChipWrapper {
     padding: 0;
   }
-  #modeSwitchWrapper .btn, #helpBtnWrapper .btn, #devBtnWrapper .btn, #syncBtnWrapper .btn {
+  #modeSwitchWrapper .btn, #helpBtnWrapper .btn, #devBtnWrapper .btn, #authChipWrapper .btn {
     padding: 12px 18px;
     font-size: 14px;
   }
@@ -293,21 +301,6 @@
     opacity: 0.8;
   }
 
-  /* Sync Feature Styles */
-  .sync-status-indicator {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 600;
-  }
-  .sync-status-indicator.synced { color: var(--success); }
-  .sync-status-indicator.syncing { color: var(--warning); }
-  .sync-status-indicator.error { color: var(--danger); }
-  #ossConfigModal .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
-  #ossConfigModal .field label { font-size: 12px; color: var(--muted); }
-  #ossConfigModal input { width: 100%; }
-
   .loading-overlay {
     position: fixed; inset: 0;
     background: rgba(255, 255, 255, 0.8);
@@ -376,7 +369,7 @@
     .kpi{width:100%;gap:12px;flex-direction:column;align-items:stretch}
     .kpi .chip{width:100%;justify-content:space-between;border-radius:10px;background:var(--panel);padding:14px;font-size:18px}
     #helpBtnWrapper { display: none; }
-    #syncBtnWrapper {
+    #authChipWrapper {
       order: 10;
     }
     .desktop-tabs { display: none; }
@@ -461,19 +454,16 @@
       color: var(--accent);
       font-size: 11px;
     }
-    #syncBtnWrapper {
+    #authChipWrapper {
       padding: 0;
       border: none;
       background: transparent;
     }
-    #btnSync {
+    #authChipWrapper .btn {
       width: 100%;
     }
-    #syncStatusIndicator {
-      display: none;
-    }
     .auth-chip{gap:8px}
-    .auth-chip .btn{flex:1}
+    .auth-chip .btn-login{flex:1}
     .auth-chip .auth-status{justify-content:flex-start}
     .bottom-nav{display:flex}
     .column-main.mobile-hidden, .column-side.mobile-hidden {display:none}
@@ -539,7 +529,6 @@
     }
   }
 </style>
-<script src="https://gosspublic.alicdn.com/ali-oss/client-6.18.0.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -553,8 +542,14 @@
       <div class="kpi-row" id="mobileHeaderStatus"></div>
       <span class="chip" id="modeSwitchWrapper"><button class="btn" id="modeSwitchBtn">专注模式</button></span>
       <span class="chip" id="helpBtnWrapper"><button class="btn" id="btnHelp">帮助 ❓</button></span>
-      <span class="chip" id="syncBtnWrapper"><button class="btn" id="btnSync">数据同步</button></span>
-      <div id="syncStatusIndicator" class="sync-status-indicator">本地</div>
+      <span class="chip auth-chip" id="authChipWrapper">
+          <button class="btn btn-login" id="btnLogin">用 Google 登录</button>
+          <span class="auth-status">
+              <span class="user-avatar" id="userAvatar"></span>
+              <span id="authStatusText">已登录</span>
+          </span>
+          <button class="btn small btn-logout" id="btnLogout">登出</button>
+      </span>
       <span class="chip" id="devBtnWrapper"><button class="btn" id="btnDev">调试 ⚙️</button></span>
     </div>
   </header>
@@ -756,46 +751,6 @@
   </div>
 </div>
 
-<!-- OSS 同步模态框 -->
-<div class="modal-mask" id="ossConfigModal" role="dialog" aria-modal="true">
-  <div class="modal">
-    <div class="mh">
-      <h3>OSS 数据同步配置</h3>
-      <button class="btn small" id="btnCloseOssConfig">关闭</button>
-    </div>
-    <div class="mb">
-      <div class="result-bar result-warn" style="margin-bottom: 16px;">
-        <strong>安全警告：</strong>请不要在浏览器中长期存储拥有高权限的 Access Key。建议为此应用创建一个拥有<strong>最小权限</strong>（仅对此 Bucket/Object 的读写权限）的子账户 Key。
-      </div>
-      <div class="field">
-        <label for="ossEndpoint">Endpoint (e.g., oss-cn-hangzhou.aliyuncs.com)</label>
-        <input type="text" id="ossEndpoint" placeholder="服务器地址">
-      </div>
-      <div class="field">
-        <label for="ossBucket">Bucket</label>
-        <input type="text" id="ossBucket" placeholder="Bucket 名称">
-      </div>
-      <div class="field">
-        <label for="ossObjectKey">Object Key (e.g., data/haoqing.json)</label>
-        <input type="text" id="ossObjectKey" placeholder="数据文件名">
-      </div>
-      <div class="field">
-        <label for="ossAccessKeyId">Access Key ID</label>
-        <input type="text" id="ossAccessKeyId">
-      </div>
-      <div class="field">
-        <label for="ossAccessKeySecret">Access Key Secret</label>
-        <input type="password" id="ossAccessKeySecret">
-      </div>
-      <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
-        <button class="btn danger" id="btnOssDisconnect">断开连接</button>
-        <button class="btn" id="btnOssSave">保存设置</button>
-        <button class="btn primary" id="btnOssConnect">连接并同步</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- 娱乐兑换所 · 调试器 -->
 <div class="modal-mask" id="funshopEditMask" role="dialog" aria-modal="true">
   <div class="modal">
@@ -957,7 +912,7 @@
 
 <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 <div id="completion-animation-container" class="completion-animation-container"></div>
-<div class="loading-overlay" id="loadingOverlay">正在从云端同步数据...</div>
+<div class="loading-overlay" id="loadingOverlay">正在加载...</div>
 
 <!-- Sound Effects -->
 <audio id="sfxNavTasks" src="assets/tasks-audio.mp3" preload="auto"></audio>
@@ -1011,8 +966,28 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <script>
+// ⚠️ ========================================================== ⚠️
+// ⚠️  在此处粘贴你的 Firebase 项目配置!
+// ⚠️  Get it from your Firebase project settings.
+// ⚠️ ========================================================== ⚠️
+const firebaseConfig = {
+  apiKey: "AIzaSyBjcUD9nAGxg5mgTA2v7mMcfD5dcWU9nTw",
+  authDomain: "haoqing-af64d.firebaseapp.com",
+  projectId: "haoqing-af64d",
+  storageBucket: "haoqing-af64d.firebasestorage.app",
+  messagingSenderId: "1025278981441,
+  appId: "1:1025278981441:web:edaf5f1aa9446246c0ddc0"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+const storage = firebase.storage();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+
 /* ========== 存储兜底层 ========== */
-const storage = (() => {
+const localStore = (() => {
   try {
     const t = '__hq_test__';
     window.localStorage.setItem(t, '1');
@@ -1029,11 +1004,11 @@ const storage = (() => {
 })();
 
 const readJSON = (key, fallback) => {
-  try { const s = storage.getItem(key); return s ? JSON.parse(s) : fallback; }
+  try { const s = localStore.getItem(key); return s ? JSON.parse(s) : fallback; }
   catch { return fallback; }
 };
 const writeJSON = (key, val) => {
-  try { storage.setItem(key, JSON.stringify(val)); } catch { }
+  try { localStore.setItem(key, JSON.stringify(val)); } catch { }
 };
 
 window.requestIdleCallback = window.requestIdleCallback || function(cb){return setTimeout(()=>cb({didTimeout:false,timeRemaining:()=>0}),200)};
@@ -1112,17 +1087,15 @@ const REWARD_TYPES={
 const MAX_FLIPS_PER_SECOND=8, CYCLE_SECONDS_BASE=20, CIRCUM=2*Math.PI*90;
 
 /* ========== 主逻辑 ========== */
-window.addEventListener('load', async ()=>{
+document.addEventListener('DOMContentLoaded', ()=>{
 const LS_KEYS = {
-    TASKS: "haoqing_tasks_v1",
-    AGG: "haoqing_agg_v1",
-    META: "haoqing_meta_v1",
-    RATES: "haoqing_rates_v1",
-    FUNSHOP: "haoqing_funshop_v1",
-    REWARD_PARAMS: "haoqing_reward_params_v1",
-    LIVE_TIMER: "haoqing_live_timer_v1",
+    TASKS: "haoqing_tasks_v2",
+    AGG: "haoqing_agg_v2",
+    META: "haoqing_meta_v2",
+    RATES: "haoqing_rates_v2",
+    FUNSHOP: "haoqing_funshop_v2",
+    REWARD_PARAMS: "haoqing_reward_params_v2",
     SOUND_MUTED: "haoqing_sound_muted",
-    OSS_CONFIG: "haoqing_oss_config_v1"
 };
   
   const DEFAULT_RATES={1:1,2:2,3:4,4:7,5:11};
@@ -1130,32 +1103,36 @@ const LS_KEYS = {
   
   const DEFAULT_REWARD_PARAMS = { baseChance: 0.4, betCoefficient: 0.25, maxChance: 0.9, pityIncrement: 0.015 };
   let REWARD_PARAMS = readJSON(LS_KEYS.REWARD_PARAMS, { ...DEFAULT_REWARD_PARAMS });
-
-  let ossConfig = readJSON(LS_KEYS.OSS_CONFIG, null);
-
-  // Initial state is now loaded from local storage first, then potentially overwritten by OSS
-  let state = { 
+  
+  const getInitialState = () => ({
     tasks: [], 
     agg: {totalHQ:0,totalSeconds:0}, 
     active: null,
     selectedTaskId: null
-  };
-  let meta = {};
+  });
+
+  const getInitialMeta = () => ({
+      streak:0,pity:0,arcade:false,freeze:0,badges:{},tickets:0,
+      daily:{},dailyBuff:{},multDayCount:{},guardUsedToday:0,guardDay:null,nextWheelBoost:1,
+      completed:{},
+      funshop:{ activities:[], wearAccum:{} },
+      character: { name: '', title: '', avatar: null },
+      buffs: []
+  });
+
+  let state = getInitialState();
+  let meta = getInitialMeta();
   let FUNSHOP = {};
+  let firestoreUnsubscribe = null;
 
   const loadStateFromLocalStorage = () => {
     state = { 
         tasks: readJSON(LS_KEYS.TASKS, []), 
         agg: readJSON(LS_KEYS.AGG, {totalHQ:0,totalSeconds:0}), 
-        active: readJSON(LS_KEYS.LIVE_TIMER, null),
+        active: null, // Live timer is not persisted locally to avoid sync issues
         selectedTaskId: null
     };
-    meta = readJSON(LS_KEYS.META, {
-        streak:0,pity:0,arcade:false,freeze:0,badges:{},tickets:0,
-        daily:{},dailyBuff:{},multDayCount:{},guardUsedToday:0,guardDay:null,nextWheelBoost:1,
-        completed:{},
-        funshop:{ activities:[], wearAccum:{} }
-    });
+    meta = readJSON(LS_KEYS.META, getInitialMeta());
     FUNSHOP = readJSON(LS_KEYS.FUNSHOP, {
         items: [
           {name:'放松呼吸训练', seconds:300, need:{rare_token:1}, wear:{rare_token:5}},
@@ -1165,15 +1142,33 @@ const LS_KEYS = {
     });
     ensureBadgeMeta();
   };
+  
+  function resetLocalState() {
+      state = getInitialState();
+      meta = getInitialMeta();
+      loadStateFromLocalStorage(); // This will load any existing local data or defaults
+      renderInitial();
+  }
 
-  const applyImportedState = (imported) => {
-    state.tasks = imported.tasks || [];
-    state.agg = imported.agg || {totalHQ: 0, totalSeconds: 0};
-    meta = imported.meta || meta;
-    RATE_BY_DIFFICULTY = imported.rates || DEFAULT_RATES;
-    FUNSHOP = imported.funshop || FUNSHOP;
-    REWARD_PARAMS = imported.rewardParams || DEFAULT_REWARD_PARAMS;
+  const applyCloudData = (data) => {
+    state.tasks = data.tasks || [];
+    state.agg = data.agg || {totalHQ: 0, totalSeconds: 0};
+    state.active = data.active || null; // Sync live timer state
+    meta = { ...getInitialMeta(), ...data.meta };
+    RATE_BY_DIFFICULTY = data.rates || DEFAULT_RATES;
+    FUNSHOP = data.funshop || FUNSHOP;
+    REWARD_PARAMS = data.rewardParams || DEFAULT_REWARD_PARAMS;
     ensureBadgeMeta();
+    
+    // Save the synced data to local storage for offline use
+    writeJSON(LS_KEYS.TASKS, state.tasks);
+    writeJSON(LS_KEYS.AGG, state.agg);
+    writeJSON(LS_KEYS.META, meta);
+    writeJSON(LS_KEYS.RATES, RATE_BY_DIFFICULTY);
+    writeJSON(LS_KEYS.FUNSHOP, FUNSHOP);
+    writeJSON(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS);
+
+    renderInitial();
   };
 
   function ensureBadgeMeta(){
@@ -1245,11 +1240,9 @@ const LS_KEYS = {
     btnHardReset: $('#btnHardReset'), devStateText: $('#devStateText'), btnExportState: $('#btnExportState'), btnImportState: $('#btnImportState'),
     devRewardBaseChance: $('#devRewardBaseChance'), devRewardBetCoeff: $('#devRewardBetCoeff'), devRewardMaxChance: $('#devRewardMaxChance'),
     devRewardPityInc: $('#devRewardPityInc'), btnSaveRewardParams: $('#btnSaveRewardParams'), btnResetRewardParams: $('#btnResetRewardParams'),
-    // OSS Sync elements
-    btnSync: $('#btnSync'), ossConfigModal: $('#ossConfigModal'), btnCloseOssConfig: $('#btnCloseOssConfig'), ossEndpoint: $('#ossEndpoint'),
-    ossBucket: $('#ossBucket'), ossObjectKey: $('#ossObjectKey'), ossAccessKeyId: $('#ossAccessKeyId'), ossAccessKeySecret: $('#ossAccessKeySecret'),
-    btnOssSave: $('#btnOssSave'), btnOssConnect: $('#btnOssConnect'), btnOssDisconnect: $('#btnOssDisconnect'),
-    syncStatusIndicator: $('#syncStatusIndicator'), loadingOverlay: $('#loadingOverlay'),
+    // Auth elements
+    authChipWrapper: $('#authChipWrapper'), btnLogin: $('#btnLogin'), btnLogout: $('#btnLogout'),
+    authStatusText: $('#authStatusText'), userAvatar: $('#userAvatar'), loadingOverlay: $('#loadingOverlay'),
   };
 
   const sessionFlip = new FlipCounter($('#sessionFlip'),{digits:6,comma:true,large:true});
@@ -1321,22 +1314,29 @@ const LS_KEYS = {
     };
   }
 
-  const debouncedSaveToOss = debounce(() => saveToOss(), 2000);
+  const debouncedSaveToFirebase = debounce(() => {
+      const user = auth.currentUser;
+      if (!user) return;
+      const fullState = { tasks: state.tasks, agg: state.agg, active: state.active, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS };
+      db.collection('users').doc(user.uid).set(fullState, { merge: true })
+        .catch(err => {
+            console.error("Firestore save error:", err);
+            pushToast('云端同步失败', 'warn');
+        });
+  }, 1500);
 
   function save(){
-    // Always save to local storage for offline support and as a backup
+    // Always save to local storage for offline support
     writeJSON(LS_KEYS.TASKS, state.tasks);
     writeJSON(LS_KEYS.AGG, state.agg);
     writeJSON(LS_KEYS.META, meta);
     writeJSON(LS_KEYS.RATES, RATE_BY_DIFFICULTY);
     writeJSON(LS_KEYS.FUNSHOP, FUNSHOP);
     writeJSON(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS);
-    writeJSON(LS_KEYS.LIVE_TIMER, state.active);
 
-    // If OSS is configured, trigger a debounced save
-    if (ossConfig) {
-      updateSyncStatus('syncing');
-      debouncedSaveToOss();
+    // If logged in, trigger a debounced save to Firestore
+    if (auth.currentUser) {
+      debouncedSaveToFirebase();
     }
   }
 
@@ -1362,7 +1362,7 @@ const LS_KEYS = {
   }
   function grantTaskReward(task){
     if(!task||!task.reward||!task.reward.type) return null; const def=REWARD_TYPES[task.reward.type]; if(!def) return null;
-    const amount=normalizeRewardAmount(reward.amount||1); def.apply(amount);
+    const amount=normalizeRewardAmount(task.reward.amount||1); def.apply(amount);
     return {message:`${task.title} 完成奖励：${def.label} +${amount}`, type:task.reward.type};
   }
 
@@ -1640,7 +1640,7 @@ function setControls(){
 
   function stopTimer(){
     if(!state.active) return; playSound(sfx.timerStop);
-    const activeSession = { ...state.active }; state.active = null; save();
+    const activeSession = { ...state.active }; state.active = null;
     const t = getTask(activeSession.taskId); let sessionSeconds = activeSession.accumulatedSeconds || 0;
     if (!activeSession.isPaused && activeSession.startTime) { sessionSeconds += (Date.now() - activeSession.startTime) / 1000; }
     sessionSeconds = Math.floor(sessionSeconds);
@@ -1790,7 +1790,7 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   }
   
   if (el.avatarUploader) {
-    el.avatarUploader.onclick = () => el.avatarInput.click();
+    el.avatarUploader.onclick = () => { if (!auth.currentUser) { pushToast('请先登录', 'warn'); return; } el.avatarInput.click(); };
     const resizeImage = (file, maxWidth, maxHeight, quality) => {
         return new Promise((resolve, reject) => { const reader = new FileReader();
             reader.onload = e => { const img = new Image(); img.onload = () => { let width = img.width; let height = img.height;
@@ -1801,10 +1801,24 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
                 img.onerror = reject; img.src = e.target.result; };
             reader.onerror = reject; reader.readAsDataURL(file); }); };
 
-    el.avatarInput.onchange = async e => { const file = e.target.files[0]; if (!file) return; el.avatarUploader.innerHTML = '处理中...'; el.avatarInput.value = '';
-        try { const base64String = await resizeImage(file, 256, 256, 0.8); meta.character.avatar = base64String;
-            save(); renderYou(); pushToast('头像已更新', 'success');
-        } catch (error) { console.error("Avatar processing failed:", error); pushToast('头像处理失败', 'warn'); renderYou(); } };
+    el.avatarInput.onchange = async e => {
+      const file = e.target.files[0]; if (!file || !auth.currentUser) return;
+      el.avatarUploader.innerHTML = '处理中...'; el.avatarInput.value = '';
+      try {
+        const resizedDataUrl = await resizeImage(file, 256, 256, 0.8);
+        const storageRef = storage.ref(`avatars/${auth.currentUser.uid}.jpg`);
+        const uploadTask = await storageRef.putString(resizedDataUrl, 'data_url');
+        const downloadURL = await uploadTask.ref.getDownloadURL();
+        meta.character.avatar = downloadURL;
+        save();
+        pushToast('头像已上传并同步', 'success');
+        // Firestore listener will update the UI
+      } catch (error) {
+        console.error("Avatar upload failed:", error);
+        pushToast('头像上传失败', 'warn');
+        renderYou();
+      }
+    };
   }
 
   if (el.charNameInput) { el.charNameInput.onblur = () => { meta.character.name = el.charNameInput.value.trim(); save(); }; }
@@ -1831,44 +1845,20 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   const youPageHelpBtn = document.getElementById('youPageHelpBtn');
   if (youPageHelpBtn) { youPageHelpBtn.onclick = () => { playSound(sfx.modalOpen); if (el.helpMask) el.helpMask.style.display = 'flex'; }; }
   
-  function openDebugPanel() {
-    if (el.devMask) {
-        playSound(sfx.modalOpen);
-        el.rate1.value = RATE_BY_DIFFICULTY[1];
-        el.rate2.value = RATE_BY_DIFFICULTY[2];
-        el.rate3.value = RATE_BY_DIFFICULTY[3];
-        el.rate4.value = RATE_BY_DIFFICULTY[4];
-        el.rate5.value = RATE_BY_DIFFICULTY[5];
-        el.devRewardBaseChance.value = REWARD_PARAMS.baseChance;
-        el.devRewardBetCoeff.value = REWARD_PARAMS.betCoefficient;
-        el.devRewardMaxChance.value = REWARD_PARAMS.maxChance;
-        el.devRewardPityInc.value = REWARD_PARAMS.pityIncrement;
-        ensureBadgeMeta(); const b = meta.badges || {};
-        el.devTotalHQ.value = Math.floor(state.agg.totalHQ || 0); el.devTickets.value = meta.tickets || 0;
-        el.devFreeze.value = meta.freeze || 0; el.devRareGem.value = b.rare_gem || 0; el.devEpicGem.value = b.epic_gem || 0;
-        el.devRareToken.value = b.rare_tokens || 0; el.devEpicToken.value = b.epic_tokens || 0; el.devLegendToken.value = b.legendary_tokens || 0;
-        el.devMask.style.display = 'flex';
-    }
-  }
-
-  function setupDebugTrigger(element) {
-    if (!element) return;
-    let clickCount = 0;
-    let clickTimer = null;
-    element.addEventListener('click', () => {
-        clickCount++;
-        if (clickTimer) clearTimeout(clickTimer);
-        clickTimer = setTimeout(() => { clickCount = 0; }, 600);
-        if (clickCount === 3) {
-            clickCount = 0; clearTimeout(clickTimer);
-            openDebugPanel();
-        }
-    });
-  }
-  
-  // Bind debug trigger to both desktop and mobile elements
-  setupDebugTrigger(document.getElementById('totalValorChip'));
-  setupDebugTrigger(document.getElementById('mobileHeaderStatus'));
+  const valorChip = document.getElementById('totalValorChip');
+  if (valorChip) { let valorClickCount = 0; let valorClickTimer = null;
+    valorChip.addEventListener('click', () => { valorClickCount++; if (valorClickTimer) clearTimeout(valorClickTimer);
+      valorClickTimer = setTimeout(() => { valorClickCount = 0; }, 600);
+      if (valorClickCount === 3) { valorClickCount = 0; clearTimeout(valorClickTimer);
+        if (el.devMask) { playSound(sfx.modalOpen);
+            el.rate1.value=RATE_BY_DIFFICULTY[1]; el.rate2.value=RATE_BY_DIFFICULTY[2]; el.rate3.value=RATE_BY_DIFFICULTY[3]; el.rate4.value=RATE_BY_DIFFICULTY[4]; el.rate5.value=RATE_BY_DIFFICULTY[5];
+            el.devRewardBaseChance.value = REWARD_PARAMS.baseChance; el.devRewardBetCoeff.value = REWARD_PARAMS.betCoefficient;
+            el.devRewardMaxChance.value = REWARD_PARAMS.maxChance; el.devRewardPityInc.value = REWARD_PARAMS.pityIncrement;
+            ensureBadgeMeta(); const b = meta.badges || {};
+            el.devTotalHQ.value = Math.floor(state.agg.totalHQ || 0); el.devTickets.value = meta.tickets || 0;
+            el.devFreeze.value = meta.freeze || 0; el.devRareGem.value = b.rare_gem || 0; el.devEpicGem.value = b.epic_gem || 0;
+            el.devRareToken.value = b.rare_tokens || 0; el.devEpicToken.value = b.epic_tokens || 0; el.devLegendToken.value = b.legendary_tokens || 0;
+            el.devMask.style.display = 'flex'; } } }); }
   
   if (el.btnSaveResources) { el.btnSaveResources.onclick = () => { playSound(sfx.click); const p = s => parseInt(s, 10) || 0;
       state.agg.totalHQ = p(el.devTotalHQ.value); meta.tickets = p(el.devTickets.value); meta.freeze = p(el.devFreeze.value);
@@ -1893,15 +1883,18 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
           rollMissions(true); save(); renderDaily(); pushToast('每日进度已重置', 'success'); }; }
   
   if (el.btnHardReset) { el.btnHardReset.onclick = () => { playSound(sfx.warn);
-          if (confirm('危险操作：这将清除此浏览器中的所有应用数据，确定吗？')) { Object.values(LS_KEYS).forEach(k => { storage.removeItem(k); }); window._debugDateOffset = 0; location.reload(); } }; }
+          if (confirm('危险操作：这将清除此浏览器中的所有应用数据，确定吗？')) { Object.values(LS_KEYS).forEach(k => { localStore.removeItem(k); }); window._debugDateOffset = 0; location.reload(); } }; }
   
   if (el.btnExportState) { el.btnExportState.onclick = () => { playSound(sfx.click);
-      const fullState = { tasks: state.tasks, agg: state.agg, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS, };
+      const fullState = { tasks: state.tasks, agg: state.agg, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS, active: state.active };
       el.devStateText.value = JSON.stringify(fullState, null, 2); pushToast('状态已导出到文本框。'); }; }
   
   if (el.btnImportState) { el.btnImportState.onclick = () => { playSound(sfx.click); const json = el.devStateText.value;
       if (!json) { pushToast('导入框为空。', 'warn'); return; }
-      try { const imported = JSON.parse(json); applyImportedState(imported);
+      try { const imported = JSON.parse(json); 
+        state.tasks = imported.tasks || []; state.agg = imported.agg || {totalHQ: 0, totalSeconds: 0}; state.active = imported.active || null;
+        meta = imported.meta || getInitialMeta(); RATE_BY_DIFFICULTY = imported.rates || DEFAULT_RATES;
+        FUNSHOP = imported.funshop || FUNSHOP; REWARD_PARAMS = imported.rewardParams || DEFAULT_REWARD_PARAMS;
         save(); renderInitial(); pushToast('状态导入成功！', 'success'); el.devStateText.value = '';
       } catch (e) { pushToast('解析JSON时出错，请检查控制台。', 'warn'); console.error("Import Error:", e); } }; }
   
@@ -1909,224 +1902,69 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   function updateSoundButton() { if (btnToggleSound) { btnToggleSound.textContent = `音效：${isSoundMuted ? '关闭' : '开启'}`; } }
   if(btnToggleSound){ btnToggleSound.onclick = () => { isSoundMuted = !isSoundMuted; writeJSON(LS_KEYS.SOUND_MUTED, isSoundMuted); updateSoundButton(); if (!isSoundMuted) { playSound(sfx.click); } }; updateSoundButton(); }
   
-  /* ====================================
-   *  OSS Sync Logic (Official SDK Version)
-   * ==================================== */
-  const showLoader = (text) => { el.loadingOverlay.textContent = text; el.loadingOverlay.style.display = 'flex'; };
-  const hideLoader = () => { el.loadingOverlay.style.display = 'none'; };
-  
-  let syncButtonTimeout = null;
-  const updateSyncStatus = (status, msg = '') => {
-    if (syncButtonTimeout) {
-      clearTimeout(syncButtonTimeout);
-      syncButtonTimeout = null;
-    }
+  /* ================================
+   *        Firebase Auth & Sync
+   * ================================ */
+  const showLoader = (text) => { if(el.loadingOverlay) { el.loadingOverlay.textContent = text; el.loadingOverlay.style.display = 'flex'; }};
+  const hideLoader = () => { if(el.loadingOverlay) el.loadingOverlay.style.display = 'none'; };
 
-    const indicator = el.syncStatusIndicator;
-    indicator.classList.remove('synced', 'syncing', 'error');
-
-    // Mobile specific button feedback
-    if (mobileMedia.matches) {
-      const originalText = '数据同步';
-      if (el.btnSync) {
-        el.btnSync.textContent = originalText;
-        el.btnSync.disabled = false;
-      }
-      if (status === 'synced' || status === 'error') {
-        const buttonText = status === 'synced' ? '已同步 ✓' : `同步失败 ✗ ${msg}`.trim();
-        if (el.btnSync) {
-          el.btnSync.textContent = buttonText;
-          el.btnSync.disabled = true;
-        }
-        syncButtonTimeout = setTimeout(() => {
-          if (el.btnSync) {
-            el.btnSync.textContent = originalText;
-            el.btnSync.disabled = false;
-          }
-          syncButtonTimeout = null;
-        }, 5000);
-      }
-      return; // On mobile, we don't use the text indicator
-    }
-
-    // Desktop indicator text
-    if (status === 'synced') {
-      indicator.classList.add('synced');
-      indicator.textContent = `已同步 ✓ ${new Date().toLocaleTimeString()}`;
-    } else if (status === 'syncing') {
-      indicator.classList.add('syncing');
-      indicator.textContent = '同步中...';
-    } else if (status === 'error') {
-      indicator.classList.add('error');
-      indicator.textContent = `同步失败 ✗ ${msg}`;
-    } else {
-      indicator.textContent = '本地';
-    }
-  };
-
-  function getOssClient(config) {
-    if (typeof OSS === 'undefined') {
-      console.error('OSS SDK not loaded!');
-      pushToast('OSS SDK script not found.', 'warn');
-      return null;
-    }
-    return new OSS({
-      endpoint: config.endpoint.replace(/^https?:\/\//, ''),
-      accessKeyId: config.key,
-      accessKeySecret: config.secret,
-      bucket: config.bucket,
-      secure: true, // Use https
+  const signIn = () => {
+    auth.signInWithPopup(googleProvider).catch(error => {
+        console.error("Google Sign-In Error:", error);
+        pushToast(`登录失败: ${error.message}`, 'warn');
     });
-  }
-
-  async function loadFromOss() {
-    if (!ossConfig) return false;
-    showLoader('正在从云端同步...');
-    updateSyncStatus('syncing');
-    try {
-      const client = getOssClient(ossConfig);
-      if (!client) return false;
-
-      const result = await client.get(ossConfig.objectKey);
-      
-      if (result.res.status === 200 && result.content) {
-        const dataStr = new TextDecoder("utf-8").decode(result.content);
-        const data = JSON.parse(dataStr);
-        applyImportedState(data);
-        save(); // Save fetched state to local storage
-        pushToast('数据已从云端同步', 'success');
-        updateSyncStatus('synced');
-        return true;
-      } else {
-        throw new Error(`HTTP ${result.res.status}`);
-      }
-    } catch (e) {
-      if (e.name === 'NoSuchKeyError' || e.code === 'NoSuchKey') {
-        pushToast('云端无数据，将创建新文件。', 'info');
-        updateSyncStatus('synced');
-        await saveToOss(); // Create the initial file
-        return true;
-      }
-      
-      let errorMsg = `加载失败`;
-      if (e.name === 'RequestError' && e.message.includes('CORS')) {
-        errorMsg = '网络错误/CORS';
-        pushToast('网络请求失败。请检查网络连接以及您OSS服务器的CORS（跨域）配置。', 'warn');
-      } else if (e.code === 'AccessDenied') {
-        errorMsg = '无权限(403)';
-        pushToast('请求被拒绝 (403)。请检查您的Access Key权限和配置信息。', 'warn');
-      } else {
-        errorMsg = `${e.name || 'Error'}`;
-        pushToast(`从 OSS 加载数据失败: ${e.message}`, 'warn');
-      }
-      
-      console.error('OSS Load Error:', e);
-      updateSyncStatus('error', errorMsg);
-      return false;
-    } finally {
-      hideLoader();
-    }
-  }
-
-  async function saveToOss() {
-    if (!ossConfig) return;
-    updateSyncStatus('syncing');
-    
-    const fullState = { tasks: state.tasks, agg: state.agg, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS };
-    const body = JSON.stringify(fullState);
-    const buffer = new OSS.Buffer(body);
-
-    try {
-      const client = getOssClient(ossConfig);
-      if (!client) return;
-
-      const result = await client.put(ossConfig.objectKey, buffer, {
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (result.res.status !== 200) {
-        throw new Error(`HTTP ${result.res.status}`);
-      }
-      updateSyncStatus('synced');
-
-    } catch (e) {
-      let errorMsg = `保存失败`;
-      if (e.name === 'RequestError' && e.message.includes('CORS')) {
-        errorMsg = '网络错误/CORS';
-        pushToast('网络请求失败。请检查网络连接以及您OSS服务器的CORS（跨域）配置。', 'warn');
-      } else if (e.code === 'AccessDenied') {
-        errorMsg = '无权限(403)';
-        pushToast('请求被拒绝 (403)。请检查您的Access Key权限和配置信息。', 'warn');
-      } else {
-        errorMsg = `${e.name || 'Error'}`;
-        pushToast(`同步到 OSS 失败: ${e.message}`, 'warn');
-      }
-      console.error('OSS Save Error:', e);
-      updateSyncStatus('error', errorMsg);
-    }
-  }
-  
-  el.btnSync.onclick = () => {
-    playSound(sfx.modalOpen);
-    if(ossConfig) {
-      el.ossEndpoint.value = ossConfig.endpoint;
-      el.ossBucket.value = ossConfig.bucket;
-      el.ossObjectKey.value = ossConfig.objectKey;
-      el.ossAccessKeyId.value = ossConfig.key;
-      el.ossAccessKeySecret.value = ossConfig.secret;
-    }
-    el.ossConfigModal.style.display = 'flex';
   };
-  el.btnCloseOssConfig.onclick = () => { playSound(sfx.modalClose); el.ossConfigModal.style.display = 'none'; };
-  
-  const saveOssConfig = () => {
-    const config = {
-      endpoint: el.ossEndpoint.value.trim(),
-      bucket: el.ossBucket.value.trim(),
-      objectKey: el.ossObjectKey.value.trim(),
-      key: el.ossAccessKeyId.value.trim(),
-      secret: el.ossAccessKeySecret.value.trim(),
-    };
-    if (!config.endpoint || !config.bucket || !config.objectKey || !config.key || !config.secret) {
-        pushToast('所有字段均为必填项', 'warn');
-        return null;
-    }
-    ossConfig = config;
-    writeJSON(LS_KEYS.OSS_CONFIG, ossConfig);
-    return config;
+  const signOut = () => {
+    auth.signOut();
   };
 
-  el.btnOssSave.onclick = () => {
-    if (saveOssConfig()) {
-      pushToast('OSS 设置已保存', 'success');
-      el.ossConfigModal.style.display = 'none';
+  el.btnLogin.onclick = signIn;
+  el.btnLogout.onclick = signOut;
+
+  const setupFirestoreListener = (uid) => {
+    if (firestoreUnsubscribe) {
+        firestoreUnsubscribe();
     }
-  };
-  
-  el.btnOssConnect.onclick = async () => {
-    if (saveOssConfig()) {
-        el.ossConfigModal.style.display = 'none';
-        await loadFromOss();
-        renderInitial();
-    }
+    const docRef = db.collection('users').doc(uid);
+    firestoreUnsubscribe = docRef.onSnapshot(doc => {
+        if (doc.exists) {
+            applyCloudData(doc.data());
+        } else {
+            // First time user, create their document with local state
+            console.log("New user, creating document in Firestore.");
+            const fullState = { tasks: state.tasks, agg: state.agg, active: state.active, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS };
+            docRef.set(fullState);
+        }
+        hideLoader();
+    }, error => {
+        console.error("Firestore listener error:", error);
+        pushToast('与云端同步时出错', 'warn');
+        hideLoader();
+    });
   };
 
-  el.btnOssDisconnect.onclick = () => {
-    if (confirm('确定要断开与 OSS 的连接吗？您的数据将只保存在此浏览器中。')) {
-        ossConfig = null;
-        storage.removeItem(LS_KEYS.OSS_CONFIG);
-        updateSyncStatus('local');
-        el.ossConfigModal.style.display = 'none';
-        pushToast('已断开 OSS 连接', 'info');
+  auth.onAuthStateChanged(user => {
+    if (user) {
+        // User is signed in.
+        el.authChipWrapper.classList.add('logged-in');
+        el.authStatusText.textContent = user.displayName || '已登录';
+        el.userAvatar.style.backgroundImage = user.photoURL ? `url(${user.photoURL})` : 'none';
+        showLoader('同步云端数据...');
+        setupFirestoreListener(user.uid);
+    } else {
+        // User is signed out.
+        if (firestoreUnsubscribe) {
+            firestoreUnsubscribe();
+            firestoreUnsubscribe = null;
+        }
+        el.authChipWrapper.classList.remove('logged-in');
+        resetLocalState();
+        hideLoader();
     }
-  };
-
+  });
 
   // App Initialization
   loadStateFromLocalStorage();
-  if (ossConfig) {
-      await loadFromOss();
-  }
   renderInitial();
   loop();
   tickFunshopTimers();
