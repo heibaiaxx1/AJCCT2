@@ -203,10 +203,10 @@
 
   .desktop-tabs { display: none; }
   
-  #modeSwitchWrapper, #helpBtnWrapper, #devBtnWrapper {
+  #modeSwitchWrapper, #helpBtnWrapper, #devBtnWrapper, #syncBtnWrapper {
     padding: 0;
   }
-  #modeSwitchWrapper .btn, #helpBtnWrapper .btn, #devBtnWrapper .btn {
+  #modeSwitchWrapper .btn, #helpBtnWrapper .btn, #devBtnWrapper .btn, #syncBtnWrapper .btn {
     padding: 12px 18px;
     font-size: 14px;
   }
@@ -293,6 +293,33 @@
     opacity: 0.8;
   }
 
+  /* Sync Feature Styles */
+  .sync-status-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .sync-status-indicator.synced { color: var(--success); }
+  .sync-status-indicator.syncing { color: var(--warning); }
+  .sync-status-indicator.error { color: var(--danger); }
+  #ossConfigModal .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; }
+  #ossConfigModal .field label { font-size: 12px; color: var(--muted); }
+  #ossConfigModal input { width: 100%; }
+
+  .loading-overlay {
+    position: fixed; inset: 0;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9998;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  
   /* Desktop and Tablet Styles */
   @media (min-width: 768px) {
     .card .desktop-tabs {
@@ -349,6 +376,9 @@
     .kpi{width:100%;gap:12px;flex-direction:column;align-items:stretch}
     .kpi .chip{width:100%;justify-content:space-between;border-radius:10px;background:var(--panel);padding:14px;font-size:18px}
     #helpBtnWrapper { display: none; }
+    #syncBtnWrapper {
+      order: 10;
+    }
     .desktop-tabs { display: none; }
     .kpi-row {
       display: flex;
@@ -366,6 +396,81 @@
       border: none;
       background: none;
       box-shadow: none;
+    }
+    .desktop-only-kpi { display: none; }
+    .mobile-header-card {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        width: 100%;
+    }
+    .mobile-char-avatar {
+        flex-shrink: 0;
+        flex-basis: 30%;
+        max-width: 80px;
+        aspect-ratio: 1 / 1;
+        border-radius: 10px;
+        background-color: var(--ring-bg);
+        background-size: cover;
+        background-position: center;
+        border: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+        color: var(--muted);
+    }
+    .mobile-char-details {
+        flex: 1;
+        min-width: 0;
+    }
+    .mobile-char-status {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+    }
+    .mobile-char-status .char-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 0 2px;
+    }
+    .mobile-char-status .char-name {
+        font-weight: 700;
+        font-size: 18px;
+        color: var(--text);
+    }
+    .mobile-char-status .char-title {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--muted);
+    }
+    .mobile-char-status .exp-bar-container {
+        margin-top: 0;
+    }
+    .mobile-char-status .exp-bar-header {
+        font-size: 12px;
+        margin-bottom: 4px;
+    }
+    .mobile-char-status .exp-bar {
+        height: 8px;
+    }
+    .mobile-char-status .exp-bar-header .exp-buffs {
+      font-weight: 600;
+      color: var(--accent);
+      font-size: 11px;
+    }
+    #syncBtnWrapper {
+      padding: 0;
+      border: none;
+      background: transparent;
+    }
+    #btnSync {
+      width: 100%;
+    }
+    #syncStatusIndicator {
+      display: none;
     }
     .auth-chip{gap:8px}
     .auth-chip .btn{flex:1}
@@ -440,12 +545,15 @@
   <header>
     <h1>豪情在天</h1>
     <div class="kpi">
-      <div class="kpi-row">
+      <div class="kpi-row desktop-only-kpi">
         <span class="chip" id="totalValorChip">总豪情值：<strong id="kpiTotalValue">0</strong></span>
         <span class="chip">累计用时：<strong id="kpiTime">0:00:00</strong></span>
       </div>
+      <div class="kpi-row" id="mobileHeaderStatus"></div>
       <span class="chip" id="modeSwitchWrapper"><button class="btn" id="modeSwitchBtn">专注模式</button></span>
       <span class="chip" id="helpBtnWrapper"><button class="btn" id="btnHelp">帮助 ❓</button></span>
+      <span class="chip" id="syncBtnWrapper"><button class="btn" id="btnSync">数据同步</button></span>
+      <div id="syncStatusIndicator" class="sync-status-indicator">本地</div>
       <span class="chip" id="devBtnWrapper"><button class="btn" id="btnDev">调试 ⚙️</button></span>
     </div>
   </header>
@@ -647,6 +755,46 @@
   </div>
 </div>
 
+<!-- OSS 同步模态框 -->
+<div class="modal-mask" id="ossConfigModal" role="dialog" aria-modal="true">
+  <div class="modal">
+    <div class="mh">
+      <h3>OSS 数据同步配置</h3>
+      <button class="btn small" id="btnCloseOssConfig">关闭</button>
+    </div>
+    <div class="mb">
+      <div class="result-bar result-warn" style="margin-bottom: 16px;">
+        <strong>安全警告：</strong>请不要在浏览器中长期存储拥有高权限的 Access Key。建议为此应用创建一个拥有<strong>最小权限</strong>（仅对此 Bucket/Object 的读写权限）的子账户 Key。
+      </div>
+      <div class="field">
+        <label for="ossEndpoint">Endpoint (e.g., oss-cn-hangzhou.aliyuncs.com)</label>
+        <input type="text" id="ossEndpoint" placeholder="服务器地址">
+      </div>
+      <div class="field">
+        <label for="ossBucket">Bucket</label>
+        <input type="text" id="ossBucket" placeholder="Bucket 名称">
+      </div>
+      <div class="field">
+        <label for="ossObjectKey">Object Key (e.g., data/haoqing.json)</label>
+        <input type="text" id="ossObjectKey" placeholder="数据文件名">
+      </div>
+      <div class="field">
+        <label for="ossAccessKeyId">Access Key ID</label>
+        <input type="text" id="ossAccessKeyId">
+      </div>
+      <div class="field">
+        <label for="ossAccessKeySecret">Access Key Secret</label>
+        <input type="password" id="ossAccessKeySecret">
+      </div>
+      <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
+        <button class="btn danger" id="btnOssDisconnect">断开连接</button>
+        <button class="btn" id="btnOssSave">保存设置</button>
+        <button class="btn primary" id="btnOssConnect">连接并同步</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- 娱乐兑换所 · 调试器 -->
 <div class="modal-mask" id="funshopEditMask" role="dialog" aria-modal="true">
   <div class="modal">
@@ -808,6 +956,7 @@
 
 <div class="toast-container" id="toastContainer" aria-live="polite"></div>
 <div id="completion-animation-container" class="completion-animation-container"></div>
+<div class="loading-overlay" id="loadingOverlay">正在从云端同步数据...</div>
 
 <!-- Sound Effects -->
 <audio id="sfxNavTasks" src="assets/tasks-audio.mp3" preload="auto"></audio>
@@ -962,7 +1111,7 @@ const REWARD_TYPES={
 const MAX_FLIPS_PER_SECOND=8, CYCLE_SECONDS_BASE=20, CIRCUM=2*Math.PI*90;
 
 /* ========== 主逻辑 ========== */
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded', async ()=>{
 const LS_KEYS = {
     TASKS: "haoqing_tasks_v1",
     AGG: "haoqing_agg_v1",
@@ -971,7 +1120,8 @@ const LS_KEYS = {
     FUNSHOP: "haoqing_funshop_v1",
     REWARD_PARAMS: "haoqing_reward_params_v1",
     LIVE_TIMER: "haoqing_live_timer_v1",
-    SOUND_MUTED: "haoqing_sound_muted"
+    SOUND_MUTED: "haoqing_sound_muted",
+    OSS_CONFIG: "haoqing_oss_config_v1"
 };
   
   const DEFAULT_RATES={1:1,2:2,3:4,4:7,5:11};
@@ -980,25 +1130,50 @@ const LS_KEYS = {
   const DEFAULT_REWARD_PARAMS = { baseChance: 0.4, betCoefficient: 0.25, maxChance: 0.9, pityIncrement: 0.015 };
   let REWARD_PARAMS = readJSON(LS_KEYS.REWARD_PARAMS, { ...DEFAULT_REWARD_PARAMS });
 
+  let ossConfig = readJSON(LS_KEYS.OSS_CONFIG, null);
+
+  // Initial state is now loaded from local storage first, then potentially overwritten by OSS
   let state = { 
-    tasks: readJSON(LS_KEYS.TASKS, []), 
-    agg: readJSON(LS_KEYS.AGG, {totalHQ:0,totalSeconds:0}), 
-    active: readJSON(LS_KEYS.LIVE_TIMER, null),
+    tasks: [], 
+    agg: {totalHQ:0,totalSeconds:0}, 
+    active: null,
     selectedTaskId: null
   };
-  let meta = readJSON(LS_KEYS.META, {
-    streak:0,pity:0,arcade:false,freeze:0,badges:{},tickets:0,
-    daily:{},dailyBuff:{},multDayCount:{},guardUsedToday:0,guardDay:null,nextWheelBoost:1,
-    completed:{}, /* 今日已完成持久化容器（date->[]） */
-    funshop:{ activities:[], wearAccum:{} } /* —— 娱乐兑换所 —— */
-  });
-  let FUNSHOP = readJSON(LS_KEYS.FUNSHOP, {
-    items: [
-      {name:'放松呼吸训练', seconds:300, need:{rare_token:1}, wear:{rare_token:5}},
-      {name:'豪情轮盘挑战', seconds:180, need:{epic_token:1}, wear:{epic_token:8}, window:{start:'19:00', end:'23:00'}},
-      {name:'街机小游园', seconds:120, need:{rare_token:1}, wear:{rare_token:3, ticket:1}}
-    ]
-  });
+  let meta = {};
+  let FUNSHOP = {};
+
+  const loadStateFromLocalStorage = () => {
+    state = { 
+        tasks: readJSON(LS_KEYS.TASKS, []), 
+        agg: readJSON(LS_KEYS.AGG, {totalHQ:0,totalSeconds:0}), 
+        active: readJSON(LS_KEYS.LIVE_TIMER, null),
+        selectedTaskId: null
+    };
+    meta = readJSON(LS_KEYS.META, {
+        streak:0,pity:0,arcade:false,freeze:0,badges:{},tickets:0,
+        daily:{},dailyBuff:{},multDayCount:{},guardUsedToday:0,guardDay:null,nextWheelBoost:1,
+        completed:{},
+        funshop:{ activities:[], wearAccum:{} }
+    });
+    FUNSHOP = readJSON(LS_KEYS.FUNSHOP, {
+        items: [
+          {name:'放松呼吸训练', seconds:300, need:{rare_token:1}, wear:{rare_token:5}},
+          {name:'豪情轮盘挑战', seconds:180, need:{epic_token:1}, wear:{epic_token:8}, window:{start:'19:00', end:'23:00'}},
+          {name:'街机小游园', seconds:120, need:{rare_token:1}, wear:{rare_token:3, ticket:1}}
+        ]
+    });
+    ensureBadgeMeta();
+  };
+
+  const applyImportedState = (imported) => {
+    state.tasks = imported.tasks || [];
+    state.agg = imported.agg || {totalHQ: 0, totalSeconds: 0};
+    meta = imported.meta || meta;
+    RATE_BY_DIFFICULTY = imported.rates || DEFAULT_RATES;
+    FUNSHOP = imported.funshop || FUNSHOP;
+    REWARD_PARAMS = imported.rewardParams || DEFAULT_REWARD_PARAMS;
+    ensureBadgeMeta();
+  };
 
   function ensureBadgeMeta(){
     meta.badges = meta.badges || {};
@@ -1012,217 +1187,105 @@ const LS_KEYS = {
     meta.badges.loadoutCooldownUntil = meta.badges.loadoutCooldownUntil || 0;
     meta.nextWheelBoost = meta.nextWheelBoost || 1;
     meta.funshop = meta.funshop || { activities:[], wearAccum:{} };
-    // Character data
     if (!meta.character) {
-        meta.character = {
-            name: '',
-            title: '',
-            avatar: null // base64 string or url
-        };
+        meta.character = { name: '', title: '', avatar: null };
     }
-    // Buffs data
-    if (!meta.buffs) {
-        meta.buffs = [];
-    }
+    if (!meta.buffs) { meta.buffs = []; }
   }
-  ensureBadgeMeta();
 
   const $=s=>document.querySelector(s);
   
   let isSoundMuted = readJSON(LS_KEYS.SOUND_MUTED, false);
 
-  // === Sound Effect Handling ===
   const sfx = {
-    navTasks: $('#sfxNavTasks'),
-    navTimer: $('#sfxNavTimer'),
-    navBackpack: $('#sfxNavBackpack'),
-    navClub: $('#sfxNavClub'),
-    navYou: $('#sfxNavYou'),
-    add: $('#sfxAddTask'),
-    select: $('#sfxSelectTask'),
-    delete: $('#sfxDeleteTask'),
-    timerStart: $('#sfxTimerStart'),
-    timerPause: $('#sfxTimerPause'),
-    timerStop: $('#sfxTimerStop'),
-    modalOpen: $('#sfxModalOpen'),
-    modalClose: $('#sfxModalClose'),
-    success: $('#sfxSuccess'),
-    warn: $('#sfxWarn'),
-    click: $('#sfxClick'),
+    navTasks: $('#sfxNavTasks'), navTimer: $('#sfxNavTimer'), navBackpack: $('#sfxNavBackpack'),
+    navClub: $('#sfxNavClub'), navYou: $('#sfxNavYou'), add: $('#sfxAddTask'), select: $('#sfxSelectTask'),
+    delete: $('#sfxDeleteTask'), timerStart: $('#sfxTimerStart'), timerPause: $('#sfxTimerPause'),
+    timerStop: $('#sfxTimerStop'), modalOpen: $('#sfxModalOpen'), modalClose: $('#sfxModalClose'),
+    success: $('#sfxSuccess'), warn: $('#sfxWarn'), click: $('#sfxClick'),
   };
 
   function playSound(audioEl) {
-    if (isSoundMuted) return;
-    if (audioEl) {
-      audioEl.pause();
-      audioEl.currentTime = 0;
-      const playPromise = audioEl.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(error => {
-          console.warn(`Audio playback for ${audioEl.id} was prevented. This is a common browser restriction on mobile.`);
-        });
-      }
+    if (isSoundMuted || !audioEl) return;
+    audioEl.currentTime = 0;
+    const playPromise = audioEl.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(error => { console.warn(`Audio playback for ${audioEl.id} was prevented.`); });
     }
   }
 
-  /* —— 徽章显示元数据 —— */
   const BADGE_META = {
-    rare_token:   {label:'稀有徽章', cls:'fb-rare',   invKey:'rare_tokens'},
-    epic_token:   {label:'史诗徽章', cls:'fb-epic',   invKey:'epic_tokens'},
-    legend_token: {label:'传说徽章', cls:'fb-legend', invKey:'legendary_tokens'},
-    ticket:       {label:'抽卡券',   cls:'fb-util',   invKey:null},
+    rare_token:   {label:'稀有徽章', cls:'fb-rare',   invKey:'rare_tokens'}, epic_token:   {label:'史诗徽章', cls:'fb-epic',   invKey:'epic_tokens'},
+    legend_token: {label:'传说徽章', cls:'fb-legend', invKey:'legendary_tokens'}, ticket:       {label:'抽卡券',   cls:'fb-util',   invKey:null},
     freeze:       {label:'冻结卡',   cls:'fb-util',   invKey:null}
   };
   const el = {
-    kpiTotalValue: $('#kpiTotalValue'), kpiTime: $('#kpiTime'),
-    taskTitle: $('#taskTitle'), taskDiff: $('#taskDiff'),
-    btnAdd: $('#btnAdd'), btnClearAll: $('#btnClearAll'),
-    taskList: $('#taskList'), emptyTask: $('#emptyTask'),
-    rateText: $('#rateText'),
-    sessionTime: $('#sessionTime'), taskTotal: $('#taskTotal'), taskTime: $('#taskTime'),
-    activeHint: $('#activeHint'), btnStart: $('#btnStart'), btnPause: $('#btnPause'), btnStop: $('#btnStop'),
-    modeSwitchBtn: $('#modeSwitchBtn'),
-    rewardMask: $('#rewardMask'), rewardBody: $('#rewardBody'), btnCloseReward: $('#btnCloseReward'),
-    helpMask: $('#helpMask'), btnHelp: $('#btnHelp'), btnCloseHelp: $('#btnCloseHelp'),
-    dailyList: $('#dailyList'), btnDailyRefresh: $('#btnDailyRefresh'),
-    invRow: $('#invRow'), badgeWorkshopBody: $('#badgeWorkshopBody'),
-    toastWrap: $('#toastContainer'), pauseIndicator: $('#pauseIndicator'), pauseTime: $('#pauseTime'),
-    btnSpin: $('#btnSpin'), wheelResult: $('#wheelResult'),
-    btnDev: $('#btnDev'), devMask: $('#devMask'), btnCloseDev: $('#btnCloseDev'),
-    rate1: $('#rate1'), rate2: $('#rate2'), rate3: $('#rate3'), rate4: $('#rate4'), rate5: $('#rate5'),
-    btnSaveRates: $('#btnSaveRates'), btnResetRates: $('#btnResetRates'),
-    btnForgeFreeze: $('#btnForgeFreeze'), btnRareRefresh: $('#btnRareRefresh'), btnWheelBoost: $('#btnWheelBoost'), btnSpeedChip: $('#btnSpeedChip'),
-    prizeTicker: $('#prizeTicker'),
-    btnTaskLibrary: $('#btnTaskLibrary'), taskLibraryMask: $('#taskLibraryMask'),
-    btnCloseTaskLibrary: $('#btnCloseTaskLibrary'), taskLibraryInput: $('#taskLibraryInput'), btnImportTasks: $('#btnImportTasks'),
-    btnTodayDone: $('#btnTodayDone'), todayDoneMask: $('#todayDoneMask'), todayDoneBody: $('#todayDoneBody'), btnCloseTodayDone: $('#btnCloseTodayDone'),
-    funshopList: $('#funshopList'),
-    btnFunshopEdit: $('#btnFunshopEdit'), funshopEditMask: $('#funshopEditMask'),
-    btnCloseFunshopEdit: $('#btnCloseFunshopEdit'), funshopInput: $('#funshopInput'), btnFunshopImport: $('#btnFunshopImport'),
-    // "You" Page elements
-    avatarUploader: $('#avatarUploader'), avatarInput: $('#avatarInput'),
-    charNameInput: $('#charNameInput'), charTitleInput: $('#charTitleInput'),
-    charStatusTag: $('#charStatusTag'), charLevelText: $('#charLevelText'), charTotalHQText: $('#charTotalHQText'),
-    charBuffsList: $('#charBuffsList'),
-    // Dev Panel
-    devTotalHQ: $('#devTotalHQ'), devTickets: $('#devTickets'), devFreeze: $('#devFreeze'),
-    devRareGem: $('#devRareGem'), devEpicGem: $('#devEpicGem'),
-    devRareToken: $('#devRareToken'), devEpicToken: $('#devEpicToken'), devLegendToken: $('#devLegendToken'),
-    btnSaveResources: $('#btnSaveResources'), btnSimulateNextDay: $('#btnSimulateNextDay'),
-    btnResetDaily: $('#btnResetDaily'), btnHardReset: $('#btnHardReset'),
-    devStateText: $('#devStateText'), btnExportState: $('#btnExportState'), btnImportState: $('#btnImportState'),
-    devRewardBaseChance: $('#devRewardBaseChance'), devRewardBetCoeff: $('#devRewardBetCoeff'),
-    devRewardMaxChance: $('#devRewardMaxChance'), devRewardPityInc: $('#devRewardPityInc'),
-    btnSaveRewardParams: $('#btnSaveRewardParams'), btnResetRewardParams: $('#btnResetRewardParams'),
+    kpiTotalValue: $('#kpiTotalValue'), kpiTime: $('#kpiTime'), taskTitle: $('#taskTitle'), taskDiff: $('#taskDiff'),
+    btnAdd: $('#btnAdd'), btnClearAll: $('#btnClearAll'), taskList: $('#taskList'), emptyTask: $('#emptyTask'), rateText: $('#rateText'),
+    sessionTime: $('#sessionTime'), taskTotal: $('#taskTotal'), taskTime: $('#taskTime'), activeHint: $('#activeHint'),
+    btnStart: $('#btnStart'), btnPause: $('#btnPause'), btnStop: $('#btnStop'), modeSwitchBtn: $('#modeSwitchBtn'),
+    rewardMask: $('#rewardMask'), rewardBody: $('#rewardBody'), btnCloseReward: $('#btnCloseReward'), helpMask: $('#helpMask'),
+    btnHelp: $('#btnHelp'), btnCloseHelp: $('#btnCloseHelp'), dailyList: $('#dailyList'), btnDailyRefresh: $('#btnDailyRefresh'),
+    invRow: $('#invRow'), badgeWorkshopBody: $('#badgeWorkshopBody'), toastWrap: $('#toastContainer'), pauseIndicator: $('#pauseIndicator'),
+    pauseTime: $('#pauseTime'), btnSpin: $('#btnSpin'), wheelResult: $('#wheelResult'), btnDev: $('#btnDev'), devMask: $('#devMask'),
+    btnCloseDev: $('#btnCloseDev'), rate1: $('#rate1'), rate2: $('#rate2'), rate3: $('#rate3'), rate4: $('#rate4'), rate5: $('#rate5'),
+    btnSaveRates: $('#btnSaveRates'), btnResetRates: $('#btnResetRates'), btnForgeFreeze: $('#btnForgeFreeze'), btnRareRefresh: $('#btnRareRefresh'),
+    btnWheelBoost: $('#btnWheelBoost'), btnSpeedChip: $('#btnSpeedChip'), prizeTicker: $('#prizeTicker'), btnTaskLibrary: $('#btnTaskLibrary'),
+    taskLibraryMask: $('#taskLibraryMask'), btnCloseTaskLibrary: $('#btnCloseTaskLibrary'), taskLibraryInput: $('#taskLibraryInput'),
+    btnImportTasks: $('#btnImportTasks'), btnTodayDone: $('#btnTodayDone'), todayDoneMask: $('#todayDoneMask'), todayDoneBody: $('#todayDoneBody'),
+    btnCloseTodayDone: $('#btnCloseTodayDone'), funshopList: $('#funshopList'), btnFunshopEdit: $('#btnFunshopEdit'),
+    funshopEditMask: $('#funshopEditMask'), btnCloseFunshopEdit: $('#btnCloseFunshopEdit'), funshopInput: $('#funshopInput'),
+    btnFunshopImport: $('#btnFunshopImport'), avatarUploader: $('#avatarUploader'), avatarInput: $('#avatarInput'),
+    charNameInput: $('#charNameInput'), charTitleInput: $('#charTitleInput'), charStatusTag: $('#charStatusTag'),
+    charLevelText: $('#charLevelText'), charTotalHQText: $('#charTotalHQText'), charBuffsList: $('#charBuffsList'),
+    devTotalHQ: $('#devTotalHQ'), devTickets: $('#devTickets'), devFreeze: $('#devFreeze'), devRareGem: $('#devRareGem'),
+    devEpicGem: $('#devEpicGem'), devRareToken: $('#devRareToken'), devEpicToken: $('#devEpicToken'), devLegendToken: $('#devLegendToken'),
+    btnSaveResources: $('#btnSaveResources'), btnSimulateNextDay: $('#btnSimulateNextDay'), btnResetDaily: $('#btnResetDaily'),
+    btnHardReset: $('#btnHardReset'), devStateText: $('#devStateText'), btnExportState: $('#btnExportState'), btnImportState: $('#btnImportState'),
+    devRewardBaseChance: $('#devRewardBaseChance'), devRewardBetCoeff: $('#devRewardBetCoeff'), devRewardMaxChance: $('#devRewardMaxChance'),
+    devRewardPityInc: $('#devRewardPityInc'), btnSaveRewardParams: $('#btnSaveRewardParams'), btnResetRewardParams: $('#btnResetRewardParams'),
+    // OSS Sync elements
+    btnSync: $('#btnSync'), ossConfigModal: $('#ossConfigModal'), btnCloseOssConfig: $('#btnCloseOssConfig'), ossEndpoint: $('#ossEndpoint'),
+    ossBucket: $('#ossBucket'), ossObjectKey: $('#ossObjectKey'), ossAccessKeyId: $('#ossAccessKeyId'), ossAccessKeySecret: $('#ossAccessKeySecret'),
+    btnOssSave: $('#btnOssSave'), btnOssConnect: $('#btnOssConnect'), btnOssDisconnect: $('#btnOssDisconnect'),
+    syncStatusIndicator: $('#syncStatusIndicator'), loadingOverlay: $('#loadingOverlay'),
   };
 
   const sessionFlip = new FlipCounter($('#sessionFlip'),{digits:6,comma:true,large:true});
   
-  // === Unified Navigation Logic ===
   const mobileTabButtons = document.querySelectorAll('.bottom-nav .tab-btn');
   const desktopTabButtons = document.querySelectorAll('.desktop-tab');
-  const mainColumn = $('#mainColumn');
-  const timerColumn = $('#timerCard');
-  const allPanes = {
-    'tasks-pane': $('#tasks-pane'),
-    'backpack-pane': $('#backpack-pane'),
-    'club-pane': $('#club-pane'),
-    'you-pane': $('#you-pane'),
-  };
+  const mainColumn = $('#mainColumn'); const timerColumn = $('#timerCard');
+  const allPanes = {'tasks-pane': $('#tasks-pane'), 'backpack-pane': $('#backpack-pane'), 'club-pane': $('#club-pane'), 'you-pane': $('#you-pane')};
   const mobileMedia = window.matchMedia('(max-width: 767px) or (max-height: 500px)');
   let activeView = 'tasks-pane';
 
   function setView(targetId) {
     activeView = targetId;
-    
-    // Update active state on buttons
     mobileTabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.mobileTarget === targetId));
     desktopTabButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.desktopTarget === targetId));
-    
     const isMainContent = allPanes.hasOwnProperty(targetId);
-
-    // Show/hide main vs timer columns (for mobile)
-    if (mobileMedia.matches) {
-        mainColumn.classList.toggle('mobile-hidden', !isMainContent);
-        timerColumn.classList.toggle('mobile-hidden', targetId !== 'timerCard');
-    }
-
-    // Show/hide the correct content pane within the main column
-    Object.keys(allPanes).forEach(paneId => {
-      if (allPanes[paneId]) {
-        allPanes[paneId].style.display = (paneId === targetId) ? '' : 'none';
-      }
-    });
-
-    if (targetId === 'you-pane') {
-        renderYou();
-    }
-
+    if (mobileMedia.matches) { mainColumn.classList.toggle('mobile-hidden', !isMainContent); timerColumn.classList.toggle('mobile-hidden', targetId !== 'timerCard'); }
+    Object.keys(allPanes).forEach(paneId => { if (allPanes[paneId]) { allPanes[paneId].style.display = (paneId === targetId) ? '' : 'none'; } });
+    if (targetId === 'you-pane') { renderYou(); }
     window.scrollTo(0, 0);
   }
 
   function handleLayoutChange() {
-      if (mobileMedia.matches) {
-        // Mobile view: show/hide columns based on active view
-        const isMainContent = allPanes.hasOwnProperty(activeView);
-        mainColumn.classList.toggle('mobile-hidden', !isMainContent);
-        timerColumn.classList.toggle('mobile-hidden', activeView !== 'timerCard');
-      } else {
-        // Desktop view: ensure both columns are visible, active pane is correct
-        mainColumn.classList.remove('mobile-hidden');
-        timerColumn.classList.remove('mobile-hidden');
-        if (activeView === 'timerCard') {
-            setView('tasks-pane'); // Default to tasks on desktop if timer was active
-        }
-      }
+      if (mobileMedia.matches) { const isMainContent = allPanes.hasOwnProperty(activeView); mainColumn.classList.toggle('mobile-hidden', !isMainContent); timerColumn.classList.toggle('mobile-hidden', activeView !== 'timerCard');
+      } else { mainColumn.classList.remove('mobile-hidden'); timerColumn.classList.remove('mobile-hidden'); if (activeView === 'timerCard') { setView('tasks-pane'); } }
   }
   
-  mobileTabButtons.forEach(btn => {
-    btn.addEventListener('click', () => {
-      const target = btn.dataset.mobileTarget;
-      if (target) {
-        const soundId = btn.dataset.soundId;
-        if (soundId) {
-          // 'sfxNavTasks' -> 'navTasks'
-          const soundKey = soundId.substring(3).replace(/^\w/, c => c.toLowerCase());
-          if (sfx[soundKey]) {
-            playSound(sfx[soundKey]);
-          }
-        }
-        setView(target);
-      }
-    });
-  });
+  mobileTabButtons.forEach(btn => { btn.addEventListener('click', () => { const target = btn.dataset.mobileTarget; if (target) { const soundId = btn.dataset.soundId; if (soundId) { const soundKey = soundId.substring(3).replace(/^\w/, c => c.toLowerCase()); if (sfx[soundKey]) { playSound(sfx[soundKey]); } } setView(target); } }); });
+  desktopTabButtons.forEach(tab => { tab.addEventListener('click', () => { const targetId = tab.dataset.desktopTarget; const soundId = tab.dataset.soundId; if (soundId) { const soundKey = soundId.substring(3).replace(/^\w/, c => c.toLowerCase()); if (sfx[soundKey]) { playSound(sfx[soundKey]); } } setView(targetId); }); });
+  if(mobileMedia.addEventListener){ mobileMedia.addEventListener('change', handleLayoutChange); } else if(mobileMedia.addListener){ mobileMedia.addListener(handleLayoutChange); }
+  handleLayoutChange();
 
-  desktopTabButtons.forEach(tab => {
-      tab.addEventListener('click', () => {
-          const targetId = tab.dataset.desktopTarget;
-          const soundId = tab.dataset.soundId;
-          if (soundId) {
-            // 'sfxNavTasks' -> 'navTasks'
-            const soundKey = soundId.substring(3).replace(/^\w/, c => c.toLowerCase());
-            if (sfx[soundKey]) {
-              playSound(sfx[soundKey]);
-            }
-          }
-          setView(targetId);
-      });
-  });
-
-  if(mobileMedia.addEventListener){
-    mobileMedia.addEventListener('change', handleLayoutChange);
-  }else if(mobileMedia.addListener){
-    mobileMedia.addListener(handleLayoutChange);
-  }
-  handleLayoutChange(); // Initial check
-
-  /* 幸运轮名称跳动器（简化） */
   let tickerTimer = null, tickerTimeout = null, tickerIndex = 0;
   function clearTicker(){ if(tickerTimer){clearInterval(tickerTimer);tickerTimer=null;} if(tickerTimeout){clearTimeout(tickerTimeout);tickerTimeout=null;} }
   function rollWheelOutcomeType(){ const base=[{type:'hq',p:0.40},{type:'rare',p:0.32},{type:'epic',p:0.12},{type:'freeze',p:0.16}]; const r=Math.random(); let acc=0; for(const it of base){acc+=it.p;if(r<acc)return it.type} return 'hq'; }
   function applyWheelReward(type){
-    const boost = Math.max(1, meta.nextWheelBoost || 1);
-    let msg='';
+    const boost = Math.max(1, meta.nextWheelBoost || 1); let msg='';
     if(type==='hq'){ const add=Math.floor(50*boost); state.agg.totalHQ=(state.agg.totalHQ||0)+add; msg=`幸运轮获得豪情值 +${add}${boost>1?`（强运×${boost.toFixed(2)}）`:''}`; }
     else if(type==='rare'){ meta.badges.rare_gem=(meta.badges.rare_gem||0)+Math.max(1,Math.round(2*boost)); msg=`获得稀有碎片 ×${Math.max(1,Math.round(2*boost))}`; }
     else if(type==='epic'){ meta.badges.epic_gem=(meta.badges.epic_gem||0)+1; msg='获得史诗碎片 ×1'; }
@@ -1232,38 +1295,53 @@ const LS_KEYS = {
   }
   function startNameTicker(){
     if((meta.tickets||0)<=0){pushToast('抽卡券不足', 'warn');return;}
-    playSound(sfx.click);
-    meta.tickets-=1; save(); renderInventory();
-    tickerIndex = Math.floor(Math.random()*PRIZE_NAMES.length);
-    if(el.prizeTicker) el.prizeTicker.textContent = PRIZE_NAMES[tickerIndex];
-    if(el.wheelResult){el.wheelResult.textContent='跳动中…';el.wheelResult.classList.add('muted');}
-    if(el.btnSpin) el.btnSpin.disabled=true;
-    clearTicker();
+    playSound(sfx.click); meta.tickets-=1; save(); renderInventory();
+    tickerIndex = Math.floor(Math.random()*PRIZE_NAMES.length); if(el.prizeTicker) el.prizeTicker.textContent = PRIZE_NAMES[tickerIndex];
+    if(el.wheelResult){el.wheelResult.textContent='跳动中…';el.wheelResult.classList.add('muted');} if(el.btnSpin) el.btnSpin.disabled=true; clearTicker();
     tickerTimer = setInterval(()=>{ tickerIndex=(tickerIndex+1)%PRIZE_NAMES.length; if(el.prizeTicker) el.prizeTicker.textContent=PRIZE_NAMES[tickerIndex]; }, 80);
     tickerTimeout = setTimeout(()=>{ clearTicker(); const outcome=rollWheelOutcomeType(); const chosen=WHEEL_SEGMENTS.find(seg=>seg.type===outcome) || WHEEL_SEGMENTS[0]; if(el.prizeTicker) el.prizeTicker.textContent=chosen.label; applyWheelReward(outcome); if(el.btnSpin) el.btnSpin.disabled=false; }, 2000);
   }
 
   function fmtTime(sec){ sec=Math.floor(sec); const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60; const pad=n=>n.toString().padStart(2,'0'); return `${h}:${pad(m)}:${pad(s)}`; }
   function fmtPause(sec){ sec=Math.max(0,Math.floor(sec||0)); const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60), s=sec%60; const pad=n=>n.toString().padStart(2,'0'); return h>0?`${h}:${pad(m)}:${pad(s)}`:`${m}:${pad(s)}`;}
-  
   window._debugDateOffset = 0;
   const getToday = () => { const d = new Date(); d.setDate(d.getDate() + (window._debugDateOffset || 0)); return d; };
   function todayKey(){ return getToday().toISOString().slice(0,10); }
 
-function save(){
-  writeJSON(LS_KEYS.TASKS, state.tasks);
-  writeJSON(LS_KEYS.AGG, state.agg);
-  writeJSON(LS_KEYS.META, meta);
-  writeJSON(LS_KEYS.RATES, RATE_BY_DIFFICULTY);
-  writeJSON(LS_KEYS.FUNSHOP, FUNSHOP);
-  writeJSON(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS);
-  writeJSON(LS_KEYS.LIVE_TIMER, state.active);
-}
+  function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  }
+
+  const debouncedSaveToOss = debounce(() => saveToOss(), 2000);
+
+  function save(){
+    // Always save to local storage for offline support and as a backup
+    writeJSON(LS_KEYS.TASKS, state.tasks);
+    writeJSON(LS_KEYS.AGG, state.agg);
+    writeJSON(LS_KEYS.META, meta);
+    writeJSON(LS_KEYS.RATES, RATE_BY_DIFFICULTY);
+    writeJSON(LS_KEYS.FUNSHOP, FUNSHOP);
+    writeJSON(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS);
+    writeJSON(LS_KEYS.LIVE_TIMER, state.active);
+
+    // If OSS is configured, trigger a debounced save
+    if (ossConfig) {
+      updateSyncStatus('syncing');
+      debouncedSaveToOss();
+    }
+  }
 
   function pushToast(message, variant='info'){
     if (variant === 'success') playSound(sfx.success);
     else if (variant === 'warn' || variant === 'err') playSound(sfx.warn);
-
     const wrap = el.toastWrap || document.getElementById('toastContainer'); if(!wrap) return;
     const toast = document.createElement('div'); toast.className = 'toast'; if(variant==='warn') toast.classList.add('warn'); if(variant==='success') toast.classList.add('success');
     toast.textContent = message; wrap.appendChild(toast);
@@ -1271,189 +1349,107 @@ function save(){
     setTimeout(()=>{ toast.classList.remove('show'); toast.addEventListener('transitionend',()=>toast.remove(),{once:true}); },4000);
   }
 
-  /* 首屏加载渲染 */
-  (function load(){ 
-    if(el.kpiTotalValue) el.kpiTotalValue.textContent = (state.agg.totalHQ||0).toLocaleString('en-US');
-    el.kpiTime.textContent=fmtTime(state.agg.totalSeconds||0); 
-    updateModeButton();
-  })();
-
+  function updateModeButton() { if (!el.modeSwitchBtn) return; const isArcade = !!meta.arcade; el.modeSwitchBtn.textContent = isArcade ? '街机模式' : '专注模式'; el.modeSwitchBtn.classList.toggle('primary', !isArcade); }
   const uid=()=>Math.random().toString(36).slice(2,10);
   const clamp=(n,a,b)=>Math.max(a,Math.min(b,n));
   const getTask=id=>state.tasks.find(t=>t.id===id);
   function difficultyBadge(d){const map={1:"轻松",2:"较易",3:"标准",4:"较难",5:"硬仗"};return `<span class="tag">${"★".repeat(d)}${"☆".repeat(5-d)} <b style="margin-left:4px">D${d}</b> · ${map[d]}</span>`}
   const normalizeRewardAmount = val => Math.max(1, Math.floor(Number(val) || 0));
   function rewardLabel(reward){
-    if(!reward||!reward.type) return '';
-    const def=REWARD_TYPES[reward.type];
-    if(!def) return '';
-    const amount=normalizeRewardAmount(reward.amount||1);
-    return `${def.label} ×${amount}`;
+    if(!reward||!reward.type) return ''; const def=REWARD_TYPES[reward.type]; if(!def) return '';
+    const amount=normalizeRewardAmount(reward.amount||1); return `${def.label} ×${amount}`;
   }
   function grantTaskReward(task){
-    if(!task||!task.reward||!task.reward.type) return null;
-    const def=REWARD_TYPES[task.reward.type];
-    if(!def) return null;
-    const amount=normalizeRewardAmount(task.reward.amount||1);
-    def.apply(amount);
+    if(!task||!task.reward||!task.reward.type) return null; const def=REWARD_TYPES[task.reward.type]; if(!def) return null;
+    const amount=normalizeRewardAmount(reward.amount||1); def.apply(amount);
     return {message:`${task.title} 完成奖励：${def.label} +${amount}`, type:task.reward.type};
   }
 
-  /* ================================
-   *           俱乐部
-   * ================================ */
-  const WEAR_MAX = { rare_token:100, epic_token:140, legend_token:200 }; // 每枚徽章耐久
+  const WEAR_MAX = { rare_token:100, epic_token:140, legend_token:200 };
   function ensureWearPool(){ meta.funshop = meta.funshop || {activities:[], wearAccum:{}}; meta.funshop.wearAccum = meta.funshop.wearAccum || {}; }
 
-  // 解析行： 名称|时长秒|需求: badge*数量[,..]|磨损: badge*磨损[,..]|时段: HH:MM-HH:MM
   function parsePack(text, lead){
-    if(!text) return {};
-    const s = text.trim().replace(/，/g,',');
-    const t = lead && s.startsWith(lead) ? s.slice(lead.length).trim() : s;
-    if(!t) return {};
-    const out={};
-    t.split(',').map(x=>x.trim()).filter(Boolean).forEach(seg=>{
-      const m=seg.match(/^([a-zA-Z_]+)\*(\d+)$/);
-      if(!m) return;
-      const k=m[1].toLowerCase(); const v=Math.max(1,parseInt(m[2],10)||0);
-      if(BADGE_META[k]) out[k]=(out[k]||0)+v;
-    });
+    if(!text) return {}; const s = text.trim().replace(/，/g,','); const t = lead && s.startsWith(lead) ? s.slice(lead.length).trim() : s;
+    if(!t) return {}; const out={};
+    t.split(',').map(x=>x.trim()).filter(Boolean).forEach(seg=>{ const m=seg.match(/^([a-zA-Z_]+)\*(\d+)$/); if(!m) return;
+      const k=m[1].toLowerCase(); const v=Math.max(1,parseInt(m[2],10)||0); if(BADGE_META[k]) out[k]=(out[k]||0)+v; });
     return out;
   }
   function parseFunshopLines(text){
     const out=[]; (text||'').split('\n').forEach(line=>{
       const s=line.trim(); if(!s) return; const p=s.split('|'); if(p.length<2) return;
-      const title=p[0].trim(); const seconds=Math.max(1,parseInt(p[1].trim(),10)||0);
-      const need=parsePack(p[2]||'','需求:'); const wear=parsePack(p[3]||'','磨损:');
+      const title=p[0].trim(); const seconds=Math.max(1,parseInt(p[1].trim(),10)||0); const need=parsePack(p[2]||'','需求:'); const wear=parsePack(p[3]||'','磨损:');
       let timeWindow=null; const w=(p[4]||'').trim(); if(w && w.startsWith('时段:')){ const m=w.slice(3).trim().match(/(\d{2}:\d{2})-(\d{2}:\d{2})/); if(m) timeWindow={start:m[1],end:m[2]}; }
-      out.push({ id:uid(), title, seconds, need, wear, timeWindow, running:null });
-    }); return out;
+      out.push({ id:uid(), title, seconds, need, wear, timeWindow, running:null }); }); return out;
   }
   function withinWindow(tw){
-    if(!tw) return true;
-    const now=getToday();
+    if(!tw) return true; const now=getToday();
     const cur=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     return (cur>=tw.start && cur<=tw.end);
   }
-  // 生成“需求”胶囊 HTML（含库存校验）
   function needChipsHTML(need){
-    const parts=[];
-    const b=meta.badges||{};
-    Object.entries(need||{}).forEach(([k,v])=>{
-      const metaK = BADGE_META[k]; if(!metaK) return;
-      let have = 0;
-      if(metaK.invKey) have = b[metaK.invKey]||0;
-      else if(k==='ticket') have = meta.tickets||0;
-      else if(k==='freeze') have = meta.freeze||0;
-      const ok = have>=v;
-      const cls = ok?metaK.cls:'fb-bad';
-      parts.push(`<span class="fb-chip ${cls}">${metaK.label} ×${v}${ok?``:`（缺${v-have}）`}</span>`);
-    });
+    const parts=[]; const b=meta.badges||{};
+    Object.entries(need||{}).forEach(([k,v])=>{ const metaK = BADGE_META[k]; if(!metaK) return;
+      let have = 0; if(metaK.invKey) have = b[metaK.invKey]||0; else if(k==='ticket') have = meta.tickets||0; else if(k==='freeze') have = meta.freeze||0;
+      const ok = have>=v; const cls = ok?metaK.cls:'fb-bad';
+      parts.push(`<span class="fb-chip ${cls}">${metaK.label} ×${v}${ok?``:`（缺${v-have}）`}</span>`); });
     return parts.length?parts.join(''):'<span class="funshop-muted">无</span>';
   }
-  // 生成“磨损”胶囊 HTML
   function wearChipsHTML(wear){
-    const parts=[];
-    Object.entries(wear||{}).forEach(([k,v])=>{
-      const metaK = BADGE_META[k]; if(!metaK) return;
-      parts.push(`<span class="fb-chip ${metaK.cls}">${metaK.label} −${v} 耐久</span>`);
-    });
+    const parts=[]; Object.entries(wear||{}).forEach(([k,v])=>{ const metaK = BADGE_META[k]; if(!metaK) return;
+      parts.push(`<span class="fb-chip ${metaK.cls}">${metaK.label} −${v} 耐久</span>`); });
     return parts.length?parts.join(''):'<span class="funshop-muted">无</span>';
   }
 
-  // 校验并应用：扣减 ticket/freeze，给徽章累计磨损并按上限销毁
   function applyWearAndConsume(need={}, wear={}){
-    ensureBadgeMeta(); ensureWearPool();
-    const b=meta.badges||{};
+    ensureBadgeMeta(); ensureWearPool(); const b=meta.badges||{};
     const have={ rare_token:b.rare_tokens||0, epic_token:b.epic_tokens||0, legend_token:b.legendary_tokens||0, ticket:meta.tickets||0, freeze:meta.freeze||0 };
-    for(const [k,req] of Object.entries(need)){
-      if((have[k]||0) < req) return {ok:false,msg:`${BADGE_META[k]?.label || k} 不足`};
-    }
-    // 扣减需求
+    for(const [k,req] of Object.entries(need)){ if((have[k]||0) < req) return {ok:false,msg:`${BADGE_META[k]?.label || k} 不足`}; }
     if(need.rare_token){ meta.badges.rare_tokens = Math.max(0,(meta.badges.rare_tokens||0) - need.rare_token); }
     if(need.epic_token){ meta.badges.epic_tokens = Math.max(0,(meta.badges.epic_tokens||0) - need.epic_token); }
     if(need.legend_token){ meta.badges.legendary_tokens = Math.max(0,(meta.badges.legendary_tokens||0) - need.legend_token); }
     if(need.ticket){ meta.tickets = Math.max(0,(meta.tickets||0) - need.ticket); }
     if(need.freeze){ meta.freeze  = Math.max(0,(meta.freeze||0)  - need.freeze); }
-    // 累计磨损
-    const pool=meta.funshop.wearAccum;
-    Object.entries(wear||{}).forEach(([k,v])=>{ if(WEAR_MAX[k]) pool[k]=(pool[k]||0)+Math.max(0,v); });
-    // 销毁（每满上限销毁 1 枚）
+    const pool=meta.funshop.wearAccum; Object.entries(wear||{}).forEach(([k,v])=>{ if(WEAR_MAX[k]) pool[k]=(pool[k]||0)+Math.max(0,v); });
     const report=[];
     [['rare_token','rare_tokens'],['epic_token','epic_tokens'],['legend_token','legendary_tokens']].forEach(([k,invKey])=>{
       const max=WEAR_MAX[k]; const have=meta.badges[invKey]||0; const w=pool[k]||0; const destroy=Math.min(have, Math.floor(w/max));
-      if(destroy>0){ meta.badges[invKey]=Math.max(0,have-destroy); pool[k]=w - destroy*max; report.push(`${BADGE_META[k]?.label || k} -${destroy}`); }
-    });
+      if(destroy>0){ meta.badges[invKey]=Math.max(0,have-destroy); pool[k]=w - destroy*max; report.push(`${BADGE_META[k]?.label || k} -${destroy}`); } });
     return {ok:true,destroyed:report};
   }
 
   function renderFunshop(){
-    const list = el.funshopList; if(!list) return;
-    ensureBadgeMeta(); ensureWearPool();
-    const acts = meta.funshop.activities||[];
-    const fragment = document.createDocumentFragment();
-
-    if(!acts.length){
-      list.innerHTML = `<div class="funshop-muted">尚未配置娱乐活动。点右上角“调试/导入”。</div>`;
-      return;
-    }
-
-    acts.forEach(a=>{
-      const row=document.createElement('div'); row.className='funshop-item';
-      const inTime=withinWindow(a.timeWindow);
-      const timerHTML = a.running ? `
-        <span class="mini-timer">
-          进行中 · 剩余 <b><span class="remain" data-id="${a.id}">${fmtTime(Math.max(0,Math.ceil((a.running.until-Date.now())/1000)))}</span></b>
-          <button class="btn small" data-stop="${a.id}">停止</button>
-        </span>` : '';
+    const list = el.funshopList; if(!list) return; ensureBadgeMeta(); ensureWearPool();
+    const acts = meta.funshop.activities||[]; const fragment = document.createDocumentFragment();
+    if(!acts.length){ list.innerHTML = `<div class="funshop-muted">尚未配置娱乐活动。点右上角“调试/导入”。</div>`; return; }
+    acts.forEach(a=>{ const row=document.createElement('div'); row.className='funshop-item'; const inTime=withinWindow(a.timeWindow);
+      const timerHTML = a.running ? `<span class="mini-timer">进行中 · 剩余 <b><span class="remain" data-id="${a.id}">${fmtTime(Math.max(0,Math.ceil((a.running.until-Date.now())/1000)))}</span></b><button class="btn small" data-stop="${a.id}">停止</button></span>` : '';
       row.innerHTML = `
-        <div class="funshop-grid-2">
-          <div><b>${a.title}</b> <span class="funshop-muted">（${fmtTime(a.seconds)}）</span></div>
-          <div>${a.timeWindow?`<span class="funshop-muted">${inTime?'时段开放':'当前不在时段'}：${a.timeWindow.start}–${a.timeWindow.end}</span>`:''}</div>
-        </div>
-        <div class="fb-line">
-          <span class="funshop-muted">需求：</span>${needChipsHTML(a.need)}
-        </div>
-        <div class="fb-line">
-          <span class="funshop-muted">磨损：</span>${wearChipsHTML(a.wear)}
-        </div>
-        <div class="funshop-row">
-          ${timerHTML}
-          <span style="flex:1"></span>
-          <button class="btn small${inTime?'':' disabled'}" data-play="${a.id}" ${inTime?'':'disabled'}>${inTime?'兑换并开始':'未到时段'}</button>
-        </div>`;
-      const play = row.querySelector(`[data-play="${a.id}"]`);
-      if(play) play.onclick=()=>startFunActivity(a.id);
-      const stop = row.querySelector(`[data-stop="${a.id}"]`);
-      if(stop) stop.onclick=()=>stopFunActivity(a.id,true);
-      fragment.appendChild(row);
-    });
-    list.innerHTML = '';
-    list.appendChild(fragment);
+        <div class="funshop-grid-2"><div><b>${a.title}</b> <span class="funshop-muted">（${fmtTime(a.seconds)}）</span></div><div>${a.timeWindow?`<span class="funshop-muted">${inTime?'时段开放':'当前不在时段'}：${a.timeWindow.start}–${a.timeWindow.end}</span>`:''}</div></div>
+        <div class="fb-line"><span class="funshop-muted">需求：</span>${needChipsHTML(a.need)}</div>
+        <div class="fb-line"><span class="funshop-muted">磨损：</span>${wearChipsHTML(a.wear)}</div>
+        <div class="funshop-row">${timerHTML}<span style="flex:1"></span><button class="btn small${inTime?'':' disabled'}" data-play="${a.id}" ${inTime?'':'disabled'}>${inTime?'兑换并开始':'未到时段'}</button></div>`;
+      const play = row.querySelector(`[data-play="${a.id}"]`); if(play) play.onclick=()=>startFunActivity(a.id);
+      const stop = row.querySelector(`[data-stop="${a.id}"]`); if(stop) stop.onclick=()=>stopFunActivity(a.id,true);
+      fragment.appendChild(row); });
+    list.innerHTML = ''; list.appendChild(fragment);
   }
 
   function startFunActivity(id){
-    ensureBadgeMeta(); ensureWearPool();
-    const acts=meta.funshop.activities||[]; const a=acts.find(x=>x.id===id); if(!a) return;
-    if(a.running){ pushToast('已在进行中','warn'); return; }
-    const res = applyWearAndConsume(a.need||{}, a.wear||{});
+    ensureBadgeMeta(); ensureWearPool(); const acts=meta.funshop.activities||[]; const a=acts.find(x=>x.id===id); if(!a) return;
+    if(a.running){ pushToast('已在进行中','warn'); return; } const res = applyWearAndConsume(a.need||{}, a.wear||{});
     if(!res.ok){ pushToast(res.msg||'条件不足','warn'); save(); renderInventory(); return; }
     if(res.destroyed && res.destroyed.length){ pushToast(`磨损导致销毁：${res.destroyed.join('、')}`,'warn'); }
-    a.running = { until: Date.now() + Math.max(1,a.seconds)*1000 };
-    save(); renderInventory(); renderFunshop();
+    a.running = { until: Date.now() + Math.max(1,a.seconds)*1000 }; save(); renderInventory(); renderFunshop();
   }
-  function stopFunActivity(id,byUser=false){
-    const acts=meta.funshop.activities||[]; const a=acts.find(x=>x.id===id); if(!a||!a.running) return;
+  function stopFunActivity(id,byUser=false){ const acts=meta.funshop.activities||[]; const a=acts.find(x=>x.id===id); if(!a||!a.running) return;
     a.running=null; save(); renderFunshop(); if(byUser) pushToast('已停止娱乐活动','info');
   }
   function tickFunshopTimers(){
     const acts=meta.funshop.activities||[]; let dirty=false; const now=Date.now();
-    acts.forEach(a=>{ if(a.running && a.running.until<=now){ a.running=null; dirty=true; }});
-    if(dirty){ save(); renderFunshop(); }
-    document.querySelectorAll('.mini-timer .remain').forEach(span=>{
-      const id = span.getAttribute('data-id'); const a = acts.find(x=>x.id===id);
-      if(a && a.running){ span.textContent = fmtTime(Math.max(0,Math.ceil((a.running.until-Date.now())/1000))); }
-    });
+    acts.forEach(a=>{ if(a.running && a.running.until<=now){ a.running=null; dirty=true; }}); if(dirty){ save(); renderFunshop(); }
+    document.querySelectorAll('.mini-timer .remain').forEach(span=>{ const id = span.getAttribute('data-id'); const a = acts.find(x=>x.id===id);
+      if(a && a.running){ span.textContent = fmtTime(Math.max(0,Math.ceil((a.running.until-Date.now())/1000))); } });
     setTimeout(tickFunshopTimers,1000);
   }
 
@@ -1462,654 +1458,288 @@ function save(){
       if (el.kpiTime) el.kpiTime.textContent = fmtTime(state.agg.totalSeconds || 0);
   }
 
-  function renderTasks(){
-    el.emptyTask.style.display = state.tasks.length?'none':'block';
-    const fragment = document.createDocumentFragment();
-    const currentDisplayTaskId = (state.active && state.active.taskId) || state.selectedTaskId;
+  function renderHeaderStatus() {
+      const headerStatusEl = document.getElementById('mobileHeaderStatus');
+      if (!headerStatusEl) return;
+      
+      const totalHQ = state.agg.totalHQ || 0;
+      const hqForLevelUp = 1000;
+      const currentLevel = Math.floor(totalHQ / hqForLevelUp) + 1;
+      const currentLevelBaseHQ = (currentLevel - 1) * hqForLevelUp;
+      const hqInCurrentLevel = totalHQ - currentLevelBaseHQ;
+      const percent = Math.min(100, (hqInCurrentLevel / hqForLevelUp) * 100);
 
-    state.tasks.forEach(t=>{
-      const row=document.createElement('div'); row.className='task';
-      if(currentDisplayTaskId ===t.id) row.classList.add('selected');
+      const name = (meta.character && meta.character.name) ? meta.character.name : '英雄';
+      const title = (meta.character && meta.character.title) ? meta.character.title : '初出茅庐';
+      
+      const now = Date.now();
+      const activeBuffs = (meta.buffs || []).filter(b => b.expiresAt > now);
+      const buffText = activeBuffs.length > 0 ? `${activeBuffs.length}个Buff生效中` : '';
+
+      const avatarUrl = meta.character.avatar || '';
+
+      headerStatusEl.innerHTML = `
+      <div class="mobile-header-card">
+          <div class="mobile-char-avatar" style="background-image: ${avatarUrl ? `url(${avatarUrl})` : 'none'};">
+              ${!avatarUrl ? '👤' : ''}
+          </div>
+          <div class="mobile-char-details">
+              <div class="mobile-char-status">
+                  <div class="char-info">
+                      <span class="char-name">${name}</span>
+                      <span class="char-title">${title}</span>
+                  </div>
+                  <div class="exp-bar-container">
+                      <div class="exp-bar-header">
+                          <span class="exp-level">Lv.${currentLevel}</span>
+                          <span class="exp-buffs">${buffText}</span>
+                      </div>
+                      <div class="exp-bar">
+                          <div class="exp-bar-fill" style="width: ${percent}%;"></div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      </div>
+      `;
+  }
+
+  function renderTasks(){
+    el.emptyTask.style.display = state.tasks.length?'none':'block'; const fragment = document.createDocumentFragment();
+    const currentDisplayTaskId = (state.active && state.active.taskId) || state.selectedTaskId;
+    state.tasks.forEach(t=>{ const row=document.createElement('div'); row.className='task'; if(currentDisplayTaskId ===t.id) row.classList.add('selected');
       row.innerHTML = `
         <div>${difficultyBadge(t.difficulty)}</div>
-        <div>
-          <div class="task-title">${t.title}</div>
-          <div class="task-meta">累计豪情值：<b>${Math.floor(t.totalHQ||0)}</b> · 累计用时：<b>${fmtTime(t.totalSeconds||0)}</b></div>
-          ${t.reward&&rewardLabel(t.reward)?`<div class="reward-tag">奖励：${rewardLabel(t.reward)}</div>`:''}
-        </div>
+        <div> <div class="task-title">${t.title}</div> <div class="task-meta">累计豪情值：<b>${Math.floor(t.totalHQ||0)}</b> · 累计用时：<b>${fmtTime(t.totalSeconds||0)}</b></div> ${t.reward&&rewardLabel(t.reward)?`<div class="reward-tag">奖励：${rewardLabel(t.reward)}</div>`:''} </div>
         <div class="controls"><button class="btn small" data-act="edit">编辑</button><button class="btn small danger" data-act="del">删除</button></div>
         <div><button class="btn small accent" data-act="select">${currentDisplayTaskId === t.id ? '已选':'选择'}</button></div>`;
-      row.querySelector('[data-act="edit"]').onclick=()=>editTask(t.id);
-      row.querySelector('[data-act="del"]').onclick=()=>deleteTask(t.id);
-      row.querySelector('[data-act="select"]').onclick=()=>selectTask(t.id);
-      fragment.appendChild(row);
-    });
-    el.taskList.innerHTML = '';
-    el.taskList.appendChild(fragment);
+      row.querySelector('[data-act="edit"]').onclick=()=>editTask(t.id); row.querySelector('[data-act="del"]').onclick=()=>deleteTask(t.id);
+      row.querySelector('[data-act="select"]').onclick=()=>selectTask(t.id); fragment.appendChild(row); });
+    el.taskList.innerHTML = ''; el.taskList.appendChild(fragment);
   }
 
 function setControls(){
-  const btnStart = el.btnStart;
-  const btnPause = el.btnPause;
-  const btnStop  = el.btnStop;
-  if(!btnStart || !btnPause || !btnStop) return;
-
-  const setStartState = (disabled, label) => {
-    btnStart.disabled = disabled;
-    btnStart.textContent = label;
-    btnStart.setAttribute('aria-label', label);
-  };
-  
-  // Default state
-  setStartState(true, '开始');
-  btnPause.disabled = true;
-  btnStop.disabled  = true;
-  
-  if (state.active) {
-    // Timer is active (running or paused)
-    const a = state.active;
-    if (!a.isPaused) { // Running
-      setStartState(true, '开始');
-      btnPause.disabled = false;
-      btnStop.disabled = false;
-    } else { // Paused
-      setStartState(false, '继续');
-      btnPause.disabled = true; // Can't pause a paused timer
-      btnStop.disabled = false;
-    }
-  } else if (state.selectedTaskId) {
-    // A task is selected but not active
-    setStartState(false, '开始');
-  }
+  const btnStart = el.btnStart; const btnPause = el.btnPause; const btnStop  = el.btnStop; if(!btnStart || !btnPause || !btnStop) return;
+  const setStartState = (disabled, label) => { btnStart.disabled = disabled; btnStart.textContent = label; btnStart.setAttribute('aria-label', label); };
+  setStartState(true, '开始'); btnPause.disabled = true; btnStop.disabled  = true;
+  if (state.active) { const a = state.active; if (!a.isPaused) { setStartState(true, '开始'); btnPause.disabled = false; btnStop.disabled = false; } else { setStartState(false, '继续'); btnPause.disabled = true; btnStop.disabled = false; }
+  } else if (state.selectedTaskId) { setStartState(false, '开始'); }
 }
   function showPauseIndicator(sec){ if(!el.pauseIndicator||!el.pauseTime) return; el.pauseIndicator.style.display='flex'; el.pauseTime.textContent=fmtPause(sec); }
   function hidePauseIndicator(){ if(!el.pauseIndicator||!el.pauseTime) return; el.pauseIndicator.style.display='none'; el.pauseTime.textContent='0:00'; }
 
   function addTask(){
-    const title=el.taskTitle.value.trim(); const diff=parseInt(el.taskDiff.value,10);
-    if(!title){playSound(sfx.warn); alert('请输入任务标题');return}
-    playSound(sfx.add);
-    state.tasks.unshift({id:uid(), title, difficulty:diff, totalHQ:0, totalSeconds:0});
+    const title=el.taskTitle.value.trim(); const diff=parseInt(el.taskDiff.value,10); if(!title){playSound(sfx.warn); alert('请输入任务标题');return}
+    playSound(sfx.add); state.tasks.unshift({id:uid(), title, difficulty:diff, totalHQ:0, totalSeconds:0});
     save(); renderTasks(); el.taskTitle.value='';
   }
   function editTask(id){
-    const t=getTask(id); if(!t) return;
-    const title=prompt('编辑任务标题：',t.title); if(title===null) return;
+    const t=getTask(id); if(!t) return; const title=prompt('编辑任务标题：',t.title); if(title===null) return;
     let diff=prompt('编辑难度（1-5）：',t.difficulty); if(diff===null) return;
     diff=clamp(parseInt(diff,10)||t.difficulty,1,5);
-    t.title=(title.trim()||t.title); t.difficulty=diff;
-    playSound(sfx.click);
+    t.title=(title.trim()||t.title); t.difficulty=diff; playSound(sfx.click);
     save(); renderTasks(); if((state.active && state.active.taskId === id) || state.selectedTaskId === id){ updateRate(); }
   }
   function deleteTask(id){
     if(state.active&&state.active.taskId===id){ playSound(sfx.warn); alert('请先结束当前任务的计时，再删除。'); return; }
-    if(state.selectedTaskId === id) { state.selectedTaskId = null; }
-    playSound(sfx.delete);
+    if(state.selectedTaskId === id) { state.selectedTaskId = null; } playSound(sfx.delete);
     state.tasks=state.tasks.filter(t=>t.id!==id); save(); renderTasks();
   }
 
   function baseRateOfTask(task){return RATE_BY_DIFFICULTY[task.difficulty]||1;}
   function todayBuff(){const day=todayKey(); meta.dailyBuff=meta.dailyBuff||{}; meta.dailyBuff[day]=meta.dailyBuff[day]||{rateBuff:0}; return meta.dailyBuff[day];}
-  function effectiveRate(baseRate, difficulty){
-    let rate=baseRate;
-    const chip = todayBuff().rateBuff || 0; rate *= (1 + chip);
-    return rate;
-  }
+  function effectiveRate(baseRate, difficulty){ let rate=baseRate; const chip = todayBuff().rateBuff || 0; rate *= (1 + chip); return rate; }
   function rateOfActive(){ if(!state.active) return 0; const task=getTask(state.active.taskId); if(!task) return 0; return effectiveRate(baseRateOfTask(task), task.difficulty); }
   
   function updateRate(){
-    let task;
-    if (state.active) {
-      task = getTask(state.active.taskId);
-    } else if (state.selectedTaskId) {
-      task = getTask(state.selectedTaskId);
-    }
-    
-    if(!task){ el.rateText.textContent='0'; return; }
-    const eff=effectiveRate(baseRateOfTask(task), task.difficulty);
+    let task; if (state.active) { task = getTask(state.active.taskId); } else if (state.selectedTaskId) { task = getTask(state.selectedTaskId); }
+    if(!task){ el.rateText.textContent='0'; return; } const eff=effectiveRate(baseRateOfTask(task), task.difficulty);
     el.rateText.textContent=eff.toFixed(2);
   }
 
   function selectTask(id){
     const t=getTask(id); if(!t) return;
-    if(state.active && state.active.taskId !== id) {
-        pushToast('当前有任务正在计时，请先结束。', 'warn'); return;
-    }
-    if(state.active && state.active.taskId === id) return;
-
-    playSound(sfx.select);
-    state.selectedTaskId = id;
-    
-    el.activeHint.textContent=`已选择：${t.title}（难度 ${t.difficulty}）`;
-    sessionFlip.setValue(0,true); 
-    el.sessionTime.textContent='0:00:00'; 
-    el.taskTotal.textContent=Math.floor(t.totalHQ||0); 
-    el.taskTime.textContent=fmtTime(t.totalSeconds||0);
-    hidePauseIndicator(); 
-    updateRate(); 
-    renderTasks(); 
-    setControls();
-    if (mobileMedia.matches) {
-        setView('timerCard');
-    }
+    if(state.active && state.active.taskId !== id) { pushToast('当前有任务正在计时，请先结束。', 'warn'); return; }
+    if(state.active && state.active.taskId === id) return; playSound(sfx.select); state.selectedTaskId = id;
+    el.activeHint.textContent=`已选择：${t.title}（难度 ${t.difficulty}）`; sessionFlip.setValue(0,true); 
+    el.sessionTime.textContent='0:00:00'; el.taskTotal.textContent=Math.floor(t.totalHQ||0); el.taskTime.textContent=fmtTime(t.totalSeconds||0);
+    hidePauseIndicator(); updateRate(); renderTasks(); setControls();
+    if (mobileMedia.matches) { setView('timerCard'); }
   }
   
   function startTimer(){
-    if (state.active && !state.active.isPaused) return; // Already running
-
-    const taskId = state.active ? state.active.taskId : state.selectedTaskId;
-    if (!taskId) {
-        playSound(sfx.warn);
-        alert('请先选择任务');
-        return;
-    }
-    
-    const task = getTask(taskId);
-    if (!task) return;
-
-    playSound(sfx.timerStart);
-
-    let newTimerState;
-    const now = Date.now();
-
-    if (state.active && state.active.isPaused) { // Resuming
-        const pausedDurationSec = (now - state.active.pauseTime) / 1000;
-        newTimerState = {
-            ...state.active,
-            startTime: now,
-            isPaused: false,
-            pauseTime: null,
-            pauses: (state.active.pauses || 0) + (pausedDurationSec > ECON.pauseBreakSec ? 1 : 0),
-        };
-    } else { // Starting fresh
-        newTimerState = {
-            taskId: taskId,
-            startTime: now,
-            accumulatedSeconds: 0,
-            isPaused: false,
-            pauseTime: null,
-            pauses: 0,
-        };
-    }
-
-    state.selectedTaskId = null;
-    state.active = newTimerState;
-    save();
-    
+    if (state.active && !state.active.isPaused) return;
+    const taskId = state.active ? state.active.taskId : state.selectedTaskId; if (!taskId) { playSound(sfx.warn); alert('请先选择任务'); return; }
+    const task = getTask(taskId); if (!task) return; playSound(sfx.timerStart);
+    let newTimerState; const now = Date.now();
+    if (state.active && state.active.isPaused) { const pausedDurationSec = (now - state.active.pauseTime) / 1000; newTimerState = { ...state.active, startTime: now, isPaused: false, pauseTime: null, pauses: (state.active.pauses || 0) + (pausedDurationSec > ECON.pauseBreakSec ? 1 : 0), };
+    } else { newTimerState = { taskId: taskId, startTime: now, accumulatedSeconds: 0, isPaused: false, pauseTime: null, pauses: 0, }; }
+    state.selectedTaskId = null; state.active = newTimerState; save();
     el.activeHint.textContent = `进行中：${task.title}（难度 ${task.difficulty}）`;
-    renderTasks();
-    updateRate();
-    setControls();
-    hidePauseIndicator();
+    renderTasks(); updateRate(); setControls(); hidePauseIndicator();
   }
 
   function pauseTimer(){
-    if(!state.active || state.active.isPaused) return;
-    
-    playSound(sfx.timerPause);
-    const now = Date.now();
+    if(!state.active || state.active.isPaused) return; playSound(sfx.timerPause); const now = Date.now();
     const elapsedSec = (now - state.active.startTime) / 1000;
-
-    const newTimerState = {
-        ...state.active,
-        accumulatedSeconds: (state.active.accumulatedSeconds || 0) + elapsedSec,
-        isPaused: true,
-        pauseTime: now,
-        startTime: null,
-    };
-    
-    state.active = newTimerState;
-    save();
-    setControls();
-
+    const newTimerState = { ...state.active, accumulatedSeconds: (state.active.accumulatedSeconds || 0) + elapsedSec, isPaused: true, pauseTime: now, startTime: null, };
+    state.active = newTimerState; save(); setControls();
     const task = getTask(state.active.taskId);
-    if(task) {
-      const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
-      const finalSessionHQ = (state.active.accumulatedSeconds || 0) * rate;
-      const finalSessionSeconds = state.active.accumulatedSeconds || 0;
-      
-      sessionFlip.setValue(Math.floor(finalSessionHQ), true); // instant update
-      el.sessionTime.textContent = fmtTime(finalSessionSeconds);
+    if(task) { const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
+      const finalSessionHQ = (state.active.accumulatedSeconds || 0) * rate; const finalSessionSeconds = state.active.accumulatedSeconds || 0;
+      sessionFlip.setValue(Math.floor(finalSessionHQ), true); el.sessionTime.textContent = fmtTime(finalSessionSeconds);
       el.taskTotal.textContent = Math.floor((task.totalHQ || 0) + finalSessionHQ);
       el.taskTime.textContent = fmtTime((task.totalSeconds || 0) + finalSessionSeconds);
     }
   }
 
-  /* —— 今日已完成：核心 —— */
-  function pushTodayDone(entry){
-    const d = todayObj();
-    d.completed.unshift(entry);
-    save();
-  }
-
+  function pushTodayDone(entry){ const d = todayObj(); d.completed.unshift(entry); save(); }
   function renderTodayDone(){
-    const d = todayObj();
-    const list = d.completed || [];
-    const box = document.getElementById('todayDoneBody');
-    if(!box) return;
-
-    if(list.length === 0){
-      box.innerHTML = '<div class="muted">今天还没有完成的任务。</div>';
-      return;
-    }
-
-    const fragment = document.createDocumentFragment();
-    list.forEach(it => {
-        const item = document.createElement('div');
+    const d = todayObj(); const list = d.completed || []; const box = document.getElementById('todayDoneBody'); if(!box) return;
+    if(list.length === 0){ box.innerHTML = '<div class="muted">今天还没有完成的任务。</div>'; return; }
+    const fragment = document.createDocumentFragment(); list.forEach(it => { const item = document.createElement('div');
         item.className = 'pane';
-        item.innerHTML = `
-            <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
-              <div style="font-weight:600">${it.title}</div>
-              <span class="tag">D${it.difficulty}</span>
-            </div>
-            <div class="muted" style="margin-top:6px;font-size:12px">
-              用时：<b>${fmtTime(it.seconds)}</b> · 本次豪情值：<b>${Math.floor(it.hq)}</b> · 完成于：${new Date(it.ts).toLocaleTimeString()}
-            </div>
-        `;
-        fragment.appendChild(item);
-    });
-    box.innerHTML = '';
-    box.appendChild(fragment);
+        item.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"> <div style="font-weight:600">${it.title}</div> <span class="tag">D${it.difficulty}</span> </div> <div class="muted" style="margin-top:6px;font-size:12px"> 用时：<b>${fmtTime(it.seconds)}</b> · 本次豪情值：<b>${Math.floor(it.hq)}</b> · 完成于：${new Date(it.ts).toLocaleTimeString()} </div>`;
+        fragment.appendChild(item); });
+    box.innerHTML = ''; box.appendChild(fragment);
   }
 
-  /* 奖励计算与弹窗 */
-  function bindRewardClose() {
-    const closeBtn = el.btnCloseReward;
-    if (closeBtn) {
-      closeBtn.onclick = () => {
-        playSound(sfx.modalClose);
-        el.rewardMask.style.display = 'none';
-      };
-    }
-  }
+  function bindRewardClose() { const closeBtn = el.btnCloseReward; if (closeBtn) { closeBtn.onclick = () => { playSound(sfx.modalClose); el.rewardMask.style.display = 'none'; }; } }
 
   function openReward({baseHQ, seconds, difficulty, rawHQ}){
-    playSound(sfx.modalOpen);
-    const streakMulti = 1 + (meta.streak || 0);
-    const baseReward = Math.floor(baseHQ * streakMulti);
-    const isArcade = !!meta.arcade;
-
-    const body = el.rewardBody;
-    if(!body) return;
-
-    body.innerHTML = `
-      <div style="text-align:center;margin-bottom:16px">
-        <div style="font-size:24px;font-weight:800;margin-bottom:4px">${baseReward}</div>
-        <div class="muted">基础奖励（连击 ×${streakMulti.toFixed(2)}）</div>
-      </div>
-      ${isArcade ? `
-        <div class="choice" id="betChoice">
-          <div class="opt" data-bet="0">不押注</div>
-          <div class="opt" data-bet="0.5">押注 ×0.5（${Math.floor(baseReward*0.5)}）</div>
-          <div class="opt" data-bet="1">押注 ×1（${baseReward}）</div>
-          <div class="opt" data-bet="2">押注 ×2（${Math.floor(baseReward*2)}）</div>
-        </div>
-        <div class="muted" style="margin-top:10px;font-size:12px">街机模式：可押注赢取更多豪情值，失败则失去基础奖励</div>
-      ` : ''}
-    `;
-
+    playSound(sfx.modalOpen); const streakMulti = 1 + (meta.streak || 0);
+    const baseReward = Math.floor(baseHQ * streakMulti); const isArcade = !!meta.arcade;
+    const body = el.rewardBody; if(!body) return;
+    body.innerHTML = ` <div style="text-align:center;margin-bottom:16px"> <div style="font-size:24px;font-weight:800;margin-bottom:4px">${baseReward}</div> <div class="muted">基础奖励（连击 ×${streakMulti.toFixed(2)}）</div> </div> ${isArcade ? ` <div class="choice" id="betChoice"> <div class="opt" data-bet="0">不押注</div> <div class="opt" data-bet="0.5">押注 ×0.5（${Math.floor(baseReward*0.5)}）</div> <div class="opt" data-bet="1">押注 ×1（${baseReward}）</div> <div class="opt" data-bet="2">押注 ×2（${Math.floor(baseReward*2)}）</div> </div> <div class="muted" style="margin-top:10px;font-size:12px">街机模式：可押注赢取更多豪情值，失败则失去基础奖励</div> ` : ''} `;
     if(isArcade){
       const opts = body.querySelectorAll('.opt');
-      opts.forEach(opt => {
-        opt.onclick = () => {
-          playSound(sfx.click);
-          const bet = parseFloat(opt.dataset.bet);
-          if(bet === 0){
-            state.agg.totalHQ = (state.agg.totalHQ || 0) + baseReward;
-            save(); renderKPI();
-            body.innerHTML += `<div class="result-bar result-ok" style="margin-top:16px">已领取基础奖励 +${baseReward}</div>`;
-            bindRewardClose();
-          }else{
-            const cost = Math.floor(baseReward * bet);
-            const chance = Math.min(REWARD_PARAMS.maxChance, REWARD_PARAMS.baseChance + bet * REWARD_PARAMS.betCoefficient + (meta.pity || 0));
-            const won = Math.random() < chance;
-            const loot = won ? Math.floor(cost * (1.5 + Math.random() * 1.5)) : 0;
-            
-            if(won){
-              state.agg.totalHQ = (state.agg.totalHQ || 0) + loot;
-              meta.pity = Math.max(0, (meta.pity || 0) - ECON.pityStep);
-              body.innerHTML += `
-                <div class="result-bar result-ok" style="margin-top:16px">
-                  <div>🎉 押注成功！获得 +${loot} 豪情值</div>
-                  <div class="loots" style="margin-top:8px">
-                    <span class="loot">基础消耗：${cost}</span>
-                    <span class="loot">倍率：×${(loot/cost).toFixed(2)}</span>
-                    <span class="loot">怜悯：+${(chance*100).toFixed(1)}%</span>
-                  </div>
-                </div>
-              `;
-            }else{
-              meta.pity = (meta.pity || 0) + REWARD_PARAMS.pityIncrement;
-              body.innerHTML += `
-                <div class="result-bar result-err" style="margin-top:16px">
-                  <div>💥 押注失败，失去基础奖励 -${baseReward}</div>
-                  <div class="loots" style="margin-top:8px">
-                    <span class="loot">怜悯+${(REWARD_PARAMS.pityIncrement*100).toFixed(1)}%</span>
-                  </div>
-                </div>
-              `;
-            }
-            save(); renderKPI();
-          }
-          bindRewardClose();
-        };
-      });
-    }else{
-      state.agg.totalHQ = (state.agg.totalHQ || 0) + baseReward;
-      save(); renderKPI();
-      body.innerHTML += `<div class="result-bar result-ok" style="margin-top:16px">已领取基础奖励 +${baseReward}</div>`;
-      bindRewardClose();
-    }
+      opts.forEach(opt => { opt.onclick = () => { playSound(sfx.click); const bet = parseFloat(opt.dataset.bet);
+          if(bet === 0){ state.agg.totalHQ = (state.agg.totalHQ || 0) + baseReward; save(); renderKPI(); body.innerHTML += `<div class="result-bar result-ok" style="margin-top:16px">已领取基础奖励 +${baseReward}</div>`; bindRewardClose();
+          }else{ const cost = Math.floor(baseReward * bet); const chance = Math.min(REWARD_PARAMS.maxChance, REWARD_PARAMS.baseChance + bet * REWARD_PARAMS.betCoefficient + (meta.pity || 0));
+            const won = Math.random() < chance; const loot = won ? Math.floor(cost * (1.5 + Math.random() * 1.5)) : 0;
+            if(won){ state.agg.totalHQ = (state.agg.totalHQ || 0) + loot; meta.pity = Math.max(0, (meta.pity || 0) - ECON.pityStep);
+              body.innerHTML += `<div class="result-bar result-ok" style="margin-top:16px"> <div>🎉 押注成功！获得 +${loot} 豪情值</div> <div class="loots" style="margin-top:8px"> <span class="loot">基础消耗：${cost}</span> <span class="loot">倍率：×${(loot/cost).toFixed(2)}</span> <span class="loot">怜悯：+${(chance*100).toFixed(1)}%</span> </div> </div>`;
+            }else{ meta.pity = (meta.pity || 0) + REWARD_PARAMS.pityIncrement;
+              body.innerHTML += `<div class="result-bar result-err" style="margin-top:16px"> <div>💥 押注失败，失去基础奖励 -${baseReward}</div> <div class="loots" style="margin-top:8px"> <span class="loot">怜悯+${(REWARD_PARAMS.pityIncrement*100).toFixed(1)}%</span> </div> </div>`;
+            } save(); renderKPI(); } bindRewardClose(); }; });
+    }else{ state.agg.totalHQ = (state.agg.totalHQ || 0) + baseReward; save(); renderKPI(); body.innerHTML += `<div class="result-bar result-ok" style="margin-top:16px">已领取基础奖励 +${baseReward}</div>`; bindRewardClose(); }
     el.rewardMask.style.display = 'flex';
   }
 
   function triggerCompletionAnimation() {
-    const container = document.getElementById('completion-animation-container');
-    if (!container) return;
-    container.innerHTML = '';
-    const textEl = document.createElement('div');
-    textEl.className = 'completion-text';
-    textEl.textContent = '任务完成!';
-    container.appendChild(textEl);
-    const confettiCount = 50;
-    const colors = ['var(--primary)', 'var(--accent)', '#e3b341', '#3fb950'];
-    for (let i = 0; i < confettiCount; i++) {
-        const confetti = document.createElement('div');
-        confetti.className = 'confetti';
-        confetti.style.left = `${Math.random() * 100}vw`;
-        confetti.style.top = `${Math.random() * -20}vh`;
-        confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
-        confetti.style.animationDelay = `${Math.random() * 0.5}s`;
-        confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
-        container.appendChild(confetti);
-    }
+    const container = document.getElementById('completion-animation-container'); if (!container) return; container.innerHTML = '';
+    const textEl = document.createElement('div'); textEl.className = 'completion-text'; textEl.textContent = '任务完成!'; container.appendChild(textEl);
+    const confettiCount = 50; const colors = ['var(--primary)', 'var(--accent)', '#e3b341', '#3fb950'];
+    for (let i = 0; i < confettiCount; i++) { const confetti = document.createElement('div'); confetti.className = 'confetti';
+        confetti.style.left = `${Math.random() * 100}vw`; confetti.style.top = `${Math.random() * -20}vh`;
+        confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)]; confetti.style.animationDelay = `${Math.random() * 0.5}s`;
+        confetti.style.transform = `rotate(${Math.random() * 360}deg)`; container.appendChild(confetti); }
     setTimeout(() => { container.innerHTML = ''; }, 2500);
   }
 
   function stopTimer(){
-    if(!state.active) return;
-    playSound(sfx.timerStop);
-
-    const activeSession = { ...state.active };
-    state.active = null;
-    save();
-
-    const t = getTask(activeSession.taskId);
-    let sessionSeconds = activeSession.accumulatedSeconds || 0;
-    if (!activeSession.isPaused && activeSession.startTime) {
-        sessionSeconds += (Date.now() - activeSession.startTime) / 1000;
-    }
+    if(!state.active) return; playSound(sfx.timerStop);
+    const activeSession = { ...state.active }; state.active = null; save();
+    const t = getTask(activeSession.taskId); let sessionSeconds = activeSession.accumulatedSeconds || 0;
+    if (!activeSession.isPaused && activeSession.startTime) { sessionSeconds += (Date.now() - activeSession.startTime) / 1000; }
     sessionSeconds = Math.floor(sessionSeconds);
     const taskRate = t ? effectiveRate(baseRateOfTask(t), t.difficulty) : 0;
-    const sessionHQ = Math.floor(sessionSeconds * taskRate);
-    
-    const pauses = activeSession.pauses || 0;
+    const sessionHQ = Math.floor(sessionSeconds * taskRate); const pauses = activeSession.pauses || 0;
     const diff = t ? t.difficulty : 3;
-
-    if(t){
-      t.totalHQ = (t.totalHQ || 0) + sessionHQ;
-      t.totalSeconds = (t.totalSeconds || 0) + sessionSeconds;
-    }
+    if(t){ t.totalHQ = (t.totalHQ || 0) + sessionHQ; t.totalSeconds = (t.totalSeconds || 0) + sessionSeconds; }
     state.agg.totalSeconds = (state.agg.totalSeconds || 0) + sessionSeconds;
-
-    pushTodayDone({
-      title: t ? t.title : '未知任务',
-      difficulty: diff,
-      seconds: sessionSeconds,
-      hq: sessionHQ,
-      ts: Date.now()
-    });
-
-    triggerCompletionAnimation();
-    const extraReward = grantTaskReward(t);
-    state.tasks = state.tasks.filter(task => task.id !== activeSession.taskId);
-    if(state.selectedTaskId === activeSession.taskId) state.selectedTaskId = null;
-
-    save();
-    renderTasks();
-    renderKPI();
-    
-    // Reset timer UI
-    el.activeHint.textContent='未选择任务';
-    sessionFlip.setValue(0,true);
-    el.sessionTime.textContent='0:00:00';
-    el.taskTotal.textContent='0';
-    el.taskTime.textContent='0:00:00';
-    el.rateText.textContent='0';
-    hidePauseIndicator();
-    setControls();
-    
-    if(extraReward){
-      if(extraReward.type!=='hq'){ renderInventory(); }
-      pushToast(extraReward.message,'success');
-    }
-
-    setTimeout(() => {
-        onSegmentEnd_base(sessionSeconds, diff, pauses);
-        singleMissionJudge(sessionSeconds, diff, pauses);
-        openReward({ baseHQ: sessionHQ, seconds: sessionSeconds, difficulty: diff, rawHQ: sessionHQ });
-    }, 1800);
+    pushTodayDone({ title: t ? t.title : '未知任务', difficulty: diff, seconds: sessionSeconds, hq: sessionHQ, ts: Date.now() });
+    triggerCompletionAnimation(); const extraReward = grantTaskReward(t);
+    state.tasks = state.tasks.filter(task => task.id !== activeSession.taskId); if(state.selectedTaskId === activeSession.taskId) state.selectedTaskId = null;
+    save(); renderTasks(); renderKPI();
+    el.activeHint.textContent='未选择任务'; sessionFlip.setValue(0,true); el.sessionTime.textContent='0:00:00'; el.taskTotal.textContent='0';
+    el.taskTime.textContent='0:00:00'; el.rateText.textContent='0'; hidePauseIndicator(); setControls();
+    if(extraReward){ if(extraReward.type!=='hq'){ renderInventory(); } pushToast(extraReward.message,'success'); }
+    setTimeout(() => { onSegmentEnd_base(sessionSeconds, diff, pauses); singleMissionJudge(sessionSeconds, diff, pauses);
+        openReward({ baseHQ: sessionHQ, seconds: sessionSeconds, difficulty: diff, rawHQ: sessionHQ }); }, 1800);
   }
 
   let lastKnownTotalHQForDisplay = 0;
   function loop(){
-      if (state.active && !state.active.isPaused) {
-          const a = state.active;
-          const task = getTask(a.taskId);
-          if (task) {
-              const rate = rateOfActive();
-              const elapsedSinceStart = (Date.now() - a.startTime) / 1000;
-              const currentSessionSeconds = (a.accumulatedSeconds || 0) + elapsedSinceStart;
-              const currentSessionHQ = currentSessionSeconds * rate;
-              
-              sessionFlip.flipTo(Math.floor(currentSessionHQ));
-              el.sessionTime.textContent = fmtTime(currentSessionSeconds);
+      if (state.active && !state.active.isPaused) { const a = state.active; const task = getTask(a.taskId);
+          if (task) { const rate = rateOfActive(); const elapsedSinceStart = (Date.now() - a.startTime) / 1000;
+              const currentSessionSeconds = (a.accumulatedSeconds || 0) + elapsedSinceStart; const currentSessionHQ = currentSessionSeconds * rate;
+              sessionFlip.flipTo(Math.floor(currentSessionHQ)); el.sessionTime.textContent = fmtTime(currentSessionSeconds);
               el.taskTotal.textContent = Math.floor((task.totalHQ || 0) + currentSessionHQ);
               el.taskTime.textContent = fmtTime((task.totalSeconds || 0) + currentSessionSeconds);
-              
               lastKnownTotalHQForDisplay = Math.floor((state.agg.totalHQ || 0) + currentSessionHQ);
-              el.kpiTotalValue.textContent = lastKnownTotalHQForDisplay.toLocaleString('en-US');
-          }
-      } else if (state.active && state.active.isPaused) {
-          const pausedFor = (Date.now() - (state.active.pauseTime || Date.now())) / 1000;
-          showPauseIndicator(pausedFor);
-          el.kpiTotalValue.textContent = lastKnownTotalHQForDisplay.toLocaleString('en-US');
-      } else {
-          hidePauseIndicator();
-          lastKnownTotalHQForDisplay = Math.floor(state.agg.totalHQ || 0);
-          el.kpiTotalValue.textContent = lastKnownTotalHQForDisplay.toLocaleString('en-US');
-      }
+              el.kpiTotalValue.textContent = lastKnownTotalHQForDisplay.toLocaleString('en-US'); }
+      } else if (state.active && state.active.isPaused) { const pausedFor = (Date.now() - (state.active.pauseTime || Date.now())) / 1000;
+          showPauseIndicator(pausedFor); el.kpiTotalValue.textContent = lastKnownTotalHQForDisplay.toLocaleString('en-US');
+      } else { hidePauseIndicator(); lastKnownTotalHQForDisplay = Math.floor(state.agg.totalHQ || 0);
+          el.kpiTotalValue.textContent = lastKnownTotalHQForDisplay.toLocaleString('en-US'); }
       
-      // "You" page dynamic elements
-      if (activeView === 'you-pane') {
-        let statusText = '离线';
-        if (state.active) {
-            statusText = state.active.isPaused ? '休息中' : '专注中';
-        }
+      if (activeView === 'you-pane') { let statusText = '离线';
+        if (state.active) { statusText = state.active.isPaused ? '休息中' : '专注中'; }
         if (el.charStatusTag) el.charStatusTag.textContent = statusText;
-
-        const now = Date.now();
-        meta.buffs = (meta.buffs || []).filter(b => b.expiresAt > now);
-        
+        const now = Date.now(); meta.buffs = (meta.buffs || []).filter(b => b.expiresAt > now);
         const buffList = el.charBuffsList;
-        if (buffList) {
-            if (meta.buffs.length === 0) {
-                buffList.innerHTML = `<div class="char-buff-item muted">无</div>`;
-            } else {
-                buffList.innerHTML = meta.buffs.map(buff => {
-                    const remainingSec = Math.max(0, Math.floor((buff.expiresAt - now) / 1000));
+        if (buffList) { if (meta.buffs.length === 0) { buffList.innerHTML = `<div class="char-buff-item muted">无</div>`; } else {
+                buffList.innerHTML = meta.buffs.map(buff => { const remainingSec = Math.max(0, Math.floor((buff.expiresAt - now) / 1000));
                     const m = Math.floor(remainingSec / 60).toString().padStart(2, '0');
                     const s = (remainingSec % 60).toString().padStart(2, '0');
-                    return `<div class="char-buff-item">${buff.name}（剩余 ${m}:${s}）</div>`;
-                }).join('');
-            }
-        }
+                    return `<div class="char-buff-item">${buff.name}（剩余 ${m}:${s}）</div>`; }).join(''); } }
       }
-
+      renderHeaderStatus();
       requestAnimationFrame(loop);
   }
   
   document.addEventListener('visibilitychange',()=>{ if(document.hidden && state.active && !state.active.isPaused){ pauseTimer(); }});
   
-  function updateModeButton() {
-    if (!el.modeSwitchBtn) return;
-    const isArcade = !!meta.arcade;
-    el.modeSwitchBtn.textContent = isArcade ? '街机模式' : '专注模式';
-    el.modeSwitchBtn.classList.toggle('primary', !isArcade);
-  }
-
-  /* 事件绑定 */
-  if (el.modeSwitchBtn) {
-      el.modeSwitchBtn.addEventListener('click', () => {
-          playSound(sfx.click);
-          meta.arcade = !meta.arcade;
-          save();
-          updateModeButton();
-          pushToast(`已切换到${meta.arcade ? '街机' : '专注'}模式`);
-      });
-  }
-  
+  if (el.modeSwitchBtn) { el.modeSwitchBtn.addEventListener('click', () => { playSound(sfx.click); meta.arcade = !meta.arcade; save(); updateModeButton(); pushToast(`已切换到${meta.arcade ? '街机' : '专注'}模式`); }); }
   if (el.btnHelp) el.btnHelp.onclick=()=>{ playSound(sfx.modalOpen); el.helpMask.style.display='flex'; };
   el.btnCloseHelp.onclick=()=>{ playSound(sfx.modalClose); el.helpMask.style.display='none'; };
   el.btnCloseDev.onclick=()=>{ playSound(sfx.modalClose); el.devMask.style.display='none'; };
   el.btnSaveRates.onclick=()=>{ playSound(sfx.click); const r1=parseFloat(el.rate1.value)||0, r2=parseFloat(el.rate2.value)||0, r3=parseFloat(el.rate3.value)||0, r4=parseFloat(el.rate4.value)||0, r5=parseFloat(el.rate5.value)||0; RATE_BY_DIFFICULTY={1:Math.max(0,r1),2:Math.max(0,r2),3:Math.max(0,r3),4:Math.max(0,r4),5:Math.max(0,r5)}; save(); updateRate(); pushToast('速率已保存并应用','success'); };
   el.btnResetRates.onclick=()=>{ playSound(sfx.click); RATE_BY_DIFFICULTY={...DEFAULT_RATES}; save(); updateRate(); pushToast('已恢复默认速率','success'); };
-  
   el.btnAdd.onclick=addTask; el.taskTitle.addEventListener('keydown',e=>{ if(e.key==='Enter') addTask(); });
   el.btnClearAll.onclick=()=>{ playSound(sfx.click); if(confirm('清空所有任务与累计数据（不清空库存/连胜/每日/速率），确定？')){ state.tasks=[]; state.agg={totalHQ:0,totalSeconds:0}; state.active=null; save(); renderTasks(); renderKPI(); setControls(); el.activeHint.textContent='未选择任务'; sessionFlip.setValue(0,true); el.sessionTime.textContent='0:00:00'; el.taskTotal.textContent='0'; el.taskTime.textContent='0:00:00'; el.rateText.textContent='0'; } };
   el.btnStart.onclick=startTimer; el.btnPause.onclick=pauseTimer; el.btnStop.onclick=stopTimer;
 
-  // 统一处理桌面版和移动版按钮的点击事件
-  function setupButtonPair(mobileId, desktopId, callback) {
-      const mobileBtn = document.getElementById(mobileId);
-      const desktopBtn = document.getElementById(desktopId);
-      if (mobileBtn) mobileBtn.onclick = callback;
-      if (desktopBtn) desktopBtn.onclick = callback;
-  }
-  
-  const refreshMissionsAction = () => {
-    playSound(sfx.click);
-    const ok = rollMissions(false, false);
-    if (ok) {
-      save();
-      renderDaily();
-      renderInventory();
-      pushToast('已刷新每日任务', 'success');
-    }
-  };
-  
+  function setupButtonPair(mobileId, desktopId, callback) { const mobileBtn = document.getElementById(mobileId); const desktopBtn = document.getElementById(desktopId); if (mobileBtn) mobileBtn.onclick = callback; if (desktopBtn) desktopBtn.onclick = callback; }
+  const refreshMissionsAction = () => { playSound(sfx.click); const ok = rollMissions(false, false); if (ok) { save(); renderDaily(); renderInventory(); pushToast('已刷新每日任务', 'success'); } };
   el.btnDailyRefresh.onclick = refreshMissionsAction;
 
-/* 每日任务/库存（保留核心） */
-function todayObj(){
-  const k = todayKey();
-  if (!meta.daily[k]) {
-    meta.daily[k] = {
-      progressSec: 0,
-      hardSec: 0,
-      sessions: 0,
-      zeroPauseSessions: 0,
-      missions: null,
-      refreshUsed: false,
-      done: {},
-      completed: []
-    };
-  }
-  if (!Array.isArray(meta.daily[k].completed)) {
-    meta.daily[k].completed = [];
-  }
-  return meta.daily[k];
-}
+function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] = { progressSec: 0, hardSec: 0, sessions: 0, zeroPauseSessions: 0, missions: null, refreshUsed: false, done: {}, completed: [] }; } if (!Array.isArray(meta.daily[k].completed)) { meta.daily[k].completed = []; } return meta.daily[k]; }
   const FIXED_MISSIONS=[{id:'total25',type:'totalSec',need:25*60,label:'今日累计 ≥ 25 分钟',reward:{ticket:1}},{id:'total45',type:'totalSec',need:45*60,label:'今日累计 ≥ 45 分钟',reward:{freeze:1}}];
   const RANDOM_POOL=[{id:'total90',type:'totalSec',need:90*60,label:'今日累计 ≥ 90 分钟',reward:{ticket:2}},{id:'single15',type:'singleSec',need:15*60,label:'单次 ≥ 15 分钟',reward:{ticket:1}},{id:'single30',type:'singleSec',need:30*60,label:'单次 ≥ 30 分钟',reward:{ticket:2}},{id:'hard20',type:'hardSec',need:20*60,label:'难度≥4 今日累计 ≥ 20 分钟',reward:{ticket:1}},{id:'noPause10',type:'noPauseSingle',need:10*60,label:'单次 ≥ 10 分钟且无暂停',reward:{freeze:1}},{id:'sessions3',type:'sessions',need:3,label:'今日完成 ≥ 3 次计时',reward:{ticket:1}}];
   function addTodayProgress({seconds,difficulty,pauses}){const d=todayObj(); d.progressSec+=seconds; if(difficulty>=4) d.hardSec+=seconds; d.sessions+=1; if(pauses===0 && seconds>=10*60) d.zeroPauseSessions+=1; save(); renderDaily();}
   function onSegmentEnd_base(seconds,difficulty,pauses){ if(seconds>=ECON.baseFloorMinSec){ meta.streak=+(meta.streak+ECON.streakStep).toFixed(2)} addTodayProgress({seconds,difficulty,pauses}); save(); }
   function singleMissionJudge(seconds,diff,pauses){ const d=todayObj(); if(!d.missions) return; d.missions.forEach(m=>{ if(d.done[m.id]) return; if(m.type==='singleSec' && seconds>=m.need) d.done[m.id]=true; if(m.type==='noPauseSingle' && seconds>=m.need && pauses===0) d.done[m.id]=true; }); save(); renderDaily(); }
   function rollMissions(firstFree=false,useRare=false){
-    const d=todayObj();
-    if(useRare){ if((meta.badges.rare_gem||0)<6){alert('稀有碎片不足');return false;} meta.badges.rare_gem-=6; }
+    const d=todayObj(); if(useRare){ if((meta.badges.rare_gem||0)<6){alert('稀有碎片不足');return false;} meta.badges.rare_gem-=6; }
     else{ if(d.refreshUsed && (meta.tickets||0)<=0){alert('抽卡券不足（每日首次刷新免费）');return false;} if(d.refreshUsed) meta.tickets-=1; }
     d.refreshUsed=true; const pool=[...RANDOM_POOL], pick=[]; for(let i=0;i<3;i++){const j=Math.floor(Math.random()*pool.length); pick.push(pool.splice(j,1)[0]);}
     d.missions=[...FIXED_MISSIONS,...pick]; d.done={}; save(); renderDaily(); renderInventory(); return true;
   }
   function renderDaily(){
-    const d=todayObj(); if(!d.missions){rollMissions(true);return}
-    const fragment = document.createDocumentFragment();
-    d.missions.forEach(m=>{
-      const ok=(()=>{if(m.type==='totalSec')return d.progressSec>=m.need; if(m.type==='hardSec')return d.hardSec>=m.need; if(m.type==='sessions')return d.sessions>=m.need; return false})();
-      const done=!!d.done[m.id];
-      const progress=(()=>{if(m.type==='totalSec')return `${fmtTime(Math.min(d.progressSec,m.need))}/${fmtTime(m.need)}`; if(m.type==='hardSec')return `${fmtTime(Math.min(d.hardSec,m.need))}/${fmtTime(m.need)}`; if(m.type==='sessions')return `${Math.min(d.sessions,m.need)}/${m.need}`; if(m.type==='singleSec')return `完成一次 ≥ ${fmtTime(m.need)}`; if(m.type==='noPauseSingle')return `完成一次 ≥ ${fmtTime(m.need)}(0暂停)`; return ''})();
-      const buttonText = done ? '已领取' : '领取';
-      
-      const row = document.createElement('div');
-      row.className = 'daily-task-card';
-      row.innerHTML = `
-        <div class="daily-task-info">
-            <div class="daily-task-label">${m.label}</div>
-            <div class="daily-task-progress muted">${progress ? `${progress}` : ''}</div>
-        </div>
-        <div class="daily-task-action">
-            <button class="btn small" ${(!ok || done) ? 'disabled' : ''}>${buttonText}</button>
-        </div>`;
-      
+    const d=todayObj(); if(!d.missions){rollMissions(true);return} const fragment = document.createDocumentFragment();
+    d.missions.forEach(m=>{ const ok=(()=>{if(m.type==='totalSec')return d.progressSec>=m.need; if(m.type==='hardSec')return d.hardSec>=m.need; if(m.type==='sessions')return d.sessions>=m.need; return false})();
+      const done=!!d.done[m.id]; const progress=(()=>{if(m.type==='totalSec')return `${fmtTime(Math.min(d.progressSec,m.need))}/${fmtTime(m.need)}`; if(m.type==='hardSec')return `${fmtTime(Math.min(d.hardSec,m.need))}/${fmtTime(m.need)}`; if(m.type==='sessions')return `${Math.min(d.sessions,m.need)}/${m.need}`; if(m.type==='singleSec')return `完成一次 ≥ ${fmtTime(m.need)}`; if(m.type==='noPauseSingle')return `完成一次 ≥ ${fmtTime(m.need)}(0暂停)`; return ''})();
+      const buttonText = done ? '已领取' : '领取'; const row = document.createElement('div'); row.className = 'daily-task-card';
+      row.innerHTML = `<div class="daily-task-info"> <div class="daily-task-label">${m.label}</div> <div class="daily-task-progress muted">${progress ? `${progress}` : ''}</div> </div> <div class="daily-task-action"> <button class="btn small" ${(!ok || done) ? 'disabled' : ''}>${buttonText}</button> </div>`;
       row.querySelector('button').onclick=()=>{ if(done||!ok)return; playSound(sfx.success); d.done[m.id]=true; if(m.reward.ticket)meta.tickets=(meta.tickets||0)+m.reward.ticket; if(m.reward.freeze)meta.freeze=(meta.freeze||0)+m.reward.freeze; save(); renderDaily(); renderInventory(); };
-      fragment.appendChild(row);
-    });
-    el.dailyList.innerHTML = '';
-    el.dailyList.appendChild(fragment);
+      fragment.appendChild(row); });
+    el.dailyList.innerHTML = ''; el.dailyList.appendChild(fragment);
   }
 
   function renderInventory(){
-    ensureBadgeMeta();
-    const b=meta.badges||{}; const buff=todayBuff();
+    ensureBadgeMeta(); const b=meta.badges||{}; const buff=todayBuff();
     el.invRow.innerHTML=`<div class="badge">稀有碎片：<b>${b.rare_gem||0}</b></div><div class="badge">史诗碎片：<b>${b.epic_gem||0}</b></div><div class="badge">稀有徽章：<b>${b.rare_tokens||0}</b></div><div class="badge">史诗徽章：<b>${b.epic_tokens||0}</b></div><div class="badge">传说徽章：<b>${b.legendary_tokens||0}</b></div><div class="badge">冻结卡：<b>${meta.freeze||0}</b></div><div class="badge">抽卡券：<b>${meta.tickets||0}</b></div><div class="badge">当日速率加成：<b>${Math.round((buff.rateBuff||0)*100)}%</b></div>${meta.nextWheelBoost>1?`<div class="badge">下一次幸运轮奖池 ×${meta.nextWheelBoost.toFixed(2)}</div>`:''}`;
-    // [fix] 库存变化时同步刷新工坊按钮状态
     renderWorkshop();
   }
 
-  // [fix] 实现徽章工坊渲染逻辑
   function renderWorkshop(){
-    const body = el.badgeWorkshopBody;
-    if (!body) return;
-    ensureBadgeMeta();
-    const b = meta.badges || {};
-    const rare = b.rare_gem || 0;
-    const epic = b.epic_gem || 0;
-
-    body.innerHTML = `
-      <div class="workshop-section">
-        <div class="muted" style="margin-bottom:6px">碎片库存</div>
-        <div class="badge-card">稀有碎片：<b>${rare}</b> · 史诗碎片：<b>${epic}</b></div>
-      </div>
-      <div class="workshop-section">
-        <div class="muted" style="margin-bottom:6px">合成与消耗</div>
-        <div class="loadout-grid">
-          <div class="loadout-slot">
-            <div class="muted">合成冻结卡（稀有×15）</div>
-            <button class="btn small" id="wsForgeFreeze"${rare<15?' disabled':''}>锻造</button>
-          </div>
-          <div class="loadout-slot">
-            <div class="muted">刷新每日（稀有×6）</div>
-            <button class="btn small" id="wsRareRefresh"${rare<6?' disabled':''}>使用</button>
-          </div>
-          <div class="loadout-slot">
-            <div class="muted">幸运轮强运（稀有×10）</div>
-            <button class="btn small" id="wsWheelBoost"${rare<10?' disabled':''}>注入</button>
-          </div>
-          <div class="loadout-slot">
-            <div class="muted">调速芯片 +5%（稀有×20，上限20%）</div>
-            <button class="btn small" id="wsSpeedChip"${rare<20?' disabled':''}>安装</button>
-          </div>
-        </div>
-      </div>
-    `;
-
-    // 绑定工坊按钮
+    const body = el.badgeWorkshopBody; if (!body) return; ensureBadgeMeta(); const b = meta.badges || {};
+    const rare = b.rare_gem || 0; const epic = b.epic_gem || 0;
+    body.innerHTML = ` <div class="workshop-section"> <div class="muted" style="margin-bottom:6px">碎片库存</div> <div class="badge-card">稀有碎片：<b>${rare}</b> · 史诗碎片：<b>${epic}</b></div> </div> <div class="workshop-section"> <div class="muted" style="margin-bottom:6px">合成与消耗</div> <div class="loadout-grid"> <div class="loadout-slot"> <div class="muted">合成冻结卡（稀有×15）</div> <button class="btn small" id="wsForgeFreeze"${rare<15?' disabled':''}>锻造</button> </div> <div class="loadout-slot"> <div class="muted">刷新每日（稀有×6）</div> <button class="btn small" id="wsRareRefresh"${rare<6?' disabled':''}>使用</button> </div> <div class="loadout-slot"> <div class="muted">幸运轮强运（稀有×10）</div> <button class="btn small" id="wsWheelBoost"${rare<10?' disabled':''}>注入</button> </div> <div class="loadout-slot"> <div class="muted">调速芯片 +5%（稀有×20，上限20%）</div> <button class="btn small" id="wsSpeedChip"${rare<20?' disabled':''}>安装</button> </div> </div> </div> `;
     const bind = (id, fn) => { const x = document.getElementById(id); if (x) x.onclick = fn; };
-    bind('wsForgeFreeze', forgeFreeze);
-    bind('wsRareRefresh', rareRefresh);
-    bind('wsWheelBoost', activateWheelBoost);
-    bind('wsSpeedChip', applySpeedChip);
+    bind('wsForgeFreeze', forgeFreeze); bind('wsRareRefresh', rareRefresh); bind('wsWheelBoost', activateWheelBoost); bind('wsSpeedChip', applySpeedChip);
   }
 
   function forgeFreeze(){ playSound(sfx.click); if((meta.badges.rare_gem||0)<15){alert('稀有碎片不足');return;} meta.badges.rare_gem-=15; meta.freeze=(meta.freeze||0)+1; save(); renderInventory(); pushToast('锻造成功，获得冻结卡×1','success'); }
@@ -2117,423 +1747,344 @@ function todayObj(){
   function activateWheelBoost(){ playSound(sfx.click); if((meta.badges.rare_gem||0)<10){alert('稀有碎片不足');return;} meta.badges.rare_gem-=10; meta.nextWheelBoost=Math.min((meta.nextWheelBoost||1)*1.5,3); save(); renderInventory(); pushToast('已注入强运，下一次幸运轮提升','success'); }
   function applySpeedChip(){ playSound(sfx.click); if((meta.badges.rare_gem||0)<20){alert('稀有碎片不足');return;} const buff=todayBuff(); if(buff.rateBuff>=0.20){alert('今日加成已达上限');return;} meta.badges.rare_gem-=20; buff.rateBuff=+(Math.min(0.20,(buff.rateBuff||0)+0.05).toFixed(2)); save(); renderInventory(); updateRate(); pushToast('当日基础速率 +5%','success'); }
   
-  /* 任务库逻辑 */
-  const openTaskLibrary = () => { playSound(sfx.modalOpen); el.taskLibraryMask.style.display = 'flex'; };
-  el.btnTaskLibrary.onclick = openTaskLibrary;
-
+  const openTaskLibrary = () => { playSound(sfx.modalOpen); el.taskLibraryMask.style.display = 'flex'; }; el.btnTaskLibrary.onclick = openTaskLibrary;
   if(el.btnCloseTaskLibrary) el.btnCloseTaskLibrary.onclick=()=>{ playSound(sfx.modalClose); el.taskLibraryMask.style.display='none'; };
   if(el.btnImportTasks) el.btnImportTasks.onclick=()=>{
-    playSound(sfx.click);
-    const inputText = (el.taskLibraryInput.value||'').trim(); if(!inputText){ pushToast('任务库输入为空','warn'); return; }
+    playSound(sfx.click); const inputText = (el.taskLibraryInput.value||'').trim(); if(!inputText){ pushToast('任务库输入为空','warn'); return; }
     const lines = inputText.split('\n'); let imported=0;
-    lines.forEach(line=>{
-      const s=line.trim(); if(!s) return;
-      const parts = s.split('|');
-      if(parts.length<2){ pushToast(`跳过无效行: ${s}`,'warn'); return; }
-      const title=parts[0].trim(); const difficulty=parseInt((parts[1]||'').trim(),10);
+    lines.forEach(line=>{ const s=line.trim(); if(!s) return; const parts = s.split('|');
+      if(parts.length<2){ pushToast(`跳过无效行: ${s}`,'warn'); return; } const title=parts[0].trim(); const difficulty=parseInt((parts[1]||'').trim(),10);
       if(!title || isNaN(difficulty) || difficulty<1 || difficulty>5){ pushToast(`跳过无效任务: ${s}`,'warn'); return; }
-      let reward=null;
-      const rewardTypeKey=(parts[2]||'').trim().toLowerCase();
-      if(rewardTypeKey){
-        if(!REWARD_TYPES[rewardTypeKey]){ pushToast(`未知奖励类型：${rewardTypeKey}`,'warn'); return; }
+      let reward=null; const rewardTypeKey=(parts[2]||'').trim().toLowerCase();
+      if(rewardTypeKey){ if(!REWARD_TYPES[rewardTypeKey]){ pushToast(`未知奖励类型：${rewardTypeKey}`,'warn'); return; }
         const amountRaw=parts[3]!==undefined?parts[3].trim():''; const amountVal=amountRaw?Number(amountRaw):1;
         if(Number.isNaN(amountVal)){ pushToast(`奖励数量无效：${s}`,'warn'); return; }
-        reward={type:rewardTypeKey,amount:normalizeRewardAmount(amountVal||1)};
-      }
-      state.tasks.unshift({id:uid(), title, difficulty, totalHQ:0, totalSeconds:0, reward}); imported++;
-    });
+        reward={type:rewardTypeKey,amount:normalizeRewardAmount(amountVal||1)}; }
+      state.tasks.unshift({id:uid(), title, difficulty, totalHQ:0, totalSeconds:0, reward}); imported++; });
     if(imported>0){ save(); renderTasks(); pushToast(`成功导入 ${imported} 个任务`,'success'); el.taskLibraryInput.value=''; } else { pushToast('未导入任何任务','warn'); }
   };
 
-  /* 今日已完成 */
-  const openTodayDone = () => {
-    playSound(sfx.modalOpen);
-    renderTodayDone();
-    el.todayDoneMask.style.display = 'flex';
-  };
+  const openTodayDone = () => { playSound(sfx.modalOpen); renderTodayDone(); el.todayDoneMask.style.display = 'flex'; };
   el.btnTodayDone.onclick = openTodayDone;
-  el.btnCloseTodayDone.onclick = () => {
-    playSound(sfx.modalClose);
-    el.todayDoneMask.style.display = 'none';
-  };
-
-  /* 幸运轮入口 */
+  el.btnCloseTodayDone.onclick = () => { playSound(sfx.modalClose); el.todayDoneMask.style.display = 'none'; };
   el.btnSpin.onclick=startNameTicker;
   
-  /* ================================
-   *           "你" 页面逻辑
-   * ================================ */
   function renderYou() {
-    ensureBadgeMeta();
-    const {
-      avatarUploader, charNameInput, charTitleInput, charStatusTag,
-      charLevelText, charTotalHQText
-    } = el;
-    
-    // Data calculation
-    const totalHQ = state.agg.totalHQ || 0;
-    const hqForLevelUp = 1000;
-    const currentLevel = Math.floor(totalHQ / hqForLevelUp) + 1;
-    const nextLevel = currentLevel + 1;
-    const currentLevelBaseHQ = (currentLevel - 1) * hqForLevelUp;
-    const hqInCurrentLevel = totalHQ - currentLevelBaseHQ;
+    ensureBadgeMeta(); const { avatarUploader, charNameInput, charTitleInput, charLevelText, charTotalHQText } = el;
+    const totalHQ = state.agg.totalHQ || 0; const hqForLevelUp = 1000;
+    const currentLevel = Math.floor(totalHQ / hqForLevelUp) + 1; const nextLevel = currentLevel + 1;
+    const currentLevelBaseHQ = (currentLevel - 1) * hqForLevelUp; const hqInCurrentLevel = totalHQ - currentLevelBaseHQ;
     const hqNeeded = hqForLevelUp - hqInCurrentLevel;
-    
-    // New Block EXP Bar Logic
-    const expLevelNowEl = document.getElementById("expLevelNow");
-    const expLevelNextEl = document.getElementById("expLevelNext");
-    const expBarFillEl = document.getElementById("expBarFill");
-    const expValueTextEl = document.getElementById("expValueText");
+    const expLevelNowEl = document.getElementById("expLevelNow"); const expLevelNextEl = document.getElementById("expLevelNext");
+    const expBarFillEl = document.getElementById("expBarFill"); const expValueTextEl = document.getElementById("expValueText");
     const expGapEl = document.querySelector(".exp-bar-info .exp-gap");
-
-    if (expLevelNowEl) expLevelNowEl.textContent = currentLevel;
-    if (expLevelNextEl) expLevelNextEl.textContent = nextLevel;
-    
-    if (expBarFillEl) {
-        const percent = Math.min(99.5, (hqInCurrentLevel / hqForLevelUp) * 100);
-        expBarFillEl.style.width = `${percent}%`;
-    }
-    
+    if (expLevelNowEl) expLevelNowEl.textContent = currentLevel; if (expLevelNextEl) expLevelNextEl.textContent = nextLevel;
+    if (expBarFillEl) { const percent = Math.min(99.5, (hqInCurrentLevel / hqForLevelUp) * 100); expBarFillEl.style.width = `${percent}%`; }
     if (expValueTextEl) expValueTextEl.textContent = `${Math.floor(hqInCurrentLevel)} / ${hqForLevelUp}`;
     if (expGapEl) expGapEl.textContent = `距下级：${Math.ceil(hqNeeded)} 豪情值`;
-    
-    // Render Character Card
     avatarUploader.style.backgroundImage = meta.character.avatar ? `url(${meta.character.avatar})` : 'none';
     if (!meta.character.avatar) avatarUploader.innerHTML = '点击<br>上传头像'; else avatarUploader.innerHTML = '';
-    
-    charNameInput.value = meta.character.name;
-    charTitleInput.value = meta.character.title;
-    charLevelText.textContent = `Lv. ${currentLevel}`;
-    charTotalHQText.textContent = `${Math.floor(totalHQ).toLocaleString()} HQ`;
+    charNameInput.value = meta.character.name; charTitleInput.value = meta.character.title;
+    charLevelText.textContent = `Lv. ${currentLevel}`; charTotalHQText.textContent = `${Math.floor(totalHQ).toLocaleString()} HQ`;
   }
   
   if (el.avatarUploader) {
     el.avatarUploader.onclick = () => el.avatarInput.click();
-    
     const resizeImage = (file, maxWidth, maxHeight, quality) => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = e => {
-                const img = new Image();
-                img.onload = () => {
-                    let width = img.width;
-                    let height = img.height;
+        return new Promise((resolve, reject) => { const reader = new FileReader();
+            reader.onload = e => { const img = new Image(); img.onload = () => { let width = img.width; let height = img.height;
+                    if (width > height) { if (width > maxWidth) { height *= maxWidth / width; width = maxWidth; } } else { if (height > maxHeight) { width *= maxHeight / height; height = maxHeight; } }
+                    const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
+                    const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
+                    resolve(canvas.toDataURL('image/jpeg', quality)); };
+                img.onerror = reject; img.src = e.target.result; };
+            reader.onerror = reject; reader.readAsDataURL(file); }); };
 
-                    if (width > height) {
-                        if (width > maxWidth) {
-                            height *= maxWidth / width;
-                            width = maxWidth;
-                        }
-                    } else {
-                        if (height > maxHeight) {
-                            width *= maxHeight / height;
-                            height = maxHeight;
-                        }
-                    }
-
-                    const canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
-                    resolve(canvas.toDataURL('image/jpeg', quality));
-                };
-                img.onerror = reject;
-                img.src = e.target.result;
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
-    };
-
-    el.avatarInput.onchange = async e => {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        el.avatarUploader.innerHTML = '处理中...';
-        el.avatarInput.value = ''; // Clear input for re-selection of same file
-
-        try {
-            // Resize to max 256x256, 80% JPEG quality for performance
-            const base64String = await resizeImage(file, 256, 256, 0.8);
-            meta.character.avatar = base64String;
-            save();
-            renderYou();
-            pushToast('头像已更新', 'success');
-        } catch (error) {
-            console.error("Avatar processing failed:", error);
-            pushToast('头像处理失败', 'warn');
-            renderYou(); // Restore previous state
-        }
-    };
+    el.avatarInput.onchange = async e => { const file = e.target.files[0]; if (!file) return; el.avatarUploader.innerHTML = '处理中...'; el.avatarInput.value = '';
+        try { const base64String = await resizeImage(file, 256, 256, 0.8); meta.character.avatar = base64String;
+            save(); renderYou(); pushToast('头像已更新', 'success');
+        } catch (error) { console.error("Avatar processing failed:", error); pushToast('头像处理失败', 'warn'); renderYou(); } };
   }
 
-  if (el.charNameInput) {
-    el.charNameInput.onblur = () => {
-      meta.character.name = el.charNameInput.value.trim();
-      save();
-    };
-  }
-  if (el.charTitleInput) {
-    el.charTitleInput.onblur = () => {
-      meta.character.title = el.charTitleInput.value.trim();
-      save();
-    };
-  }
+  if (el.charNameInput) { el.charNameInput.onblur = () => { meta.character.name = el.charNameInput.value.trim(); save(); }; }
+  if (el.charTitleInput) { el.charTitleInput.onblur = () => { meta.character.title = el.charTitleInput.value.trim(); save(); }; }
 
+  function renderInitial(){ renderTasks(); renderKPI(); renderDaily(); renderInventory(); renderWorkshop(); renderFunshop(); renderYou(); renderHeaderStatus(); hidePauseIndicator(); setControls(); updateModeButton();}
 
-  /* 首渲染 */
-  function renderInitial(){ renderTasks(); renderKPI(); renderDaily(); renderInventory(); renderWorkshop(); renderFunshop(); renderYou(); hidePauseIndicator(); setControls(); updateModeButton();}
-  renderInitial();
-
-  /* —— Funshop 事件绑定 —— */
-  if(el.btnFunshopEdit) el.btnFunshopEdit.onclick=()=>{
-    playSound(sfx.modalOpen);
-    const acts=meta.funshop.activities||[];
-    const lines=acts.map(a=>{
-      const need=Object.entries(a.need||{}).map(([k,v])=>`${k}*${v}`).join(',');
+  if(el.btnFunshopEdit) el.btnFunshopEdit.onclick=()=>{ playSound(sfx.modalOpen); const acts=meta.funshop.activities||[];
+    const lines=acts.map(a=>{ const need=Object.entries(a.need||{}).map(([k,v])=>`${k}*${v}`).join(',');
       const wear=Object.entries(a.wear||{}).map(([k,v])=>`${k}*${v}`).join(',');
       const win=a.timeWindow?`${a.timeWindow.start}-${a.timeWindow.end}`:'';
-      return `${a.title}|${a.seconds}|需求: ${need}|磨损: ${wear}|时段: ${win}`;
-    }).join('\n');
-    if(el.funshopInput) el.funshopInput.value=lines;
-    el.funshopEditMask.style.display='flex';
-  };
+      return `${a.title}|${a.seconds}|需求: ${need}|磨损: ${wear}|时段: ${win}`; }).join('\n');
+    if(el.funshopInput) el.funshopInput.value=lines; el.funshopEditMask.style.display='flex'; };
   if(el.btnCloseFunshopEdit) el.btnCloseFunshopEdit.onclick=()=>{ playSound(sfx.modalClose); el.funshopEditMask.style.display='none'; };
-  if(el.btnFunshopImport) el.btnFunshopImport.onclick=()=>{
-    playSound(sfx.click);
-    const text=(el.funshopInput.value||'').trim();
-    const acts=parseFunshopLines(text);
-    meta.funshop.activities=acts;
-    save(); renderFunshop();
-    pushToast('已导入娱乐活动','success');
-  };
+  if(el.btnFunshopImport) el.btnFunshopImport.onclick=()=>{ playSound(sfx.click); const text=(el.funshopInput.value||'').trim();
+    const acts=parseFunshopLines(text); meta.funshop.activities=acts; save(); renderFunshop(); pushToast('已导入娱乐活动','success'); };
   
   const btnCopyFunshopFormat = document.getElementById('btnCopyFunshopFormat');
-  if(btnCopyFunshopFormat) {
-    btnCopyFunshopFormat.onclick = () => {
-      playSound(sfx.click);
-      const textToCopy = `放松呼吸训练|300|需求: rare_token*1|磨损: rare_token*5|
-豪情轮盘挑战|180|需求: epic_token*1|磨损: epic_token*8|时段: 19:00-23:00
-街机小游园|120|需求: rare_token*1|磨损: rare_token*3,ticket*1|`;
-      navigator.clipboard.writeText(textToCopy.trim()).then(() => {
-          pushToast('已复制示例格式到剪贴板', 'success');
-      }).catch(err => {
-          pushToast('复制失败', 'warn');
-          console.error('Copy failed', err);
-      });
-    };
-  }
+  if(btnCopyFunshopFormat) { btnCopyFunshopFormat.onclick = () => { playSound(sfx.click);
+      const textToCopy = `放松呼吸训练|300|需求: rare_token*1|磨损: rare_token*5|\n豪情轮盘挑战|180|需求: epic_token*1|磨损: epic_token*8|时段: 19:00-23:00\n街机小游园|120|需求: rare_token*1|磨损: rare_token*3,ticket*1|`;
+      navigator.clipboard.writeText(textToCopy.trim()).then(() => { pushToast('已复制示例格式到剪贴板', 'success');
+      }).catch(err => { pushToast('复制失败', 'warn'); console.error('Copy failed', err); }); }; }
   
-  /* --- 新增的移动端交互 --- */
-  // "你"页面的帮助按钮（移动端）
   const youPageHelpBtn = document.getElementById('youPageHelpBtn');
-  if (youPageHelpBtn) {
-    youPageHelpBtn.onclick = () => {
-        playSound(sfx.modalOpen);
-        if (el.helpMask) el.helpMask.style.display = 'flex';
-    };
-  }
+  if (youPageHelpBtn) { youPageHelpBtn.onclick = () => { playSound(sfx.modalOpen); if (el.helpMask) el.helpMask.style.display = 'flex'; }; }
   
-  // 调试后门
   const valorChip = document.getElementById('totalValorChip');
-  if (valorChip) {
-    let valorClickCount = 0;
-    let valorClickTimer = null;
-    valorChip.addEventListener('click', () => {
-      valorClickCount++;
-      if (valorClickTimer) clearTimeout(valorClickTimer);
-      valorClickTimer = setTimeout(() => { valorClickCount = 0; }, 600); // Reset after 600ms
-      if (valorClickCount === 3) {
-        valorClickCount = 0;
-        clearTimeout(valorClickTimer);
-        
-        // Populate and show the debug modal
-        if (el.devMask) {
-            playSound(sfx.modalOpen);
+  if (valorChip) { let valorClickCount = 0; let valorClickTimer = null;
+    valorChip.addEventListener('click', () => { valorClickCount++; if (valorClickTimer) clearTimeout(valorClickTimer);
+      valorClickTimer = setTimeout(() => { valorClickCount = 0; }, 600);
+      if (valorClickCount === 3) { valorClickCount = 0; clearTimeout(valorClickTimer);
+        if (el.devMask) { playSound(sfx.modalOpen);
             el.rate1.value=RATE_BY_DIFFICULTY[1]; el.rate2.value=RATE_BY_DIFFICULTY[2]; el.rate3.value=RATE_BY_DIFFICULTY[3]; el.rate4.value=RATE_BY_DIFFICULTY[4]; el.rate5.value=RATE_BY_DIFFICULTY[5];
-            
-            el.devRewardBaseChance.value = REWARD_PARAMS.baseChance;
-            el.devRewardBetCoeff.value = REWARD_PARAMS.betCoefficient;
-            el.devRewardMaxChance.value = REWARD_PARAMS.maxChance;
-            el.devRewardPityInc.value = REWARD_PARAMS.pityIncrement;
-
-            ensureBadgeMeta();
-            const b = meta.badges || {};
-            el.devTotalHQ.value = Math.floor(state.agg.totalHQ || 0);
-            el.devTickets.value = meta.tickets || 0;
-            el.devFreeze.value = meta.freeze || 0;
-            el.devRareGem.value = b.rare_gem || 0;
-            el.devEpicGem.value = b.epic_gem || 0;
-            el.devRareToken.value = b.rare_tokens || 0;
-            el.devEpicToken.value = b.epic_tokens || 0;
-            el.devLegendToken.value = b.legendary_tokens || 0;
-
-            el.devMask.style.display = 'flex';
-        }
-      }
-    });
-  }
+            el.devRewardBaseChance.value = REWARD_PARAMS.baseChance; el.devRewardBetCoeff.value = REWARD_PARAMS.betCoefficient;
+            el.devRewardMaxChance.value = REWARD_PARAMS.maxChance; el.devRewardPityInc.value = REWARD_PARAMS.pityIncrement;
+            ensureBadgeMeta(); const b = meta.badges || {};
+            el.devTotalHQ.value = Math.floor(state.agg.totalHQ || 0); el.devTickets.value = meta.tickets || 0;
+            el.devFreeze.value = meta.freeze || 0; el.devRareGem.value = b.rare_gem || 0; el.devEpicGem.value = b.epic_gem || 0;
+            el.devRareToken.value = b.rare_tokens || 0; el.devEpicToken.value = b.epic_tokens || 0; el.devLegendToken.value = b.legendary_tokens || 0;
+            el.devMask.style.display = 'flex'; } } }); }
   
-  // Dev Panel Actions
-  if (el.btnSaveResources) {
-    el.btnSaveResources.onclick = () => {
-      playSound(sfx.click);
-      const p = s => parseInt(s, 10) || 0;
-      state.agg.totalHQ = p(el.devTotalHQ.value);
-      meta.tickets = p(el.devTickets.value);
-      meta.freeze = p(el.devFreeze.value);
-      ensureBadgeMeta();
-      meta.badges.rare_gem = p(el.devRareGem.value);
-      meta.badges.epic_gem = p(el.devEpicGem.value);
-      meta.badges.rare_tokens = p(el.devRareToken.value);
-      meta.badges.epic_tokens = p(el.devEpicToken.value);
+  if (el.btnSaveResources) { el.btnSaveResources.onclick = () => { playSound(sfx.click); const p = s => parseInt(s, 10) || 0;
+      state.agg.totalHQ = p(el.devTotalHQ.value); meta.tickets = p(el.devTickets.value); meta.freeze = p(el.devFreeze.value);
+      ensureBadgeMeta(); meta.badges.rare_gem = p(el.devRareGem.value); meta.badges.epic_gem = p(el.devEpicGem.value);
+      meta.badges.rare_tokens = p(el.devRareToken.value); meta.badges.epic_tokens = p(el.devEpicToken.value);
       meta.badges.legendary_tokens = p(el.devLegendToken.value);
-      save();
-      renderKPI();
-      renderInventory();
-      pushToast('资源已更新', 'success');
-    };
-  }
+      save(); renderKPI(); renderInventory(); pushToast('资源已更新', 'success'); }; }
 
-  if (el.btnSaveRewardParams) {
-    el.btnSaveRewardParams.onclick = () => {
-      playSound(sfx.click);
-      const p = s => parseFloat(s) || 0;
-      REWARD_PARAMS.baseChance = p(el.devRewardBaseChance.value);
-      REWARD_PARAMS.betCoefficient = p(el.devRewardBetCoeff.value);
-      REWARD_PARAMS.maxChance = p(el.devRewardMaxChance.value);
-      REWARD_PARAMS.pityIncrement = p(el.devRewardPityInc.value);
-      save();
-      pushToast('奖励赔率已保存', 'success');
-    };
-  }
+  if (el.btnSaveRewardParams) { el.btnSaveRewardParams.onclick = () => { playSound(sfx.click); const p = s => parseFloat(s) || 0;
+      REWARD_PARAMS.baseChance = p(el.devRewardBaseChance.value); REWARD_PARAMS.betCoefficient = p(el.devRewardBetCoeff.value);
+      REWARD_PARAMS.maxChance = p(el.devRewardMaxChance.value); REWARD_PARAMS.pityIncrement = p(el.devRewardPityInc.value);
+      save(); pushToast('奖励赔率已保存', 'success'); }; }
   
-  if (el.btnResetRewardParams) {
-    el.btnResetRewardParams.onclick = () => {
-      playSound(sfx.click);
-      REWARD_PARAMS = { ...DEFAULT_REWARD_PARAMS };
-      el.devRewardBaseChance.value = REWARD_PARAMS.baseChance;
-      el.devRewardBetCoeff.value = REWARD_PARAMS.betCoefficient;
-      el.devRewardMaxChance.value = REWARD_PARAMS.maxChance;
-      el.devRewardPityInc.value = REWARD_PARAMS.pityIncrement;
-      save();
-      pushToast('已恢复默认赔率', 'success');
-    };
-  }
+  if (el.btnResetRewardParams) { el.btnResetRewardParams.onclick = () => { playSound(sfx.click); REWARD_PARAMS = { ...DEFAULT_REWARD_PARAMS };
+      el.devRewardBaseChance.value = REWARD_PARAMS.baseChance; el.devRewardBetCoeff.value = REWARD_PARAMS.betCoefficient;
+      el.devRewardMaxChance.value = REWARD_PARAMS.maxChance; el.devRewardPityInc.value = REWARD_PARAMS.pityIncrement;
+      save(); pushToast('已恢复默认赔率', 'success'); }; }
 
-  if (el.btnSimulateNextDay) {
-    el.btnSimulateNextDay.onclick = () => {
-        playSound(sfx.click);
-        window._debugDateOffset = (window._debugDateOffset || 0) + 1;
-        renderInitial();
-        pushToast(`已模拟到下一天 (${getToday().toLocaleDateString()})`, 'success');
-    };
-  }
-  
-  if (el.btnResetDaily) {
-      el.btnResetDaily.onclick = () => {
-          playSound(sfx.click);
-          const d = todayObj();
+  if (el.btnSimulateNextDay) { el.btnSimulateNextDay.onclick = () => { playSound(sfx.click); window._debugDateOffset = (window._debugDateOffset || 0) + 1; renderInitial(); pushToast(`已模拟到下一天 (${getToday().toLocaleDateString()})`, 'success'); }; }
+  if (el.btnResetDaily) { el.btnResetDaily.onclick = () => { playSound(sfx.click); const d = todayObj();
           d.progressSec = 0; d.hardSec = 0; d.sessions = 0; d.zeroPauseSessions = 0; d.missions = null; d.refreshUsed = false; d.done = {};
-          rollMissions(true);
-          save();
-          renderDaily();
-          pushToast('每日进度已重置', 'success');
-      };
-  }
+          rollMissions(true); save(); renderDaily(); pushToast('每日进度已重置', 'success'); }; }
   
-  if (el.btnHardReset) {
-      el.btnHardReset.onclick = () => {
-          playSound(sfx.warn);
-          if (confirm('危险操作：这将清除此浏览器中的所有应用数据，确定吗？')) {
-              Object.values(LS_KEYS).forEach(k => {
-                  storage.removeItem(k);
-              });
-              window._debugDateOffset = 0;
-              location.reload();
-          }
-      };
-  }
+  if (el.btnHardReset) { el.btnHardReset.onclick = () => { playSound(sfx.warn);
+          if (confirm('危险操作：这将清除此浏览器中的所有应用数据，确定吗？')) { Object.values(LS_KEYS).forEach(k => { storage.removeItem(k); }); window._debugDateOffset = 0; location.reload(); } }; }
   
-  if (el.btnExportState) {
-    el.btnExportState.onclick = () => {
-      playSound(sfx.click);
-      const fullState = {
-          tasks: state.tasks,
-          agg: state.agg,
-          meta: meta,
-          rates: RATE_BY_DIFFICULTY,
-          funshop: FUNSHOP,
-          rewardParams: REWARD_PARAMS,
-      };
-      el.devStateText.value = JSON.stringify(fullState, null, 2);
-      pushToast('状态已导出到文本框。');
-    };
-  }
+  if (el.btnExportState) { el.btnExportState.onclick = () => { playSound(sfx.click);
+      const fullState = { tasks: state.tasks, agg: state.agg, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS, };
+      el.devStateText.value = JSON.stringify(fullState, null, 2); pushToast('状态已导出到文本框。'); }; }
   
-  if (el.btnImportState) {
-    el.btnImportState.onclick = () => {
-      playSound(sfx.click);
-      const json = el.devStateText.value;
-      if (!json) {
-        pushToast('导入框为空。', 'warn');
-        return;
-      }
-      try {
-        const imported = JSON.parse(json);
-        state.tasks = imported.tasks || [];
-        state.agg = imported.agg || {totalHQ: 0, totalSeconds: 0};
-        meta = imported.meta || meta;
-        RATE_BY_DIFFICULTY = imported.rates || DEFAULT_RATES;
-        FUNSHOP = imported.funshop || FUNSHOP;
-        REWARD_PARAMS = imported.rewardParams || DEFAULT_REWARD_PARAMS;
-        ensureBadgeMeta();
-        save();
-        renderInitial();
-        pushToast('状态导入成功！', 'success');
-        el.devStateText.value = '';
-      } catch (e) {
-        pushToast('解析JSON时出错，请检查控制台。', 'warn');
-        console.error("Import Error:", e);
-      }
-    };
-  }
+  if (el.btnImportState) { el.btnImportState.onclick = () => { playSound(sfx.click); const json = el.devStateText.value;
+      if (!json) { pushToast('导入框为空。', 'warn'); return; }
+      try { const imported = JSON.parse(json); applyImportedState(imported);
+        save(); renderInitial(); pushToast('状态导入成功！', 'success'); el.devStateText.value = '';
+      } catch (e) { pushToast('解析JSON时出错，请检查控制台。', 'warn'); console.error("Import Error:", e); } }; }
   
   const btnToggleSound = document.getElementById('btnToggleSound');
-  function updateSoundButton() {
-    if (btnToggleSound) {
-        btnToggleSound.textContent = `音效：${isSoundMuted ? '关闭' : '开启'}`;
-    }
-  }
-  if(btnToggleSound){
-      btnToggleSound.onclick = () => {
-          isSoundMuted = !isSoundMuted;
-          writeJSON(LS_KEYS.SOUND_MUTED, isSoundMuted);
-          updateSoundButton();
-          if (!isSoundMuted) {
-              playSound(sfx.click);
-          }
-      };
-      updateSoundButton();
-  }
+  function updateSoundButton() { if (btnToggleSound) { btnToggleSound.textContent = `音效：${isSoundMuted ? '关闭' : '开启'}`; } }
+  if(btnToggleSound){ btnToggleSound.onclick = () => { isSoundMuted = !isSoundMuted; writeJSON(LS_KEYS.SOUND_MUTED, isSoundMuted); updateSoundButton(); if (!isSoundMuted) { playSound(sfx.click); } }; updateSoundButton(); }
   
-  // Global click sound for non-specific buttons
-  document.addEventListener('click', (e) => {
-    if (e.target.matches('.btn:not([data-sound-id])')) {
-      const parentNav = e.target.closest('.bottom-nav');
-      if (!parentNav) { // Avoid double-playing sounds for nav buttons
-        // Add more specific selectors to exclude if needed
-        const excludedIds = ['btnToggleSound'];
-        if (!excludedIds.includes(e.target.id)) {
-           // playSound(sfx.click); // This can be too noisy, enable if desired
-        }
-      }
+  /* ================================
+   *           OSS Sync Logic
+   * ================================ */
+  const showLoader = (text) => { el.loadingOverlay.textContent = text; el.loadingOverlay.style.display = 'flex'; };
+  const hideLoader = () => { el.loadingOverlay.style.display = 'none'; };
+  
+  let syncButtonTimeout = null;
+  const updateSyncStatus = (status, msg = '') => {
+    if (syncButtonTimeout) {
+      clearTimeout(syncButtonTimeout);
+      syncButtonTimeout = null;
     }
-  }, true);
 
-  // Initialize all loops and intervals
+    const indicator = el.syncStatusIndicator;
+    indicator.classList.remove('synced', 'syncing', 'error');
+
+    // Mobile specific button feedback
+    if (mobileMedia.matches) {
+      const originalText = '数据同步';
+      if (el.btnSync) {
+        el.btnSync.textContent = originalText;
+        el.btnSync.disabled = false;
+      }
+      if (status === 'synced' || status === 'error') {
+        const buttonText = status === 'synced' ? '已同步 ✓' : '同步失败 ✗';
+        if (el.btnSync) {
+          el.btnSync.textContent = buttonText;
+          el.btnSync.disabled = true;
+        }
+        syncButtonTimeout = setTimeout(() => {
+          if (el.btnSync) {
+            el.btnSync.textContent = originalText;
+            el.btnSync.disabled = false;
+          }
+          syncButtonTimeout = null;
+        }, 5000);
+      }
+      return; // On mobile, we don't use the text indicator
+    }
+
+    // Desktop indicator text
+    if (status === 'synced') {
+      indicator.classList.add('synced');
+      indicator.textContent = `已同步 ✓ ${new Date().toLocaleTimeString()}`;
+    } else if (status === 'syncing') {
+      indicator.classList.add('syncing');
+      indicator.textContent = '同步中...';
+    } else if (status === 'error') {
+      indicator.classList.add('error');
+      indicator.textContent = `同步失败 ✗ ${msg}`;
+    } else {
+      indicator.textContent = '本地';
+    }
+  };
+
+  async function createOssAuthHeader(config, method, resource, contentType = '') {
+      const date = new Date().toUTCString();
+      const stringToSign = `${method}\n\n${contentType}\n${date}\n${resource}`;
+      const encoder = new TextEncoder();
+      const keyData = encoder.encode(config.secret);
+      const textData = encoder.encode(stringToSign);
+
+      const cryptoKey = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+      const signature = await crypto.subtle.sign('HMAC', cryptoKey, textData);
+
+      const base64Signature = btoa(String.fromCharCode(...new Uint8Array(signature)));
+      
+      return {
+          'Authorization': `OSS ${config.key}:${base64Signature}`,
+          'Date': date,
+          ...(contentType && { 'Content-Type': contentType })
+      };
+  }
+
+  async function loadFromOss() {
+    if (!ossConfig) return false;
+    showLoader('正在从云端同步...');
+    updateSyncStatus('syncing');
+
+    try {
+        const resource = `/${ossConfig.bucket}/${ossConfig.objectKey}`;
+        const headers = await createOssAuthHeader(ossConfig, 'GET', resource);
+        const response = await fetch(`https://${ossConfig.bucket}.${ossConfig.endpoint}/${ossConfig.objectKey}`, { headers });
+        
+        if (response.ok) {
+            const data = await response.json();
+            applyImportedState(data);
+            save(); // Save the newly loaded state to local storage
+            pushToast('数据已从云端同步', 'success');
+            updateSyncStatus('synced');
+            return true;
+        } else if (response.status === 404) {
+            pushToast('云端无数据，将创建新文件。', 'info');
+            updateSyncStatus('synced'); // We are "synced" with a new state
+            await saveToOss(); // Create the initial file on OSS
+            return true;
+        } else {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+    } catch (e) {
+        console.error('OSS Load Error:', e);
+        pushToast('从 OSS 加载数据失败', 'warn');
+        updateSyncStatus('error');
+        return false;
+    } finally {
+        hideLoader();
+    }
+  }
+
+  async function saveToOss() {
+    if (!ossConfig) return;
+    updateSyncStatus('syncing');
+    
+    const fullState = { tasks: state.tasks, agg: state.agg, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS };
+    const body = JSON.stringify(fullState);
+
+    try {
+        const resource = `/${ossConfig.bucket}/${ossConfig.objectKey}`;
+        const headers = await createOssAuthHeader(ossConfig, 'PUT', resource, 'application/json');
+        
+        const response = await fetch(`https://${ossConfig.bucket}.${ossConfig.endpoint}/${ossConfig.objectKey}`, {
+            method: 'PUT',
+            headers,
+            body
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+        }
+        updateSyncStatus('synced');
+    } catch (e) {
+        console.error('OSS Save Error:', e);
+        pushToast('同步到 OSS 失败', 'warn');
+        updateSyncStatus('error');
+    }
+  }
+
+  el.btnSync.onclick = () => {
+    playSound(sfx.modalOpen);
+    if(ossConfig) {
+      el.ossEndpoint.value = ossConfig.endpoint;
+      el.ossBucket.value = ossConfig.bucket;
+      el.ossObjectKey.value = ossConfig.objectKey;
+      el.ossAccessKeyId.value = ossConfig.key;
+      el.ossAccessKeySecret.value = ossConfig.secret;
+    }
+    el.ossConfigModal.style.display = 'flex';
+  };
+  el.btnCloseOssConfig.onclick = () => { playSound(sfx.modalClose); el.ossConfigModal.style.display = 'none'; };
+  
+  const saveOssConfig = () => {
+    const config = {
+      endpoint: el.ossEndpoint.value.trim(),
+      bucket: el.ossBucket.value.trim(),
+      objectKey: el.ossObjectKey.value.trim(),
+      key: el.ossAccessKeyId.value.trim(),
+      secret: el.ossAccessKeySecret.value.trim()
+    };
+    if (!config.endpoint || !config.bucket || !config.objectKey || !config.key || !config.secret) {
+        pushToast('所有字段均为必填项', 'warn');
+        return null;
+    }
+    ossConfig = config;
+    writeJSON(LS_KEYS.OSS_CONFIG, ossConfig);
+    return config;
+  };
+
+  el.btnOssSave.onclick = () => {
+    if (saveOssConfig()) {
+      pushToast('OSS 设置已保存', 'success');
+      el.ossConfigModal.style.display = 'none';
+    }
+  };
+  
+  el.btnOssConnect.onclick = async () => {
+    if (saveOssConfig()) {
+        el.ossConfigModal.style.display = 'none';
+        await loadFromOss();
+        renderInitial();
+    }
+  };
+
+  el.btnOssDisconnect.onclick = () => {
+    if (confirm('确定要断开与 OSS 的连接吗？您的数据将只保存在此浏览器中。')) {
+        ossConfig = null;
+        storage.removeItem(LS_KEYS.OSS_CONFIG);
+        updateSyncStatus('local');
+        el.ossConfigModal.style.display = 'none';
+        pushToast('已断开 OSS 连接', 'info');
+    }
+  };
+
+
+  // App Initialization
+  loadStateFromLocalStorage();
+  if (ossConfig) {
+      await loadFromOss();
+  }
+  renderInitial();
   loop();
   tickFunshopTimers();
 });
