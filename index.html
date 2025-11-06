@@ -17,7 +17,6 @@
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
 <style>
   :root{
     --bg: #f5f5f7;
@@ -884,7 +883,6 @@ if ('serviceWorker' in navigator) {
   firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth();
   const db = firebase.firestore();
-  const storageService = firebase.storage();
 </script>
 <script>
 /* ========== 存储兜底层 ========== */
@@ -2471,43 +2469,62 @@ function todayObj(){
   
   if (el.avatarUploader) {
     el.avatarUploader.onclick = () => el.avatarInput.click();
-    el.avatarInput.onchange = e => {
+    
+    const resizeImage = (file, maxWidth, maxHeight, quality) => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = e => {
+                const img = new Image();
+                img.onload = () => {
+                    let width = img.width;
+                    let height = img.height;
+
+                    if (width > height) {
+                        if (width > maxWidth) {
+                            height *= maxWidth / width;
+                            width = maxWidth;
+                        }
+                    } else {
+                        if (height > maxHeight) {
+                            width *= maxHeight / height;
+                            height = maxHeight;
+                        }
+                    }
+
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    resolve(canvas.toDataURL('image/jpeg', quality));
+                };
+                img.onerror = reject;
+                img.src = e.target.result;
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    };
+
+    el.avatarInput.onchange = async e => {
         const file = e.target.files[0];
         if (!file) return;
 
-        // If user is logged in, upload to Firebase Storage
-        if (CLOUD.enabled && CLOUD.uid) {
-            el.avatarUploader.innerHTML = '上传中...';
-            const filePath = `avatars/${CLOUD.uid}/${file.name}`;
-            const storageRef = storageService.ref(filePath);
-            const uploadTask = storageRef.put(file);
+        el.avatarUploader.innerHTML = '处理中...';
+        el.avatarInput.value = ''; // Clear input for re-selection of same file
 
-            uploadTask.on('state_changed', 
-                (snapshot) => { /* can be used for progress bar */ }, 
-                (error) => {
-                    console.error("Avatar upload failed:", error);
-                    pushToast('头像上传失败', 'warn');
-                    renderYou(); // Restore previous avatar state
-                }, 
-                () => {
-                    uploadTask.snapshot.ref.getDownloadURL().then((downloadURL) => {
-                        meta.character.avatar = downloadURL;
-                        save();
-                        renderYou();
-                        pushToast('头像已更新并同步', 'success');
-                    });
-                }
-            );
-
-        } else { // User is not logged in, save as base64 locally
-            const reader = new FileReader();
-            reader.onload = () => {
-                meta.character.avatar = reader.result; // This is a base64 string
-                save(); // Saves to localStorage
-                renderYou();
-                pushToast('头像已在本地更新', 'success');
-            };
-            reader.readAsDataURL(file);
+        try {
+            // Resize to max 256x256, 80% JPEG quality for performance
+            const base64String = await resizeImage(file, 256, 256, 0.8);
+            meta.character.avatar = base64String;
+            save();
+            renderYou();
+            pushToast('头像已更新', 'success');
+        } catch (error) {
+            console.error("Avatar processing failed:", error);
+            pushToast('头像处理失败', 'warn');
+            renderYou(); // Restore previous state
         }
     };
   }
