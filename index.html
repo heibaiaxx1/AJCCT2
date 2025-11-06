@@ -539,6 +539,7 @@
     }
   }
 </style>
+<script src="https://gosspublic.alicdn.com/ali-oss/client-6.18.0.min.js"></script>
 </head>
 <body>
 <div class="app">
@@ -786,11 +787,6 @@
         <label for="ossAccessKeySecret">Access Key Secret</label>
         <input type="password" id="ossAccessKeySecret">
       </div>
-      <div class="field" style="flex-direction: row; align-items: center; gap: 8px; margin-top: 12px; margin-bottom: 0;">
-        <input type="checkbox" id="ossPathStyle" style="width: auto; padding: 0; height: 16px; aspect-ratio: 1/1;">
-        <label for="ossPathStyle" style="margin: 0; font-size: 13px;">使用路径样式访问 (Use Path-Style Access)</label>
-      </div>
-      <div class="note" style="font-size: 11px; margin: 4px 0 12px 0;">如果遇到 403 (Forbidden) 错误，请尝试勾选此项。</div>
       <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
         <button class="btn danger" id="btnOssDisconnect">断开连接</button>
         <button class="btn" id="btnOssSave">保存设置</button>
@@ -1252,7 +1248,6 @@ const LS_KEYS = {
     // OSS Sync elements
     btnSync: $('#btnSync'), ossConfigModal: $('#ossConfigModal'), btnCloseOssConfig: $('#btnCloseOssConfig'), ossEndpoint: $('#ossEndpoint'),
     ossBucket: $('#ossBucket'), ossObjectKey: $('#ossObjectKey'), ossAccessKeyId: $('#ossAccessKeyId'), ossAccessKeySecret: $('#ossAccessKeySecret'),
-    ossPathStyle: $('#ossPathStyle'),
     btnOssSave: $('#btnOssSave'), btnOssConnect: $('#btnOssConnect'), btnOssDisconnect: $('#btnOssDisconnect'),
     syncStatusIndicator: $('#syncStatusIndicator'), loadingOverlay: $('#loadingOverlay'),
   };
@@ -1914,9 +1909,9 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   function updateSoundButton() { if (btnToggleSound) { btnToggleSound.textContent = `音效：${isSoundMuted ? '关闭' : '开启'}`; } }
   if(btnToggleSound){ btnToggleSound.onclick = () => { isSoundMuted = !isSoundMuted; writeJSON(LS_KEYS.SOUND_MUTED, isSoundMuted); updateSoundButton(); if (!isSoundMuted) { playSound(sfx.click); } }; updateSoundButton(); }
   
-  /* ================================
-   *           OSS Sync Logic
-   * ================================ */
+  /* ====================================
+   *  OSS Sync Logic (Official SDK Version)
+   * ==================================== */
   const showLoader = (text) => { el.loadingOverlay.textContent = text; el.loadingOverlay.style.display = 'flex'; };
   const hideLoader = () => { el.loadingOverlay.style.display = 'none'; };
   
@@ -1969,71 +1964,67 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
     }
   };
 
-  async function createOssAuthHeader(config, method, resource, contentType = '') {
-      const date = new Date().toUTCString();
-      const stringToSign = `${method}\n\n${contentType}\n${date}\n${resource}`;
-      const encoder = new TextEncoder();
-      const keyData = encoder.encode(config.secret);
-      const textData = encoder.encode(stringToSign);
-
-      const cryptoKey = await crypto.subtle.importKey('raw', keyData, { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
-      const signature = await crypto.subtle.sign('HMAC', cryptoKey, textData);
-
-      const base64Signature = btoa(String.fromCharCode(...new Uint8Array(signature)));
-      
-      return {
-          'Authorization': `OSS ${config.key}:${base64Signature}`,
-          'Date': date,
-          ...(contentType && { 'Content-Type': contentType })
-      };
+  function getOssClient(config) {
+    if (typeof OSS === 'undefined') {
+      console.error('OSS SDK not loaded!');
+      pushToast('OSS SDK script not found.', 'warn');
+      return null;
+    }
+    return new OSS({
+      endpoint: config.endpoint.replace(/^https?:\/\//, ''),
+      accessKeyId: config.key,
+      accessKeySecret: config.secret,
+      bucket: config.bucket,
+      secure: true, // Use https
+    });
   }
 
   async function loadFromOss() {
     if (!ossConfig) return false;
     showLoader('正在从云端同步...');
     updateSyncStatus('syncing');
-
     try {
-        const resource = `/${ossConfig.bucket}/${ossConfig.objectKey}`;
-        const headers = await createOssAuthHeader(ossConfig, 'GET', resource);
-        const url = ossConfig.usePathStyle
-            ? `https://${ossConfig.endpoint}/${ossConfig.bucket}/${ossConfig.objectKey}`
-            : `https://${ossConfig.bucket}.${ossConfig.endpoint}/${ossConfig.objectKey}`;
-        const response = await fetch(url, { headers });
-        
-        if (response.ok) {
-            const data = await response.json();
-            applyImportedState(data);
-            save(); // Save the newly loaded state to local storage
-            pushToast('数据已从云端同步', 'success');
-            updateSyncStatus('synced');
-            return true;
-        } else if (response.status === 404) {
-            pushToast('云端无数据，将创建新文件。', 'info');
-            updateSyncStatus('synced'); // We are "synced" with a new state
-            await saveToOss(); // Create the initial file on OSS
-            return true;
-        } else {
-            const errorText = await response.text();
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
-        }
+      const client = getOssClient(ossConfig);
+      if (!client) return false;
+
+      const result = await client.get(ossConfig.objectKey);
+      
+      if (result.res.status === 200 && result.content) {
+        const dataStr = new TextDecoder("utf-8").decode(result.content);
+        const data = JSON.parse(dataStr);
+        applyImportedState(data);
+        save(); // Save fetched state to local storage
+        pushToast('数据已从云端同步', 'success');
+        updateSyncStatus('synced');
+        return true;
+      } else {
+        throw new Error(`HTTP ${result.res.status}`);
+      }
     } catch (e) {
-        let errorMsg = '加载失败';
-        if (e instanceof TypeError && e.message.includes('Failed to fetch')) {
-          errorMsg = '网络错误/CORS';
-          pushToast('网络请求失败。请检查网络连接以及您OSS服务器的CORS（跨域）配置。', 'warn');
-        } else if (e.message.includes('HTTP 403')) {
-          errorMsg = '无权限(403)';
-          pushToast('请求被拒绝 (403)。请检查您的Access Key权限和配置信息。', 'warn');
-        } else {
-          errorMsg = `未知错误(${e.message.slice(0, 15)}...)`;
-          pushToast(`从 OSS 加载数据失败: ${e.message}`, 'warn');
-        }
-        console.error('OSS Load Error:', e);
-        updateSyncStatus('error', errorMsg);
-        return false;
+      if (e.name === 'NoSuchKeyError' || e.code === 'NoSuchKey') {
+        pushToast('云端无数据，将创建新文件。', 'info');
+        updateSyncStatus('synced');
+        await saveToOss(); // Create the initial file
+        return true;
+      }
+      
+      let errorMsg = `加载失败`;
+      if (e.name === 'RequestError' && e.message.includes('CORS')) {
+        errorMsg = '网络错误/CORS';
+        pushToast('网络请求失败。请检查网络连接以及您OSS服务器的CORS（跨域）配置。', 'warn');
+      } else if (e.code === 'AccessDenied') {
+        errorMsg = '无权限(403)';
+        pushToast('请求被拒绝 (403)。请检查您的Access Key权限和配置信息。', 'warn');
+      } else {
+        errorMsg = `${e.name || 'Error'}`;
+        pushToast(`从 OSS 加载数据失败: ${e.message}`, 'warn');
+      }
+      
+      console.error('OSS Load Error:', e);
+      updateSyncStatus('error', errorMsg);
+      return false;
     } finally {
-        hideLoader();
+      hideLoader();
     }
   }
 
@@ -2043,43 +2034,38 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
     
     const fullState = { tasks: state.tasks, agg: state.agg, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS };
     const body = JSON.stringify(fullState);
+    const buffer = new OSS.Buffer(body);
 
     try {
-        const resource = `/${ossConfig.bucket}/${ossConfig.objectKey}`;
-        const headers = await createOssAuthHeader(ossConfig, 'PUT', resource, 'application/json');
-        
-        const url = ossConfig.usePathStyle
-            ? `https://${ossConfig.endpoint}/${ossConfig.bucket}/${ossConfig.objectKey}`
-            : `https://${ossConfig.bucket}.${ossConfig.endpoint}/${ossConfig.objectKey}`;
+      const client = getOssClient(ossConfig);
+      if (!client) return;
 
-        const response = await fetch(url, {
-            method: 'PUT',
-            headers,
-            body
-        });
+      const result = await client.put(ossConfig.objectKey, buffer, {
+        headers: { 'Content-Type': 'application/json' }
+      });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`HTTP ${response.status}: ${errorText}`);
-        }
-        updateSyncStatus('synced');
+      if (result.res.status !== 200) {
+        throw new Error(`HTTP ${result.res.status}`);
+      }
+      updateSyncStatus('synced');
+
     } catch (e) {
-        let errorMsg = '保存失败';
-        if (e instanceof TypeError && e.message.includes('Failed to fetch')) {
-          errorMsg = '网络错误/CORS';
-           pushToast('网络请求失败。请检查网络连接以及您OSS服务器的CORS（跨域）配置。', 'warn');
-        } else if (e.message.includes('HTTP 403')) {
-           errorMsg = '无权限(403)';
-           pushToast('请求被拒绝 (403)。请检查您的Access Key权限和配置信息。', 'warn');
-        } else {
-           errorMsg = `未知错误(${e.message.slice(0, 15)}...)`;
-           pushToast(`同步到 OSS 失败: ${e.message}`, 'warn');
-        }
-        console.error('OSS Save Error:', e);
-        updateSyncStatus('error', errorMsg);
+      let errorMsg = `保存失败`;
+      if (e.name === 'RequestError' && e.message.includes('CORS')) {
+        errorMsg = '网络错误/CORS';
+        pushToast('网络请求失败。请检查网络连接以及您OSS服务器的CORS（跨域）配置。', 'warn');
+      } else if (e.code === 'AccessDenied') {
+        errorMsg = '无权限(403)';
+        pushToast('请求被拒绝 (403)。请检查您的Access Key权限和配置信息。', 'warn');
+      } else {
+        errorMsg = `${e.name || 'Error'}`;
+        pushToast(`同步到 OSS 失败: ${e.message}`, 'warn');
+      }
+      console.error('OSS Save Error:', e);
+      updateSyncStatus('error', errorMsg);
     }
   }
-
+  
   el.btnSync.onclick = () => {
     playSound(sfx.modalOpen);
     if(ossConfig) {
@@ -2088,9 +2074,6 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
       el.ossObjectKey.value = ossConfig.objectKey;
       el.ossAccessKeyId.value = ossConfig.key;
       el.ossAccessKeySecret.value = ossConfig.secret;
-      el.ossPathStyle.checked = !!ossConfig.usePathStyle;
-    } else {
-      el.ossPathStyle.checked = false;
     }
     el.ossConfigModal.style.display = 'flex';
   };
@@ -2103,7 +2086,6 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
       objectKey: el.ossObjectKey.value.trim(),
       key: el.ossAccessKeyId.value.trim(),
       secret: el.ossAccessKeySecret.value.trim(),
-      usePathStyle: el.ossPathStyle.checked
     };
     if (!config.endpoint || !config.bucket || !config.objectKey || !config.key || !config.secret) {
         pushToast('所有字段均为必填项', 'warn');
