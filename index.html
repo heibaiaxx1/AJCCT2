@@ -966,6 +966,8 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <script>
+document.addEventListener('DOMContentLoaded', ()=>{
+
 // ⚠️ ========================================================== ⚠️
 // ⚠️  在此处粘贴你的 Firebase 项目配置!
 // ⚠️  Get it from your Firebase project settings.
@@ -975,16 +977,34 @@ const firebaseConfig = {
   authDomain: "haoqing-af64d.firebaseapp.com",
   projectId: "haoqing-af64d",
   storageBucket: "haoqing-af64d.firebasestorage.app",
-  messagingSenderId: "1025278981441,
+  messagingSenderId: "1025278981441",
   appId: "1:1025278981441:web:edaf5f1aa9446246c0ddc0"
 };
 
-// Initialize Firebase
-firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db = firebase.firestore();
-const storage = firebase.storage();
-const googleProvider = new firebase.auth.GoogleAuthProvider();
+// ====================================================================
+// =================== 坚不可摧的初始化与 Firebase 逻辑 ==================
+// ====================================================================
+
+const isFirebaseConfigured = firebaseConfig && firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
+let auth, db, storage, googleProvider, firestoreUnsubscribe = null;
+
+if (isFirebaseConfigured) {
+  try {
+    firebase.initializeApp(firebaseConfig);
+    auth = firebase.auth();
+    db = firebase.firestore();
+    storage = firebase.storage();
+    googleProvider = new firebase.auth.GoogleAuthProvider();
+    console.log("Firebase initialized successfully.");
+  } catch (e) {
+    console.error("Firebase initialization failed:", e);
+    alert("Firebase 初始化失败，请检查您的配置。应用将以本地模式运行。");
+    isFirebaseConfigured = false;
+  }
+} else {
+  console.warn("Firebase is not configured. Running in local-only mode.");
+}
+
 
 /* ========== 存储兜底层 ========== */
 const localStore = (() => {
@@ -1008,11 +1028,8 @@ const readJSON = (key, fallback) => {
   catch { return fallback; }
 };
 const writeJSON = (key, val) => {
-  try { localStore.setItem(key, JSON.stringify(val)); } catch { }
+  try { localStore.setItem(key, JSON.stringify(val)); } catch {}
 };
-
-window.requestIdleCallback = window.requestIdleCallback || function(cb){return setTimeout(()=>cb({didTimeout:false,timeRemaining:()=>0}),200)};
-window.cancelIdleCallback = window.cancelIdleCallback || function(id){clearTimeout(id)};
 
 /* ========== 静态数据（省略无关注释） ========== */
 const PRIZE_NAMES = ['特等奖','一等奖','二等奖','三等奖','四等奖','五等奖','六等奖','七等奖'];
@@ -1087,7 +1104,6 @@ const REWARD_TYPES={
 const MAX_FLIPS_PER_SECOND=8, CYCLE_SECONDS_BASE=20, CIRCUM=2*Math.PI*90;
 
 /* ========== 主逻辑 ========== */
-document.addEventListener('DOMContentLoaded', ()=>{
 const LS_KEYS = {
     TASKS: "haoqing_tasks_v2",
     AGG: "haoqing_agg_v2",
@@ -1123,7 +1139,6 @@ const LS_KEYS = {
   let state = getInitialState();
   let meta = getInitialMeta();
   let FUNSHOP = {};
-  let firestoreUnsubscribe = null;
 
   const loadStateFromLocalStorage = () => {
     state = { 
@@ -1143,32 +1158,51 @@ const LS_KEYS = {
     ensureBadgeMeta();
   };
   
-  function resetLocalState() {
+  function resetAppToDefaults() {
+      // Clear in-memory state
       state = getInitialState();
       meta = getInitialMeta();
-      loadStateFromLocalStorage(); // This will load any existing local data or defaults
+      RATE_BY_DIFFICULTY = { ...DEFAULT_RATES };
+      REWARD_PARAMS = { ...DEFAULT_REWARD_PARAMS };
+      // Clear local storage
+      Object.values(LS_KEYS).forEach(key => {
+          // Keep sound setting
+          if (key !== LS_KEYS.SOUND_MUTED) {
+            localStore.removeItem(key);
+          }
+      });
+      // Re-initialize with defaults, this time from memory, not storage
+      loadStateFromLocalStorage();
       renderInitial();
+      console.log("App has been reset to a clean state.");
   }
 
   const applyCloudData = (data) => {
-    state.tasks = data.tasks || [];
-    state.agg = data.agg || {totalHQ: 0, totalSeconds: 0};
-    state.active = data.active || null; // Sync live timer state
-    meta = { ...getInitialMeta(), ...data.meta };
-    RATE_BY_DIFFICULTY = data.rates || DEFAULT_RATES;
-    FUNSHOP = data.funshop || FUNSHOP;
-    REWARD_PARAMS = data.rewardParams || DEFAULT_REWARD_PARAMS;
-    ensureBadgeMeta();
-    
-    // Save the synced data to local storage for offline use
-    writeJSON(LS_KEYS.TASKS, state.tasks);
-    writeJSON(LS_KEYS.AGG, state.agg);
-    writeJSON(LS_KEYS.META, meta);
-    writeJSON(LS_KEYS.RATES, RATE_BY_DIFFICULTY);
-    writeJSON(LS_KEYS.FUNSHOP, FUNSHOP);
-    writeJSON(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS);
+    try {
+        state.tasks = data.tasks || [];
+        state.agg = data.agg || {totalHQ: 0, totalSeconds: 0};
+        state.active = data.active || null; // Sync live timer state
+        meta = { ...getInitialMeta(), ...data.meta };
+        RATE_BY_DIFFICULTY = data.rates || DEFAULT_RATES;
+        FUNSHOP = data.funshop || FUNSHOP;
+        REWARD_PARAMS = data.rewardParams || DEFAULT_REWARD_PARAMS;
+        ensureBadgeMeta();
+        
+        // Save the synced data to local storage for offline use
+        writeJSON(LS_KEYS.TASKS, state.tasks);
+        writeJSON(LS_KEYS.AGG, state.agg);
+        writeJSON(LS_KEYS.META, meta);
+        writeJSON(LS_KEYS.RATES, RATE_BY_DIFFICULTY);
+        writeJSON(LS_KEYS.FUNSHOP, FUNSHOP);
+        writeJSON(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS);
 
-    renderInitial();
+        renderInitial();
+    } catch (e) {
+        console.error("Error applying cloud data:", e);
+        pushToast("加载云端数据格式错误，将使用本地数据。", "warn");
+        loadStateFromLocalStorage();
+        renderInitial();
+    }
   };
 
   function ensureBadgeMeta(){
@@ -1240,9 +1274,9 @@ const LS_KEYS = {
     btnHardReset: $('#btnHardReset'), devStateText: $('#devStateText'), btnExportState: $('#btnExportState'), btnImportState: $('#btnImportState'),
     devRewardBaseChance: $('#devRewardBaseChance'), devRewardBetCoeff: $('#devRewardBetCoeff'), devRewardMaxChance: $('#devRewardMaxChance'),
     devRewardPityInc: $('#devRewardPityInc'), btnSaveRewardParams: $('#btnSaveRewardParams'), btnResetRewardParams: $('#btnResetRewardParams'),
-    // Auth elements
     authChipWrapper: $('#authChipWrapper'), btnLogin: $('#btnLogin'), btnLogout: $('#btnLogout'),
     authStatusText: $('#authStatusText'), userAvatar: $('#userAvatar'), loadingOverlay: $('#loadingOverlay'),
+    mobileHeaderStatus: $('#mobileHeaderStatus'), totalValorChip: $('#totalValorChip')
   };
 
   const sessionFlip = new FlipCounter($('#sessionFlip'),{digits:6,comma:true,large:true});
@@ -1315,18 +1349,23 @@ const LS_KEYS = {
   }
 
   const debouncedSaveToFirebase = debounce(() => {
-      const user = auth.currentUser;
-      if (!user) return;
-      const fullState = { tasks: state.tasks, agg: state.agg, active: state.active, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS };
-      db.collection('users').doc(user.uid).set(fullState, { merge: true })
+      if (!isFirebaseConfigured || !auth.currentUser) return;
+      const fullState = { 
+        tasks: state.tasks, agg: state.agg, active: state.active, 
+        meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, 
+        rewardParams: REWARD_PARAMS,
+        lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+      };
+      db.collection('users').doc(auth.currentUser.uid).set(fullState, { merge: true })
         .catch(err => {
             console.error("Firestore save error:", err);
-            pushToast('云端同步失败', 'warn');
+            let msg = '云端同步失败';
+            if (err.code === 'permission-denied') msg = '云端同步失败：权限不足';
+            pushToast(msg, 'warn');
         });
   }, 1500);
 
   function save(){
-    // Always save to local storage for offline support
     writeJSON(LS_KEYS.TASKS, state.tasks);
     writeJSON(LS_KEYS.AGG, state.agg);
     writeJSON(LS_KEYS.META, meta);
@@ -1334,8 +1373,7 @@ const LS_KEYS = {
     writeJSON(LS_KEYS.FUNSHOP, FUNSHOP);
     writeJSON(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS);
 
-    // If logged in, trigger a debounced save to Firestore
-    if (auth.currentUser) {
+    if (isFirebaseConfigured && auth.currentUser) {
       debouncedSaveToFirebase();
     }
   }
@@ -1660,33 +1698,89 @@ function setControls(){
         openReward({ baseHQ: sessionHQ, seconds: sessionSeconds, difficulty: diff, rawHQ: sessionHQ }); }, 1800);
   }
 
-  let lastKnownTotalHQForDisplay = 0;
+  let lastRenderedState = {};
   function loop(){
-      if (state.active && !state.active.isPaused) { const a = state.active; const task = getTask(a.taskId);
-          if (task) { const rate = rateOfActive(); const elapsedSinceStart = (Date.now() - a.startTime) / 1000;
-              const currentSessionSeconds = (a.accumulatedSeconds || 0) + elapsedSinceStart; const currentSessionHQ = currentSessionSeconds * rate;
-              sessionFlip.flipTo(Math.floor(currentSessionHQ)); el.sessionTime.textContent = fmtTime(currentSessionSeconds);
-              el.taskTotal.textContent = Math.floor((task.totalHQ || 0) + currentSessionHQ);
-              el.taskTime.textContent = fmtTime((task.totalSeconds || 0) + currentSessionSeconds);
-              lastKnownTotalHQForDisplay = Math.floor((state.agg.totalHQ || 0) + currentSessionHQ);
-              el.kpiTotalValue.textContent = lastKnownTotalHQForDisplay.toLocaleString('en-US'); }
-      } else if (state.active && state.active.isPaused) { const pausedFor = (Date.now() - (state.active.pauseTime || Date.now())) / 1000;
-          showPauseIndicator(pausedFor); el.kpiTotalValue.textContent = lastKnownTotalHQForDisplay.toLocaleString('en-US');
-      } else { hidePauseIndicator(); lastKnownTotalHQForDisplay = Math.floor(state.agg.totalHQ || 0);
-          el.kpiTotalValue.textContent = lastKnownTotalHQForDisplay.toLocaleString('en-US'); }
+      let needsRender = false;
+      const now = Date.now();
       
-      if (activeView === 'you-pane') { let statusText = '离线';
-        if (state.active) { statusText = state.active.isPaused ? '休息中' : '专注中'; }
-        if (el.charStatusTag) el.charStatusTag.textContent = statusText;
-        const now = Date.now(); meta.buffs = (meta.buffs || []).filter(b => b.expiresAt > now);
-        const buffList = el.charBuffsList;
-        if (buffList) { if (meta.buffs.length === 0) { buffList.innerHTML = `<div class="char-buff-item muted">无</div>`; } else {
-                buffList.innerHTML = meta.buffs.map(buff => { const remainingSec = Math.max(0, Math.floor((buff.expiresAt - now) / 1000));
-                    const m = Math.floor(remainingSec / 60).toString().padStart(2, '0');
-                    const s = (remainingSec % 60).toString().padStart(2, '0');
-                    return `<div class="char-buff-item">${buff.name}（剩余 ${m}:${s}）</div>`; }).join(''); } }
+      let currentTotalHQForDisplay = Math.floor(state.agg.totalHQ || 0);
+
+      if (state.active && !state.active.isPaused) {
+          const a = state.active;
+          const task = getTask(a.taskId);
+          if (task) {
+              const rate = rateOfActive();
+              const elapsedSinceStart = (now - a.startTime) / 1000;
+              const currentSessionSeconds = (a.accumulatedSeconds || 0) + elapsedSinceStart;
+              const currentSessionHQ = currentSessionSeconds * rate;
+              const sessionHQInt = Math.floor(currentSessionHQ);
+              
+              if (sessionHQInt !== lastRenderedState.sessionHQ) {
+                  sessionFlip.flipTo(sessionHQInt);
+                  lastRenderedState.sessionHQ = sessionHQInt;
+              }
+              const fmtSessionTime = fmtTime(currentSessionSeconds);
+              if (fmtSessionTime !== lastRenderedState.sessionTime) {
+                  el.sessionTime.textContent = fmtSessionTime;
+                  lastRenderedState.sessionTime = fmtSessionTime;
+              }
+              const taskTotalHQ = Math.floor((task.totalHQ || 0) + currentSessionHQ);
+              if (taskTotalHQ !== lastRenderedState.taskTotalHQ) {
+                  el.taskTotal.textContent = taskTotalHQ;
+                  lastRenderedState.taskTotalHQ = taskTotalHQ;
+              }
+              const fmtTaskTime = fmtTime((task.totalSeconds || 0) + currentSessionSeconds);
+              if (fmtTaskTime !== lastRenderedState.taskTime) {
+                  el.taskTime.textContent = fmtTaskTime;
+                  lastRenderedState.taskTime = fmtTaskTime;
+              }
+              currentTotalHQForDisplay += sessionHQInt;
+          }
+      } else if (state.active && state.active.isPaused) {
+          const pausedFor = (now - (state.active.pauseTime || now)) / 1000;
+          showPauseIndicator(pausedFor);
+      } else {
+          hidePauseIndicator();
       }
-      renderHeaderStatus();
+      
+      if (currentTotalHQForDisplay !== lastRenderedState.kpiTotalHQ) {
+          el.kpiTotalValue.textContent = currentTotalHQForDisplay.toLocaleString('en-US');
+          lastRenderedState.kpiTotalHQ = currentTotalHQForDisplay;
+      }
+      
+      if (activeView === 'you-pane') {
+          let statusText = '离线';
+          if (state.active) { statusText = state.active.isPaused ? '休息中' : '专注中'; }
+          if (statusText !== lastRenderedState.charStatus) {
+              el.charStatusTag.textContent = statusText;
+              lastRenderedState.charStatus = statusText;
+          }
+          const activeBuffs = (meta.buffs || []).filter(b => b.expiresAt > now);
+          if (JSON.stringify(activeBuffs) !== lastRenderedState.activeBuffs) {
+              meta.buffs = activeBuffs;
+              const buffList = el.charBuffsList;
+              if (buffList) {
+                  if (activeBuffs.length === 0) {
+                      buffList.innerHTML = `<div class="char-buff-item muted">无</div>`;
+                  } else {
+                      buffList.innerHTML = activeBuffs.map(buff => {
+                          const remainingSec = Math.max(0, Math.floor((buff.expiresAt - now) / 1000));
+                          const m = Math.floor(remainingSec / 60).toString().padStart(2, '0');
+                          const s = (remainingSec % 60).toString().padStart(2, '0');
+                          return `<div class="char-buff-item">${buff.name}（剩余 ${m}:${s}）</div>`;
+                      }).join('');
+                  }
+              }
+              lastRenderedState.activeBuffs = JSON.stringify(activeBuffs);
+          }
+      }
+      
+      const headerKey = `${state.agg.totalHQ}|${meta.character.name}|${meta.character.title}|${meta.buffs.length}`;
+      if (headerKey !== lastRenderedState.headerKey) {
+        renderHeaderStatus();
+        lastRenderedState.headerKey = headerKey;
+      }
+
       requestAnimationFrame(loop);
   }
   
@@ -1790,7 +1884,7 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   }
   
   if (el.avatarUploader) {
-    el.avatarUploader.onclick = () => { if (!auth.currentUser) { pushToast('请先登录', 'warn'); return; } el.avatarInput.click(); };
+    el.avatarUploader.onclick = () => { if (!isFirebaseConfigured || !auth.currentUser) { pushToast('请先登录', 'warn'); return; } el.avatarInput.click(); };
     const resizeImage = (file, maxWidth, maxHeight, quality) => {
         return new Promise((resolve, reject) => { const reader = new FileReader();
             reader.onload = e => { const img = new Image(); img.onload = () => { let width = img.width; let height = img.height;
@@ -1802,7 +1896,7 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
             reader.onerror = reject; reader.readAsDataURL(file); }); };
 
     el.avatarInput.onchange = async e => {
-      const file = e.target.files[0]; if (!file || !auth.currentUser) return;
+      const file = e.target.files[0]; if (!file || !isFirebaseConfigured || !auth.currentUser) return;
       el.avatarUploader.innerHTML = '处理中...'; el.avatarInput.value = '';
       try {
         const resizedDataUrl = await resizeImage(file, 256, 256, 0.8);
@@ -1812,10 +1906,9 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
         meta.character.avatar = downloadURL;
         save();
         pushToast('头像已上传并同步', 'success');
-        // Firestore listener will update the UI
       } catch (error) {
         console.error("Avatar upload failed:", error);
-        pushToast('头像上传失败', 'warn');
+        pushToast(`头像上传失败: ${error.code || error.message}`, 'warn');
         renderYou();
       }
     };
@@ -1845,20 +1938,33 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   const youPageHelpBtn = document.getElementById('youPageHelpBtn');
   if (youPageHelpBtn) { youPageHelpBtn.onclick = () => { playSound(sfx.modalOpen); if (el.helpMask) el.helpMask.style.display = 'flex'; }; }
   
-  const valorChip = document.getElementById('totalValorChip');
-  if (valorChip) { let valorClickCount = 0; let valorClickTimer = null;
-    valorChip.addEventListener('click', () => { valorClickCount++; if (valorClickTimer) clearTimeout(valorClickTimer);
-      valorClickTimer = setTimeout(() => { valorClickCount = 0; }, 600);
-      if (valorClickCount === 3) { valorClickCount = 0; clearTimeout(valorClickTimer);
-        if (el.devMask) { playSound(sfx.modalOpen);
-            el.rate1.value=RATE_BY_DIFFICULTY[1]; el.rate2.value=RATE_BY_DIFFICULTY[2]; el.rate3.value=RATE_BY_DIFFICULTY[3]; el.rate4.value=RATE_BY_DIFFICULTY[4]; el.rate5.value=RATE_BY_DIFFICULTY[5];
-            el.devRewardBaseChance.value = REWARD_PARAMS.baseChance; el.devRewardBetCoeff.value = REWARD_PARAMS.betCoefficient;
-            el.devRewardMaxChance.value = REWARD_PARAMS.maxChance; el.devRewardPityInc.value = REWARD_PARAMS.pityIncrement;
-            ensureBadgeMeta(); const b = meta.badges || {};
-            el.devTotalHQ.value = Math.floor(state.agg.totalHQ || 0); el.devTickets.value = meta.tickets || 0;
-            el.devFreeze.value = meta.freeze || 0; el.devRareGem.value = b.rare_gem || 0; el.devEpicGem.value = b.epic_gem || 0;
-            el.devRareToken.value = b.rare_tokens || 0; el.devEpicToken.value = b.epic_tokens || 0; el.devLegendToken.value = b.legendary_tokens || 0;
-            el.devMask.style.display = 'flex'; } } }); }
+  const setupDevTrigger = (element) => {
+    if (!element) return;
+    let clickCount = 0;
+    let clickTimer = null;
+    element.addEventListener('click', () => {
+        clickCount++;
+        if (clickTimer) clearTimeout(clickTimer);
+        clickTimer = setTimeout(() => { clickCount = 0; }, 600);
+        if (clickCount === 3) {
+            clickCount = 0;
+            clearTimeout(clickTimer);
+            if (el.devMask) {
+                playSound(sfx.modalOpen);
+                el.rate1.value=RATE_BY_DIFFICULTY[1]; el.rate2.value=RATE_BY_DIFFICULTY[2]; el.rate3.value=RATE_BY_DIFFICULTY[3]; el.rate4.value=RATE_BY_DIFFICULTY[4]; el.rate5.value=RATE_BY_DIFFICULTY[5];
+                el.devRewardBaseChance.value = REWARD_PARAMS.baseChance; el.devRewardBetCoeff.value = REWARD_PARAMS.betCoefficient;
+                el.devRewardMaxChance.value = REWARD_PARAMS.maxChance; el.devRewardPityInc.value = REWARD_PARAMS.pityIncrement;
+                ensureBadgeMeta(); const b = meta.badges || {};
+                el.devTotalHQ.value = Math.floor(state.agg.totalHQ || 0); el.devTickets.value = meta.tickets || 0;
+                el.devFreeze.value = meta.freeze || 0; el.devRareGem.value = b.rare_gem || 0; el.devEpicGem.value = b.epic_gem || 0;
+                el.devRareToken.value = b.rare_tokens || 0; el.devEpicToken.value = b.epic_tokens || 0; el.devLegendToken.value = b.legendary_tokens || 0;
+                el.devMask.style.display = 'flex';
+            }
+        }
+    });
+  };
+  setupDevTrigger(el.totalValorChip);
+  setupDevTrigger(el.mobileHeaderStatus);
   
   if (el.btnSaveResources) { el.btnSaveResources.onclick = () => { playSound(sfx.click); const p = s => parseInt(s, 10) || 0;
       state.agg.totalHQ = p(el.devTotalHQ.value); meta.tickets = p(el.devTickets.value); meta.freeze = p(el.devFreeze.value);
@@ -1883,7 +1989,7 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
           rollMissions(true); save(); renderDaily(); pushToast('每日进度已重置', 'success'); }; }
   
   if (el.btnHardReset) { el.btnHardReset.onclick = () => { playSound(sfx.warn);
-          if (confirm('危险操作：这将清除此浏览器中的所有应用数据，确定吗？')) { Object.values(LS_KEYS).forEach(k => { localStore.removeItem(k); }); window._debugDateOffset = 0; location.reload(); } }; }
+          if (confirm('危险操作：这将清除此浏览器中的所有应用数据，确定吗？')) { resetAppToDefaults(); location.reload(); } }; }
   
   if (el.btnExportState) { el.btnExportState.onclick = () => { playSound(sfx.click);
       const fullState = { tasks: state.tasks, agg: state.agg, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS, active: state.active };
@@ -1902,19 +2008,18 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   function updateSoundButton() { if (btnToggleSound) { btnToggleSound.textContent = `音效：${isSoundMuted ? '关闭' : '开启'}`; } }
   if(btnToggleSound){ btnToggleSound.onclick = () => { isSoundMuted = !isSoundMuted; writeJSON(LS_KEYS.SOUND_MUTED, isSoundMuted); updateSoundButton(); if (!isSoundMuted) { playSound(sfx.click); } }; updateSoundButton(); }
   
-  /* ================================
-   *        Firebase Auth & Sync
-   * ================================ */
   const showLoader = (text) => { if(el.loadingOverlay) { el.loadingOverlay.textContent = text; el.loadingOverlay.style.display = 'flex'; }};
   const hideLoader = () => { if(el.loadingOverlay) el.loadingOverlay.style.display = 'none'; };
 
   const signIn = () => {
+    if (!isFirebaseConfigured) return;
     auth.signInWithPopup(googleProvider).catch(error => {
         console.error("Google Sign-In Error:", error);
         pushToast(`登录失败: ${error.message}`, 'warn');
     });
   };
   const signOut = () => {
+    if (!isFirebaseConfigured) return;
     auth.signOut();
   };
 
@@ -1922,17 +2027,14 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   el.btnLogout.onclick = signOut;
 
   const setupFirestoreListener = (uid) => {
-    if (firestoreUnsubscribe) {
-        firestoreUnsubscribe();
-    }
+    if (firestoreUnsubscribe) firestoreUnsubscribe();
     const docRef = db.collection('users').doc(uid);
     firestoreUnsubscribe = docRef.onSnapshot(doc => {
         if (doc.exists) {
             applyCloudData(doc.data());
         } else {
-            // First time user, create their document with local state
-            console.log("New user, creating document in Firestore.");
-            const fullState = { tasks: state.tasks, agg: state.agg, active: state.active, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS };
+            console.log("New user, creating document in Firestore from local state.");
+            const fullState = { tasks: state.tasks, agg: state.agg, active: state.active, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS, lastUpdated: firebase.firestore.FieldValue.serverTimestamp() };
             docRef.set(fullState);
         }
         hideLoader();
@@ -1943,31 +2045,38 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
     });
   };
 
-  auth.onAuthStateChanged(user => {
-    if (user) {
-        // User is signed in.
-        el.authChipWrapper.classList.add('logged-in');
-        el.authStatusText.textContent = user.displayName || '已登录';
-        el.userAvatar.style.backgroundImage = user.photoURL ? `url(${user.photoURL})` : 'none';
-        showLoader('同步云端数据...');
-        setupFirestoreListener(user.uid);
-    } else {
-        // User is signed out.
-        if (firestoreUnsubscribe) {
-            firestoreUnsubscribe();
-            firestoreUnsubscribe = null;
-        }
-        el.authChipWrapper.classList.remove('logged-in');
-        resetLocalState();
-        hideLoader();
-    }
-  });
+  function initializeApp() {
+    loadStateFromLocalStorage();
+    renderInitial();
+    loop();
+    tickFunshopTimers();
 
-  // App Initialization
-  loadStateFromLocalStorage();
-  renderInitial();
-  loop();
-  tickFunshopTimers();
+    if (!isFirebaseConfigured) {
+        el.authChipWrapper.style.display = 'none';
+        pushToast('Firebase未配置，应用在本地模式下运行', 'info');
+        return;
+    }
+    
+    auth.onAuthStateChanged(user => {
+      if (user) {
+          el.authChipWrapper.classList.add('logged-in');
+          el.authStatusText.textContent = user.displayName || '已登录';
+          el.userAvatar.style.backgroundImage = user.photoURL ? `url(${user.photoURL})` : 'none';
+          showLoader('同步云端数据...');
+          setupFirestoreListener(user.uid);
+      } else {
+          if (firestoreUnsubscribe) {
+              firestoreUnsubscribe();
+              firestoreUnsubscribe = null;
+          }
+          el.authChipWrapper.classList.remove('logged-in');
+          resetAppToDefaults();
+          hideLoader();
+      }
+    });
+  }
+
+  initializeApp();
 });
 </script>
 
