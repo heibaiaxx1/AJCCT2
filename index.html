@@ -13,10 +13,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<!-- Firebase SDKs -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 <style>
   :root{
     --bg: #f5f5f7;
@@ -734,10 +730,6 @@
       ④ 结束进入<b>奖励</b>；开<b>街机</b>可押注奖金。<br/>
       ⑤ 每日任务/幸运轮产出<b>抽卡券、冻结卡、碎片</b>。
       <div style="border-top: 1px solid var(--border); margin-top: 20px; padding-top: 20px;">
-        <div class="auth-chip" id="authChip" style="display: flex; flex-direction: column; align-items: stretch; gap: 8px;">
-          <button class="btn primary" id="login">用 Google 登录</button>
-          <span class="auth-status" id="status" style="text-align: center;">未登录</span>
-        </div>
         <div style="margin-top: 16px; text-align: center;">
             <button class="btn" id="btnToggleSound">音效：开启</button>
         </div>
@@ -869,22 +861,6 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <script>
-  // --- Firebase Initialization ---
-  // IMPORTANT: Replace with your web app's Firebase project configuration
-  const firebaseConfig = {
-    apiKey: "AIzaSyBjcUD9nAGxg5mgTA2v7mMcfD5dcWU9nTw", // <-- REPLACE
-    authDomain: "haoqing-af64d.firebaseapp.com",
-    projectId: "haoqing-af64d",
-    storageBucket: "haoqing-af64d.appspot.com",
-    messagingSenderId: "1025278981441", // <-- REPLACE
-    appId: "1:1025278981441:web:edaf5f1aa9446246c0ddc0" // <-- REPLACE
-  };
-  // Initialize Firebase
-  firebase.initializeApp(firebaseConfig);
-  const auth = firebase.auth();
-  const db = firebase.firestore();
-</script>
-<script>
 /* ========== 存储兜底层 ========== */
 const storage = (() => {
   try {
@@ -997,222 +973,6 @@ const LS_KEYS = {
     LIVE_TIMER: "haoqing_live_timer_v1",
     SOUND_MUTED: "haoqing_sound_muted"
 };
-
-// === Cloud Sync（Firestore 适配） ===
-let CLOUD = { 
-  enabled: false,
-  uid: null,
-  col: null,
-  docIdMap: { 
-    [LS_KEYS.TASKS]: LS_KEYS.TASKS,
-    [LS_KEYS.AGG]: LS_KEYS.AGG,
-    [LS_KEYS.META]: LS_KEYS.META,
-    [LS_KEYS.RATES]: LS_KEYS.RATES,
-    [LS_KEYS.FUNSHOP]: LS_KEYS.FUNSHOP,
-    [LS_KEYS.REWARD_PARAMS]: LS_KEYS.REWARD_PARAMS,
-    [LS_KEYS.LIVE_TIMER]: LS_KEYS.LIVE_TIMER
-  },
-  async get(key){
-    if(!this.enabled || !this.col) return null;
-    const snap = await this.col.doc(this.docIdMap[key] || key).get();
-    return snap.exists ? snap.data() : null; // { value, updatedAt }
-  },
-  async set(key, value){
-    if(!this.enabled || !this.col) return;
-    await this.col.doc(this.docIdMap[key] || key).set({
-      value, 
-      updatedAt: Date.now()
-    }, { merge: true });
-  },
-  subscribeUnsubMap: {},
-  subscribe(key, cb){
-    if(!this.enabled || !this.col) return () => {};
-    const ref = this.col.doc(this.docIdMap[key] || key);
-    const unsub = ref.onSnapshot(snap=>{
-      const d = snap.exists ? snap.data() : { value: null };
-      cb({ 
-        key,
-        value: d.value,
-        updatedAt: d.updatedAt || 0 
-      });
-    });
-    this.subscribeUnsubMap[key] = unsub;
-    return unsub;
-  },
-  unsubscribeAll(){
-    Object.values(this.subscribeUnsubMap).forEach(fn=>{
-      try{fn();}
-      catch{}
-    });
-    this.subscribeUnsubMap = {};
-  }
-};
-
-// ———— 本地读写加时间戳（用于合并） ————
-function readWithUpdatedAt(key, fallback){
-  const v = readJSON(key, fallback);
-  const u = readJSON(key + '__updatedAt', 0);
-  return { value: v, updatedAt: u || 0 };
-}
-
-function writeWithUpdatedAt(key, value, updatedAt){
-  writeJSON(key, value);
-  writeJSON(key + '__updatedAt', updatedAt || Date.now());
-}
-
-// ———— 首次登录后的：合并 + 订阅 ————
-async function initialCloudMergeAndSubscribe(){
-  const keys = Object.values(LS_KEYS).filter(k => k !== LS_KEYS.LIVE_TIMER && k !== LS_KEYS.SOUND_MUTED);
-  const stateUpdaters = {
-      [LS_KEYS.TASKS]: (v) => { state.tasks = Array.isArray(v) ? v : []; },
-      [LS_KEYS.AGG]: (v) => { state.agg = v || { totalHQ: 0, totalSeconds: 0 }; },
-      [LS_KEYS.META]: (v) => { meta = v || meta; ensureBadgeMeta(); },
-      [LS_KEYS.RATES]: (v) => { RATE_BY_DIFFICULTY = { ...DEFAULT_RATES, ...(v || {}) }; },
-      [LS_KEYS.FUNSHOP]: (v) => { FUNSHOP = v || FUNSHOP; },
-      [LS_KEYS.REWARD_PARAMS]: (v) => { REWARD_PARAMS = { ...DEFAULT_REWARD_PARAMS, ...(v || {}) }; }
-  };
-  const subscriptions = {
-      [LS_KEYS.TASKS]: (v) => { state.tasks = Array.isArray(v) ? v : []; renderTasks(); },
-      [LS_KEYS.AGG]: (v) => { state.agg = v || { totalHQ: 0, totalSeconds: 0 }; renderKPI(); renderYou(); },
-      [LS_KEYS.META]: (v) => { meta = v || meta; ensureBadgeMeta(); renderDaily(); renderInventory(); renderWorkshop(); renderYou(); setControls(); updateModeButton(); },
-      [LS_KEYS.RATES]: (v) => { RATE_BY_DIFFICULTY = { ...DEFAULT_RATES, ...(v || {}) }; updateRate(); },
-      [LS_KEYS.FUNSHOP]: (v) => { FUNSHOP = v || FUNSHOP; renderFunshop(); },
-      [LS_KEYS.REWARD_PARAMS]: (v) => { REWARD_PARAMS = { ...DEFAULT_REWARD_PARAMS, ...(v || {}) }; }
-  };
-
-  for(const key of keys){
-    const localDefault = key===LS_KEYS.TASKS ? [] : 
-                         key===LS_KEYS.AGG ? {totalHQ:0,totalSeconds:0} : 
-                         key===LS_KEYS.META ? meta : 
-                         key===LS_KEYS.RATES ? RATE_BY_DIFFICULTY :
-                         key===LS_KEYS.FUNSHOP ? FUNSHOP : 
-                         key===LS_KEYS.REWARD_PARAMS ? REWARD_PARAMS : null;
-    const local = readWithUpdatedAt(key, localDefault);
-    let remote = await CLOUD.get(key);
-
-    if(!remote){
-      await CLOUD.set(key, local.value);
-      writeWithUpdatedAt(key, local.value, Date.now());
-    }else{
-      const ru = remote.updatedAt || 0;
-      const lu = local.updatedAt || 0;
-      if(ru > lu){
-        if (stateUpdaters[key]) stateUpdaters[key](remote.value);
-        writeWithUpdatedAt(key, remote.value, ru);
-      } else if (lu > ru) {
-        await CLOUD.set(key, local.value);
-        writeWithUpdatedAt(key, local.value, Date.now());
-      }
-    }
-  }
-
-  // 合并完刷新一次
-  renderInitial();
-
-  // 远端订阅：跨设备/多标签页实时同步
-  CLOUD.unsubscribeAll();
-  for (const key of keys) {
-      CLOUD.subscribe(key, ({ value, updatedAt }) => {
-          const localU = readJSON(key + '__updatedAt', 0);
-          if ((updatedAt || 0) > (localU || 0)) {
-              if (subscriptions[key]) subscriptions[key](value);
-              writeWithUpdatedAt(key, value, updatedAt);
-          }
-      });
-  }
-
-  // 订阅实时计时器状态
-  CLOUD.subscribe(LS_KEYS.LIVE_TIMER, ({ value }) => {
-      const wasRunning = state.active && !state.active.isPaused;
-
-      if (value && value.taskId) {
-          const wasInactive = !state.active;
-          state.active = value;
-          if (wasInactive) playSound(sfx.timerStart);
-          
-          const task = getTask(state.active.taskId);
-          if(task) {
-              el.activeHint.textContent = `进行中：${task.title}（难度 ${task.difficulty}）`;
-              state.selectedTaskId = task.id; // Keep selection synced
-              renderTasks();
-              updateRate();
-          }
-
-          // If a running timer was just paused, authoritative sync of UI values
-          if (state.active.isPaused && wasRunning) {
-              const task = getTask(state.active.taskId);
-              if (task) {
-                  const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
-                  const finalSessionHQ = (state.active.accumulatedSeconds || 0) * rate;
-                  const finalSessionSeconds = state.active.accumulatedSeconds || 0;
-                  
-                  sessionFlip.setValue(Math.floor(finalSessionHQ), true); // instant update
-                  el.sessionTime.textContent = fmtTime(finalSessionSeconds);
-                  el.taskTotal.textContent = Math.floor((task.totalHQ || 0) + finalSessionHQ);
-                  el.taskTime.textContent = fmtTime((task.totalSeconds || 0) + finalSessionSeconds);
-              }
-          }
-      } else {
-          if (state.active) {
-              state.active = null;
-              el.activeHint.textContent='未选择任务';
-              sessionFlip.setValue(0,true);
-              el.sessionTime.textContent='0:00:00';
-              const lastTask = getTask(state.selectedTaskId);
-              el.taskTotal.textContent = lastTask ? Math.floor(lastTask.totalHQ||0) : '0';
-              el.taskTime.textContent  = lastTask ? fmtTime(lastTask.totalSeconds||0) : '0:00:00';
-              el.rateText.textContent='0';
-              hidePauseIndicator();
-              renderTasks();
-          }
-      }
-      setControls();
-  });
-}
-
-// ———— 暴露给最底部 Firebase 登录脚本调用 ————
-window.AppSync = {
-  async setUser(user, dbInstance){
-    if(user){
-      CLOUD.enabled = true;
-      CLOUD.uid = user.uid;
-      CLOUD.col = dbInstance.collection('users').doc(user.uid).collection('haoqing');
-      await initialCloudMergeAndSubscribe();
-    }else{
-      CLOUD.enabled = false;
-      CLOUD.uid = null;
-      CLOUD.col = null;
-      CLOUD.unsubscribeAll();
-    }
-  }
-};
-
-  const loginBtn = document.getElementById('login');
-  const authStatusEl = document.getElementById('status');
-  const authChip = document.getElementById('authChip');
-  
-  if (loginBtn) {
-    loginBtn.addEventListener('click', () => {
-      const provider = new firebase.auth.GoogleAuthProvider();
-      auth.signInWithPopup(provider)
-        .catch((error) => {
-            console.error("Authentication failed:", error);
-            pushToast(`登录失败: ${error.message}`, 'warn');
-        });
-    });
-  }
-
-  auth.onAuthStateChanged(user => {
-    if (user) {
-        authStatusEl.textContent = `已登录: ${user.displayName || user.email}`;
-        authChip.classList.add('logged-in');
-        window.AppSync.setUser(user, db);
-    } else {
-        authStatusEl.textContent = '未登录';
-        authChip.classList.remove('logged-in');
-        window.AppSync.setUser(null, null);
-    }
-  });
   
   const DEFAULT_RATES={1:1,2:2,3:4,4:7,5:11};
   let RATE_BY_DIFFICULTY = (()=>{ const r=readJSON(LS_KEYS.RATES,{}); return {...DEFAULT_RATES,...r} })();
@@ -1223,8 +983,8 @@ window.AppSync = {
   let state = { 
     tasks: readJSON(LS_KEYS.TASKS, []), 
     agg: readJSON(LS_KEYS.AGG, {totalHQ:0,totalSeconds:0}), 
-    active: null, // This will be driven by Firestore
-    selectedTaskId: null // For UI selection before starting
+    active: readJSON(LS_KEYS.LIVE_TIMER, null),
+    selectedTaskId: null
   };
   let meta = readJSON(LS_KEYS.META, {
     streak:0,pity:0,arcade:false,freeze:0,badges:{},tickets:0,
@@ -1491,32 +1251,13 @@ window.AppSync = {
   function todayKey(){ return getToday().toISOString().slice(0,10); }
 
 function save(){
-  // 本地：写值 + 写时间戳（用于首轮合并时的胜出判断）
-  const now = Date.now();
-  writeWithUpdatedAt(LS_KEYS.TASKS,   state.tasks,           now);
-  writeWithUpdatedAt(LS_KEYS.AGG,   state.agg,             now);
-  writeWithUpdatedAt(LS_KEYS.META,  meta,                  now);
-  writeWithUpdatedAt(LS_KEYS.RATES, RATE_BY_DIFFICULTY,    now);
-  writeWithUpdatedAt(LS_KEYS.FUNSHOP, FUNSHOP,              now);
-  writeWithUpdatedAt(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS, now);
-
-  // 云：若已登录则立即推送，不阻塞 UI 帧
-  if (CLOUD.enabled) {
-    (async () => {
-      try {
-        await Promise.all([
-          CLOUD.set(LS_KEYS.TASKS,      state.tasks),
-          CLOUD.set(LS_KEYS.AGG,      state.agg),
-          CLOUD.set(LS_KEYS.META,     meta),
-          CLOUD.set(LS_KEYS.RATES,    RATE_BY_DIFFICULTY),
-          CLOUD.set(LS_KEYS.FUNSHOP,  FUNSHOP),
-          CLOUD.set(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS),
-        ]);
-      } catch (e) {
-        console.warn('Cloud save error:', e);
-      }
-    })();
-  }
+  writeJSON(LS_KEYS.TASKS, state.tasks);
+  writeJSON(LS_KEYS.AGG, state.agg);
+  writeJSON(LS_KEYS.META, meta);
+  writeJSON(LS_KEYS.RATES, RATE_BY_DIFFICULTY);
+  writeJSON(LS_KEYS.FUNSHOP, FUNSHOP);
+  writeJSON(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS);
+  writeJSON(LS_KEYS.LIVE_TIMER, state.active);
 }
 
   function pushToast(message, variant='info'){
@@ -1853,7 +1594,7 @@ function setControls(){
     }
   }
   
-  async function startTimer(){
+  function startTimer(){
     if (state.active && !state.active.isPaused) return; // Already running
 
     const taskId = state.active ? state.active.taskId : state.selectedTaskId;
@@ -1864,10 +1605,7 @@ function setControls(){
     }
     
     const task = getTask(taskId);
-    if (!task || !CLOUD.enabled) {
-      if(!CLOUD.enabled) pushToast('请先登录以使用计时器。', 'warn');
-      return;
-    }
+    if (!task) return;
 
     playSound(sfx.timerStart);
 
@@ -1895,11 +1633,18 @@ function setControls(){
     }
 
     state.selectedTaskId = null;
-    await CLOUD.set(LS_KEYS.LIVE_TIMER, newTimerState);
+    state.active = newTimerState;
+    save();
+    
+    el.activeHint.textContent = `进行中：${task.title}（难度 ${task.difficulty}）`;
+    renderTasks();
+    updateRate();
+    setControls();
+    hidePauseIndicator();
   }
 
-  async function pauseTimer(){
-    if(!state.active || state.active.isPaused || !CLOUD.enabled) return;
+  function pauseTimer(){
+    if(!state.active || state.active.isPaused) return;
     
     playSound(sfx.timerPause);
     const now = Date.now();
@@ -1913,11 +1658,10 @@ function setControls(){
         startTime: null,
     };
     
-    // Optimistic local update of state and UI
     state.active = newTimerState;
+    save();
     setControls();
 
-    // Immediately update UI to final state to prevent animation desync
     const task = getTask(state.active.taskId);
     if(task) {
       const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
@@ -1929,8 +1673,6 @@ function setControls(){
       el.taskTotal.textContent = Math.floor((task.totalHQ || 0) + finalSessionHQ);
       el.taskTime.textContent = fmtTime((task.totalSeconds || 0) + finalSessionSeconds);
     }
-
-    await CLOUD.set(LS_KEYS.LIVE_TIMER, newTimerState);
   }
 
   /* —— 今日已完成：核心 —— */
@@ -1971,7 +1713,6 @@ function setControls(){
   }
 
   /* 奖励计算与弹窗 */
-  // [fix] 统一绑定奖励弹窗关闭事件，防止押注后关闭失效
   function bindRewardClose() {
     const closeBtn = el.btnCloseReward;
     if (closeBtn) {
@@ -2014,17 +1755,15 @@ function setControls(){
           playSound(sfx.click);
           const bet = parseFloat(opt.dataset.bet);
           if(bet === 0){
-            // 不押注，直接给基础奖励
             state.agg.totalHQ = (state.agg.totalHQ || 0) + baseReward;
             save(); renderKPI();
             body.innerHTML += `<div class="result-bar result-ok" style="margin-top:16px">已领取基础奖励 +${baseReward}</div>`;
             bindRewardClose();
           }else{
-            // 押注逻辑
             const cost = Math.floor(baseReward * bet);
             const chance = Math.min(REWARD_PARAMS.maxChance, REWARD_PARAMS.baseChance + bet * REWARD_PARAMS.betCoefficient + (meta.pity || 0));
             const won = Math.random() < chance;
-            const loot = won ? Math.floor(cost * (1.5 + Math.random() * 1.5)) : 0; // 赢取1.5~3倍
+            const loot = won ? Math.floor(cost * (1.5 + Math.random() * 1.5)) : 0;
             
             if(won){
               state.agg.totalHQ = (state.agg.totalHQ || 0) + loot;
@@ -2056,7 +1795,6 @@ function setControls(){
         };
       });
     }else{
-      // 非街机模式直接给奖励
       state.agg.totalHQ = (state.agg.totalHQ || 0) + baseReward;
       save(); renderKPI();
       body.innerHTML += `<div class="result-bar result-ok" style="margin-top:16px">已领取基础奖励 +${baseReward}</div>`;
@@ -2068,14 +1806,11 @@ function setControls(){
   function triggerCompletionAnimation() {
     const container = document.getElementById('completion-animation-container');
     if (!container) return;
-
     container.innerHTML = '';
-
     const textEl = document.createElement('div');
     textEl.className = 'completion-text';
     textEl.textContent = '任务完成!';
     container.appendChild(textEl);
-
     const confettiCount = 50;
     const colors = ['var(--primary)', 'var(--accent)', '#e3b341', '#3fb950'];
     for (let i = 0; i < confettiCount; i++) {
@@ -2088,22 +1823,18 @@ function setControls(){
         confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
         container.appendChild(confetti);
     }
-    
-    setTimeout(() => {
-        container.innerHTML = '';
-    }, 2500);
+    setTimeout(() => { container.innerHTML = ''; }, 2500);
   }
 
-  /* 结束计时（最终版） */
-  async function stopTimer(){
+  function stopTimer(){
     if(!state.active) return;
     playSound(sfx.timerStop);
 
     const activeSession = { ...state.active };
-    await CLOUD.set(LS_KEYS.LIVE_TIMER, null); // Signal other clients
+    state.active = null;
+    save();
 
     const t = getTask(activeSession.taskId);
-
     let sessionSeconds = activeSession.accumulatedSeconds || 0;
     if (!activeSession.isPaused && activeSession.startTime) {
         sessionSeconds += (Date.now() - activeSession.startTime) / 1000;
@@ -2137,6 +1868,17 @@ function setControls(){
     save();
     renderTasks();
     renderKPI();
+    
+    // Reset timer UI
+    el.activeHint.textContent='未选择任务';
+    sessionFlip.setValue(0,true);
+    el.sessionTime.textContent='0:00:00';
+    el.taskTotal.textContent='0';
+    el.taskTime.textContent='0:00:00';
+    el.rateText.textContent='0';
+    hidePauseIndicator();
+    setControls();
+    
     if(extraReward){
       if(extraReward.type!=='hq'){ renderInventory(); }
       pushToast(extraReward.message,'success');
@@ -2147,8 +1889,6 @@ function setControls(){
         singleMissionJudge(sessionSeconds, diff, pauses);
         openReward({ baseHQ: sessionHQ, seconds: sessionSeconds, difficulty: diff, rawHQ: sessionHQ });
     }, 1800);
-
-    // No need to reset UI here, subscription handler will do it.
   }
 
   let lastKnownTotalHQForDisplay = 0;
@@ -2710,7 +2450,6 @@ function todayObj(){
           if (confirm('危险操作：这将清除此浏览器中的所有应用数据，确定吗？')) {
               Object.values(LS_KEYS).forEach(k => {
                   storage.removeItem(k);
-                  storage.removeItem(k + '__updatedAt');
               });
               window._debugDateOffset = 0;
               location.reload();
