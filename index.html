@@ -1908,7 +1908,7 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
         el.btnSync.disabled = false;
       }
       if (status === 'synced' || status === 'error') {
-        const buttonText = status === 'synced' ? '已同步 ✓' : '同步失败 ✗';
+        const buttonText = status === 'synced' ? '已同步 ✓' : `同步失败 ✗ ${msg}`.trim();
         if (el.btnSync) {
           el.btnSync.textContent = buttonText;
           el.btnSync.disabled = true;
@@ -1985,9 +1985,19 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
             throw new Error(`HTTP ${response.status}: ${errorText}`);
         }
     } catch (e) {
+        let errorMsg = '加载失败';
+        if (e instanceof TypeError && e.message.includes('Failed to fetch')) {
+          errorMsg = '网络错误/CORS';
+          pushToast('网络请求失败。请检查网络连接，以及OSS的CORS跨域配置。', 'warn');
+        } else if (e.message.includes('HTTP 403')) {
+          errorMsg = '无权限(403)';
+          pushToast('请求被拒绝(403)。请检查您的Access Key权限和配置信息。', 'warn');
+        } else {
+          errorMsg = '未知错误';
+          pushToast(`从 OSS 加载数据失败: ${e.message}`, 'warn');
+        }
         console.error('OSS Load Error:', e);
-        pushToast('从 OSS 加载数据失败', 'warn');
-        updateSyncStatus('error');
+        updateSyncStatus('error', errorMsg);
         return false;
     } finally {
         hideLoader();
@@ -2017,9 +2027,19 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
         }
         updateSyncStatus('synced');
     } catch (e) {
+        let errorMsg = '保存失败';
+        if (e instanceof TypeError && e.message.includes('Failed to fetch')) {
+          errorMsg = '网络错误/CORS';
+           pushToast('网络请求失败。请检查网络连接，以及OSS的CORS跨域配置。', 'warn');
+        } else if (e.message.includes('HTTP 403')) {
+           errorMsg = '无权限(403)';
+           pushToast('请求被拒绝(403)。请检查您的Access Key权限和配置信息。', 'warn');
+        } else {
+           errorMsg = '未知错误';
+           pushToast(`同步到 OSS 失败: ${e.message}`, 'warn');
+        }
         console.error('OSS Save Error:', e);
-        pushToast('同步到 OSS 失败', 'warn');
-        updateSyncStatus('error');
+        updateSyncStatus('error', errorMsg);
     }
   }
 
