@@ -13,11 +13,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<!-- Firebase SDKs -->
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-storage.js"></script>
+<!-- Tencent CloudBase SDK -->
+<script src="https://imgcache.qq.com/qcloud/cloudbase/js-sdk/1.10.0/cloudbase.full.js"></script>
 
 <style>
   :root{
@@ -543,7 +540,7 @@
       <span class="chip" id="modeSwitchWrapper"><button class="btn" id="modeSwitchBtn">专注模式</button></span>
       <span class="chip" id="helpBtnWrapper"><button class="btn" id="btnHelp">帮助 ❓</button></span>
       <span class="chip auth-chip" id="authChipWrapper">
-          <button class="btn btn-login" id="btnLogin">用 Google 登录</button>
+          <button class="btn btn-login" id="btnLogin">匿名登录/注册</button>
           <span class="auth-status">
               <span class="user-avatar" id="userAvatar"></span>
               <span id="authStatusText">已登录</span>
@@ -969,40 +966,33 @@ if ('serviceWorker' in navigator) {
 document.addEventListener('DOMContentLoaded', ()=>{
 
 // ⚠️ ========================================================== ⚠️
-// ⚠️  在此处粘贴你的 Firebase 项目配置!
-// ⚠️  Get it from your Firebase project settings.
+// ⚠️  在此处粘贴你的腾讯云 CloudBase 环境 ID!
+// ⚠️  Get it from your TCB project settings.
 // ⚠️ ========================================================== ⚠️
-const firebaseConfig = {
-  apiKey: "AIzaSyBjcUD9nAGxg5mgTA2v7mMcfD5dcWU9nTw",
-  authDomain: "haoqing-af64d.firebaseapp.com",
-  projectId: "haoqing-af64d",
-  storageBucket: "haoqing-af64d.firebasestorage.app",
-  messagingSenderId: "1025278981441",
-  appId: "1:1025278981441:web:edaf5f1aa9446246c0ddc0"
+const cloudbaseConfig = {
+  env: "YOUR_TCB_ENV_ID"
 };
 
 // ====================================================================
-// =================== 坚不可摧的初始化与 Firebase 逻辑 ==================
+// =================== 坚不可摧的初始化与 CloudBase 逻辑 ==================
 // ====================================================================
 
-const isFirebaseConfigured = firebaseConfig && firebaseConfig.apiKey && firebaseConfig.apiKey !== "YOUR_API_KEY";
-let auth, db, storage, googleProvider, firestoreUnsubscribe = null;
+const isCloudBaseConfigured = cloudbaseConfig && cloudbaseConfig.env && cloudbaseConfig.env !== "YOUR_TCB_ENV_ID";
+let app, auth, db, realtimeListener = null;
 
-if (isFirebaseConfigured) {
+if (isCloudBaseConfigured) {
   try {
-    firebase.initializeApp(firebaseConfig);
-    auth = firebase.auth();
-    db = firebase.firestore();
-    storage = firebase.storage();
-    googleProvider = new firebase.auth.GoogleAuthProvider();
-    console.log("Firebase initialized successfully.");
+    app = cloudbase.init(cloudbaseConfig);
+    auth = app.auth({ persistence: "local" });
+    db = app.database();
+    console.log("Tencent CloudBase initialized successfully.");
   } catch (e) {
-    console.error("Firebase initialization failed:", e);
-    alert("Firebase 初始化失败，请检查您的配置。应用将以本地模式运行。");
-    isFirebaseConfigured = false;
+    console.error("CloudBase initialization failed:", e);
+    alert("CloudBase 初始化失败，请检查您的配置。应用将以本地模式运行。");
+    isCloudBaseConfigured = false;
   }
 } else {
-  console.warn("Firebase is not configured. Running in local-only mode.");
+  console.warn("CloudBase is not configured. Running in local-only mode.");
 }
 
 
@@ -1348,17 +1338,22 @@ const LS_KEYS = {
     };
   }
 
-  const debouncedSaveToFirebase = debounce(() => {
-      if (!isFirebaseConfigured || !auth.currentUser) return;
+  const debouncedSaveToCloudBase = debounce(() => {
+      const loginState = auth.currentUser;
+      if (!isCloudBaseConfigured || !loginState) return;
+      
       const fullState = { 
         tasks: state.tasks, agg: state.agg, active: state.active, 
         meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, 
         rewardParams: REWARD_PARAMS,
-        lastUpdated: firebase.firestore.FieldValue.serverTimestamp()
+        _id: loginState.uid, // CloudBase uses _id for document ID
+        lastUpdated: new Date()
       };
-      db.collection('users').doc(auth.currentUser.uid).set(fullState, { merge: true })
+      
+      // Use set() with doc ID for upsert behavior
+      db.collection('users').doc(loginState.uid).set(fullState)
         .catch(err => {
-            console.error("Firestore save error:", err);
+            console.error("CloudBase save error:", err);
             let msg = '云端同步失败';
             if (err.code === 'permission-denied') msg = '云端同步失败：权限不足';
             pushToast(msg, 'warn');
@@ -1373,8 +1368,8 @@ const LS_KEYS = {
     writeJSON(LS_KEYS.FUNSHOP, FUNSHOP);
     writeJSON(LS_KEYS.REWARD_PARAMS, REWARD_PARAMS);
 
-    if (isFirebaseConfigured && auth.currentUser) {
-      debouncedSaveToFirebase();
+    if (isCloudBaseConfigured && auth.currentUser) {
+      debouncedSaveToCloudBase();
     }
   }
 
@@ -1884,7 +1879,8 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   }
   
   if (el.avatarUploader) {
-    el.avatarUploader.onclick = () => { if (!isFirebaseConfigured || !auth.currentUser) { pushToast('请先登录', 'warn'); return; } el.avatarInput.click(); };
+    el.avatarUploader.onclick = () => { if (!isCloudBaseConfigured || !auth.currentUser) { pushToast('请先登录', 'warn'); return; } el.avatarInput.click(); };
+    
     const resizeImage = (file, maxWidth, maxHeight, quality) => {
         return new Promise((resolve, reject) => { const reader = new FileReader();
             reader.onload = e => { const img = new Image(); img.onload = () => { let width = img.width; let height = img.height;
@@ -1895,20 +1891,34 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
                 img.onerror = reject; img.src = e.target.result; };
             reader.onerror = reject; reader.readAsDataURL(file); }); };
 
+    function dataURLtoFile(dataurl, filename) {
+        var arr = dataurl.split(','), mime = arr[0].match(/:(.*?);/)[1],
+            bstr = atob(arr[1]), n = bstr.length, u8arr = new Uint8Array(n);
+        while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+        return new File([u8arr], filename, {type:mime});
+    }
+
     el.avatarInput.onchange = async e => {
-      const file = e.target.files[0]; if (!file || !isFirebaseConfigured || !auth.currentUser) return;
+      const file = e.target.files[0]; 
+      const loginState = auth.currentUser;
+      if (!file || !isCloudBaseConfigured || !loginState) return;
       el.avatarUploader.innerHTML = '处理中...'; el.avatarInput.value = '';
       try {
         const resizedDataUrl = await resizeImage(file, 256, 256, 0.8);
-        const storageRef = storage.ref(`avatars/${auth.currentUser.uid}.jpg`);
-        const uploadTask = await storageRef.putString(resizedDataUrl, 'data_url');
-        const downloadURL = await uploadTask.ref.getDownloadURL();
+        const imageFile = dataURLtoFile(resizedDataUrl, 'avatar.jpg');
+        const cloudPath = `avatars/${loginState.uid}.jpg`;
+        
+        const uploadResult = await app.uploadFile({ cloudPath: cloudPath, filePath: imageFile });
+        const fileListResult = await app.getTempFileURL({ fileList: [uploadResult.fileID] });
+        const downloadURL = fileListResult.fileList[0].tempFileURL;
+
         meta.character.avatar = downloadURL;
         save();
         pushToast('头像已上传并同步', 'success');
       } catch (error) {
         console.error("Avatar upload failed:", error);
         pushToast(`头像上传失败: ${error.code || error.message}`, 'warn');
+      } finally {
         renderYou();
       }
     };
@@ -2011,69 +2021,88 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   const showLoader = (text) => { if(el.loadingOverlay) { el.loadingOverlay.textContent = text; el.loadingOverlay.style.display = 'flex'; }};
   const hideLoader = () => { if(el.loadingOverlay) el.loadingOverlay.style.display = 'none'; };
 
-  const signIn = () => {
-    if (!isFirebaseConfigured) return;
-    auth.signInWithPopup(googleProvider).catch(error => {
-        console.error("Google Sign-In Error:", error);
+  const signIn = async () => {
+    if (!isCloudBaseConfigured) return;
+    try {
+        await auth.anonymousAuthProvider().signIn();
+        pushToast('匿名登录成功', 'success');
+    } catch (error) {
+        console.error("Anonymous Sign-In Error:", error);
         pushToast(`登录失败: ${error.message}`, 'warn');
-    });
+    }
   };
   const signOut = () => {
-    if (!isFirebaseConfigured) return;
+    if (!isCloudBaseConfigured) return;
     auth.signOut();
   };
 
   el.btnLogin.onclick = signIn;
   el.btnLogout.onclick = signOut;
 
-  const setupFirestoreListener = (uid) => {
-    if (firestoreUnsubscribe) firestoreUnsubscribe();
-    const docRef = db.collection('users').doc(uid);
-    firestoreUnsubscribe = docRef.onSnapshot(doc => {
-        if (doc.exists) {
-            applyCloudData(doc.data());
+  const setupCloudBaseListener = (uid) => {
+    if (realtimeListener) realtimeListener.close();
+    
+    realtimeListener = db.collection('users').doc(uid).watch({
+      onChange: (snapshot) => {
+        if (snapshot.docs.length > 0) {
+          // Document exists and was updated
+          const data = snapshot.docs[0];
+          // CloudBase _id is the UID, so we can remove it before applying
+          delete data._id;
+          applyCloudData(data);
+        } else if (snapshot.docChanges.every(c => c.dataType === 'remove')) {
+            // This case is unlikely if we only listen to one doc, but good to handle
         } else {
-            console.log("New user, creating document in Firestore from local state.");
-            const fullState = { tasks: state.tasks, agg: state.agg, active: state.active, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS, lastUpdated: firebase.firestore.FieldValue.serverTimestamp() };
-            docRef.set(fullState);
+          // Initial snapshot is empty, means new user
+          console.log("New user, creating document in CloudBase from local state.");
+          const fullState = { tasks: state.tasks, agg: state.agg, active: state.active, meta: meta, rates: RATE_BY_DIFFICULTY, funshop: FUNSHOP, rewardParams: REWARD_PARAMS, lastUpdated: new Date() };
+          db.collection('users').doc(uid).set(fullState);
         }
         hideLoader();
-    }, error => {
-        console.error("Firestore listener error:", error);
+      },
+      onError: (err) => {
+        console.error("CloudBase listener error:", err);
         pushToast('与云端同步时出错', 'warn');
         hideLoader();
+      }
     });
   };
 
-  function initializeApp() {
+  async function initializeApp() {
     loadStateFromLocalStorage();
     renderInitial();
     loop();
     tickFunshopTimers();
 
-    if (!isFirebaseConfigured) {
+    if (!isCloudBaseConfigured) {
         el.authChipWrapper.style.display = 'none';
-        pushToast('Firebase未配置，应用在本地模式下运行', 'info');
+        pushToast('CloudBase未配置，应用在本地模式下运行', 'info');
         return;
     }
     
-    auth.onAuthStateChanged(user => {
-      if (user) {
+    auth.onLoginStateChanged(async (loginState) => {
+      if (loginState) {
           el.authChipWrapper.classList.add('logged-in');
-          el.authStatusText.textContent = user.displayName || '已登录';
-          el.userAvatar.style.backgroundImage = user.photoURL ? `url(${user.photoURL})` : 'none';
+          el.authStatusText.textContent = '已登录 (匿名)';
+          el.userAvatar.style.backgroundImage = 'none'; // No avatar for anonymous
           showLoader('同步云端数据...');
-          setupFirestoreListener(user.uid);
+          setupCloudBaseListener(loginState.user.uid);
       } else {
-          if (firestoreUnsubscribe) {
-              firestoreUnsubscribe();
-              firestoreUnsubscribe = null;
+          if (realtimeListener) {
+              realtimeListener.close();
+              realtimeListener = null;
           }
           el.authChipWrapper.classList.remove('logged-in');
           resetAppToDefaults();
           hideLoader();
       }
     });
+
+    // Check initial login state
+    const loginState = await auth.getLoginState();
+    if (!loginState) {
+        signIn(); // Automatically sign in anonymously on first load
+    }
   }
 
   initializeApp();
