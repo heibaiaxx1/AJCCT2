@@ -1,22 +1,24 @@
-const CACHE_NAME = 'haoqing-cache-v3';
+const CACHE_NAME = 'haoqing-cache-v12';
 const URLS_TO_CACHE = [
   '/',
   'index.html',
-  'assets/tasks-audio.mp3',
-  'assets/timer-audio.mp3',
-  'assets/backpack-audio.mp3',
-  'assets/club-audio.mp3',
-  'assets/sfx_add.mp3',
-  'assets/sfx_select.mp3',
-  'assets/sfx_delete.mp3',
-  'assets/sfx_timer_start.mp3',
-  'assets/sfx_timer_pause.mp3',
-  'assets/sfx_timer_stop.mp3',
-  'assets/sfx_modal_open.mp3',
-  'assets/sfx_modal_close.mp3',
-  'assets/sfx_success.mp3',
-  'assets/sfx_warn.mp3',
-  'assets/sfx_click.mp3'
+  'index.js',
+  'https://static.cloudbase.net/cloudbase-js-sdk/2.22.4/cloudbase.full.js',
+  'assets/sfx/nav_tasks.mp3',
+  'assets/sfx/nav_timer.mp3',
+  'assets/sfx/nav_backpack.mp3',
+  'assets/sfx/nav_club.mp3',
+  'assets/sfx/add.mp3',
+  'assets/sfx/select.mp3',
+  'assets/sfx/delete.mp3',
+  'assets/sfx/timer_start.mp3',
+  'assets/sfx/timer_pause.mp3',
+  'assets/sfx/timer_stop.mp3',
+  'assets/sfx/modal_open.mp3',
+  'assets/sfx/modal_close.mp3',
+  'assets/sfx/success.mp3',
+  'assets/sfx/warn.mp3',
+  'assets/sfx/click.mp3'
 ];
 
 self.addEventListener('install', event => {
@@ -25,33 +27,52 @@ self.addEventListener('install', event => {
     caches.open(CACHE_NAME)
       .then(cache => {
         console.log('Opened cache and caching app shell and assets.');
-        return cache.addAll(URLS_TO_CACHE);
+        // Use a new Request object to avoid "request has been consumed" error
+        const requests = URLS_TO_CACHE.map(url => new Request(url, {cache: 'reload'}));
+        return cache.addAll(requests).catch(err => {
+          console.error('Failed to cache all resources:', err);
+          // Even if some assets fail (e.g., 404), the core app should still be cached.
+          // This makes the PWA more resilient.
+        });
       })
   );
 });
 
 self.addEventListener('fetch', event => {
-  // We only want to handle GET requests.
-  if (event.request.method !== 'GET') {
+  // We only want to handle GET requests for http/https protocols.
+  if (event.request.method !== 'GET' || !event.request.url.startsWith('http')) {
+    return;
+  }
+
+  // For CloudBase API calls, always go to the network.
+  if (event.request.url.includes('cloudbase')) {
     return;
   }
 
   event.respondWith(
-    caches.open(CACHE_NAME).then(cache => {
-      return fetch(event.request)
-        .then(response => {
-          if (response.status === 200) {
-            // Do not cache firebase requests
-            if (!response.url.includes('firebase')) {
-                cache.put(event.request, response.clone());
+    caches.match(event.request)
+      .then(cachedResponse => {
+        // Return the cached response if it exists.
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        // If not in cache, fetch from the network.
+        return fetch(event.request).then(
+          networkResponse => {
+            // Check if we received a valid response
+            if(!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+              return networkResponse;
             }
+            // Clone the response and put it in the cache.
+            const responseToCache = networkResponse.clone();
+            caches.open(CACHE_NAME)
+              .then(cache => {
+                cache.put(event.request, responseToCache);
+              });
+            return networkResponse;
           }
-          return response;
-        })
-        .catch(() => {
-          return caches.match(event.request);
-        });
-    })
+        );
+      })
   );
 });
 
