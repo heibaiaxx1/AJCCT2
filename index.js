@@ -629,34 +629,91 @@ const processSaveQueue = async () => {
     // The actual save operation
     const uid = currentLoginState?.user?.uid;
     if (isCloudBaseConfigured && cloudSyncReady && !isApplyingRemoteSnapshot && uid) {
+        // 检查网络连接状态
+        if (navigator.onLine === false) {
+            console.log("Device is offline, skipping cloud sync");
+            isSavingToCloud = false;
+            document.body.classList.remove('is-saving');
+            // 等待网络恢复后再尝试
+            setTimeout(() => {
+                if (saveQueued === false) saveQueued = true; // 重新标记需要保存
+            }, 5000);
+            return;
+        }
+        
         const syncStamp = Date.now();
         const payload = getFullStateSnapshot(syncStamp);
         
         try {
-            // 使用事务操作确保数据一致性
-            const transaction = await db.startTransaction();
-            try {
-                await transaction.collection('users').doc(uid).set(payload);
-                await transaction.commit();
-                lastRemoteSyncStamp = Math.max(lastRemoteSyncStamp, syncStamp);
-            } catch (txError) {
-                await transaction.rollback();
-                throw txError;
+            // iOS设备上使用更简单的保存方式，避免事务失败
+            if (isIOSDevice) {
+                await db.collection('users').doc(uid).set(payload);
+            } else {
+                // 非iOS设备继续使用事务操作
+                const transaction = await db.startTransaction();
+                try {
+                    await transaction.collection('users').doc(uid).set(payload);
+                    await transaction.commit();
+                } catch (txError) {
+                    await transaction.rollback();
+                    throw txError;
+                }
+            }
+            lastRemoteSyncStamp = Math.max(lastRemoteSyncStamp, syncStamp);
+            // 重置重试计数器
+            state.saveRetryCount = 0;
+            
+            // iOS设备上成功保存后立即执行时间同步
+            if (isIOSDevice) {
+                try {
+                    await syncTimeOffset();
+                } catch (timeError) {
+                    console.warn("Time sync failed after save on iOS:", timeError);
+                }
             }
         } catch (err) {
             console.error("CloudBase save error:", err);
-            pushToast('云端同步失败，将重试', 'warn');
             
-            // 如果同步失败，标记需要重试
-            saveQueued = true;
+            // 增强错误处理，区分不同类型的错误
+            const errorCode = err.code || '';
+            const isNetworkError = errorCode.includes('NETWORK') || 
+                                 errorCode.includes('TIMEOUT') ||
+                                 errorCode.includes('CONNECTION');
             
-            // 指数退避重试机制
-            const retryDelay = Math.min(1000 * Math.pow(2, state.saveRetryCount || 0), 30000);
-            state.saveRetryCount = (state.saveRetryCount || 0) + 1;
-            
-            setTimeout(() => {
-                if (saveQueued) processSaveQueue();
-            }, retryDelay);
+            // 如果是网络错误，减少重试频率，特别是iOS设备
+            if (isNetworkError && isIOSDevice) {
+                const retryDelay = Math.min(5000 * Math.pow(1.5, state.saveRetryCount || 0), 60000);
+                state.saveRetryCount = (state.saveRetryCount || 0) + 1;
+                
+                // 只在前几次重试时显示提示，避免频繁弹出
+                if (state.saveRetryCount <= 3) {
+                    pushToast('iOS云端同步中，请稍候...', 'info');
+                }
+                
+                // 标记需要重试
+                saveQueued = true;
+                
+                setTimeout(() => {
+                    if (saveQueued) processSaveQueue();
+                }, retryDelay);
+            } 
+            // 非网络错误或非iOS设备，使用原有逻辑
+            else {
+                if (state.saveRetryCount < 5) {
+                    pushToast('云端同步失败，将重试', 'warn');
+                }
+                
+                // 如果同步失败，标记需要重试
+                saveQueued = true;
+                
+                // 指数退避重试机制
+                const retryDelay = Math.min(1000 * Math.pow(2, state.saveRetryCount || 0), 30000);
+                state.saveRetryCount = (state.saveRetryCount || 0) + 1;
+                
+                setTimeout(() => {
+                    if (saveQueued) processSaveQueue();
+                }, retryDelay);
+            }
         }
     }
     
@@ -1124,6 +1181,14 @@ async function getServerTime() {
 async function syncTimeOffset() {
     if (!isCloudBaseConfigured || !db) return;
     
+    // iOS设备上降低时间同步频率，避免频繁请求
+    const now = Date.now();
+    if (isIOSDevice && window.lastTimeSyncAttempt && (now - window.lastTimeSyncAttempt < 15000)) {
+        return; // iOS设备上至少间隔15秒再尝试同步
+    }
+    
+    window.lastTimeSyncAttempt = now;
+    
     try {
         const serverTime = await getServerTime();
         const localTime = Date.now();
@@ -1141,9 +1206,34 @@ async function syncTimeOffset() {
                     state.active.serverStartTime = serverTime - ((localTime - state.active.startTime) / 1000) * 1000;
                 }
             }
+            
+            // 重置时间同步失败计数器
+            window.timeSyncFailureCount = 0;
+        } else {
+            // iOS设备上对获取服务器时间失败的情况进行特殊处理
+            if (isIOSDevice) {
+                window.timeSyncFailureCount = (window.timeSyncFailureCount || 0) + 1;
+                
+                // 如果连续失败多次，则回退到本地时间，避免一直尝试
+                if (window.timeSyncFailureCount > 3) {
+                    console.warn("Server time sync failed multiple times on iOS, falling back to local time");
+                    window.GLOBAL_TIME_OFFSET = 0;
+                }
+            }
         }
     } catch (error) {
         console.error("Failed to sync time offset:", error);
+        
+        // iOS设备上增加特殊处理
+        if (isIOSDevice) {
+            window.timeSyncFailureCount = (window.timeSyncFailureCount || 0) + 1;
+            
+            // 如果连续失败多次，则回退到本地时间，避免一直尝试
+            if (window.timeSyncFailureCount > 3) {
+                console.warn("Time sync failed multiple times on iOS, falling back to local time");
+                window.GLOBAL_TIME_OFFSET = 0;
+            }
+        }
     }
 }
 
@@ -1950,7 +2040,8 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
     
     // 增强监听器，添加错误重试机制和主动检查机制
     let retryCount = 0;
-    const maxRetries = 5;
+    // iOS设备上减少最大重试次数，避免频繁重试
+    const maxRetries = isIOSDevice ? 3 : 5;
     let lastKnownVersion = state.syncVersion || 0;
     
     const createListener = () => {
@@ -1981,12 +2072,25 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
                 },
                 onError: (err) => {
                     console.error("CloudBase listener error:", err);
-                    pushToast(`与云端同步时出错 (尝试 ${retryCount + 1}/${maxRetries})`, 'warn');
                     
-                    // 指数退避重试
+                    // 增强错误处理，区分不同类型的错误
+                    const errorCode = err.code || '';
+                    const isNetworkError = errorCode.includes('NETWORK') || 
+                                         errorCode.includes('TIMEOUT') ||
+                                         errorCode.includes('CONNECTION');
+                    
+                    // iOS设备上减少错误提示频率
+                    if (!isIOSDevice || retryCount < 2) {
+                        pushToast(`与云端同步时出错 (尝试 ${retryCount + 1}/${maxRetries})`, 'warn');
+                    }
+                    
+                    // 指数退避重试，iOS设备上使用更长的延迟
+                    const baseDelay = isIOSDevice ? 2000 : 1000;
+                    const maxDelay = isIOSDevice ? 60000 : 30000;
+                    
                     if (retryCount < maxRetries) {
                         retryCount++;
-                        const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+                        const delay = Math.min(baseDelay * Math.pow(2, retryCount), maxDelay);
                         
                         setTimeout(() => {
                             if (currentLoginState?.user?.uid === uid) {
@@ -1994,13 +2098,25 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
                             }
                         }, delay);
                     } else {
-                        pushToast('云端同步重试次数已达上限，请刷新页面', 'err');
-                        hideLoader();
+                        if (!isIOSDevice || retryCount === maxRetries) {
+                            pushToast('云端同步连接不稳定，正在尝试重新连接', 'info');
+                        }
+                        
+                        // iOS上不显示错误提示，而是尝试在更长时间后重试
+                        setTimeout(() => {
+                            if (currentLoginState?.user?.uid === uid) {
+                                retryCount = 0; // 重置重试计数
+                                createListener();
+                            }
+                        }, isIOSDevice ? 120000 : 60000); // iOS上2分钟后重试，其他设备1分钟后重试
                     }
                 }
             });
             
             // 添加主动检查机制，定期检查数据同步状态
+            // iOS设备上降低检查频率，减少网络请求
+            const checkInterval = isIOSDevice ? 10000 : 3000; // iOS上10秒检查一次
+            
             setInterval(async () => {
                 if (currentLoginState?.user?.uid === uid) {
                     try {
@@ -2023,15 +2139,21 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
                         }
                     } catch (error) {
                         console.error("Error during periodic sync check:", error);
+                        // iOS设备上不显示这些错误，避免频繁提示
+                        if (!isIOSDevice) {
+                            console.error("Sync check error:", error);
+                        }
                     }
                 }
-            }, 3000); // 减少到3秒检查一次，提高同步频率
+            }, checkInterval);
             
         } catch (error) {
             console.error("Failed to create CloudBase listener:", error);
             if (retryCount < maxRetries) {
                 retryCount++;
-                const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+                const delay = isIOSDevice ? 
+                    Math.min(2000 * Math.pow(2, retryCount), 60000) :
+                    Math.min(1000 * Math.pow(2, retryCount), 30000);
                 
                 setTimeout(() => {
                     if (currentLoginState?.user?.uid === uid) {
@@ -2055,6 +2177,36 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
         el.authChipWrapper.style.display = 'none';
         pushToast('CloudBase未配置，应用在本地模式下运行', 'info');
         return;
+    }
+    
+    // 添加网络状态监听，特别是在iOS设备上
+    if ('ononline' in window && 'onoffline' in window) {
+      window.addEventListener('online', () => {
+        console.log("Network connection restored");
+        pushToast('网络已连接，正在同步数据...', 'info');
+        
+        // 网络恢复时，触发一次保存操作
+        if (currentLoginState && currentLoginState.user && saveQueued === false) {
+          saveQueued = true;
+          processSaveQueue();
+        }
+        
+        // 网络恢复时，立即尝试同步时间
+        if (isIOSDevice) {
+          syncTimeOffset().catch(err => console.warn("Time sync after network restore failed:", err));
+        }
+      });
+      
+      window.addEventListener('offline', () => {
+        console.log("Network connection lost");
+        pushToast('网络已断开，将在恢复后同步数据', 'warn');
+      });
+      
+      // 检查初始网络状态
+      if (!navigator.onLine) {
+        console.log("Initial network state: offline");
+        pushToast('当前网络不可用，部分功能可能受限', 'warn');
+      }
     }
     
     const handleLoginStateChange = async (loginState) => {
