@@ -317,45 +317,6 @@ const applyCloudData = (data) => {
             return;
         }
 
-        // 检查活动会话是否有重大状态变化（开始、结束、暂停）
-        const localActiveSession = state.active;
-        const remoteActiveSession = incoming.active;
-        let hasActiveStateChange = false;
-        
-        if (localActiveSession && remoteActiveSession) {
-            // 检查状态变化：isPaused、taskId、是否存在等
-            const localStateKey = `${localActiveSession.taskId}|${localActiveSession.isPaused}|${localActiveSession.isStopped || false}`;
-            const remoteStateKey = `${remoteActiveSession.taskId}|${remoteActiveSession.isPaused}|${remoteActiveSession.isStopped || false}`;
-            
-            if (localStateKey !== remoteStateKey) {
-                hasActiveStateChange = true;
-                
-                // 根据变化类型显示不同的提示
-                if (localActiveSession.taskId !== remoteActiveSession.taskId) {
-                    const taskTitle = getTask(remoteActiveSession.taskId)?.title || '未知任务';
-                    pushToast(`已切换到"${taskTitle}"的计时`, 'info');
-                } else if (localActiveSession.isPaused !== remoteActiveSession.isPaused) {
-                    pushToast(remoteActiveSession.isPaused ? '计时器已暂停' : '计时器已继续', 'info');
-                } else if (remoteActiveSession.isStopped) {
-                    pushToast('计时器已停止', 'info');
-                }
-            }
-        } else if (!localActiveSession && remoteActiveSession) {
-            // 从无活动会话到有活动会话
-            hasActiveStateChange = true;
-            const taskTitle = getTask(remoteActiveSession.taskId)?.title || '未知任务';
-            pushToast(`"${taskTitle}"的计时已开始`, 'info');
-        } else if (localActiveSession && !remoteActiveSession) {
-            // 从有活动会话到无活动会话
-            hasActiveStateChange = true;
-            pushToast('计时器已停止', 'info');
-        }
-        
-        // 只有在有状态变化时才显示通用提示，避免干扰
-        if (!hasActiveStateChange) {
-            pushToast('接收到云端同步数据...', 'info');
-        }
-
         // --- Data Integrity Firewall ---
         const isValidNumber = (val) => typeof val === 'number' && !isNaN(val) && val >= 0;
         
@@ -394,10 +355,28 @@ const applyCloudData = (data) => {
         const currentActiveSession = state.active;
         
         let finalActiveSession = incoming.active;
+        let hasActiveStateChange = false;
         
         // 检查远程会话是否标记为已停止
         if (finalActiveSession && finalActiveSession.isStopped) {
             finalActiveSession = null; // 清除活动会话
+        }
+        
+        // 检测活动会话状态变化并显示相应提示
+        if (currentActiveSession && incoming.active) {
+            // 检查状态变化：isPaused、taskId、是否存在等
+            const localStateKey = `${currentActiveSession.taskId}|${currentActiveSession.isPaused}|${currentActiveSession.isStopped || false}`;
+            const remoteStateKey = `${incoming.active.taskId}|${incoming.active.isPaused}|${incoming.active.isStopped || false}`;
+            
+            if (localStateKey !== remoteStateKey) {
+                hasActiveStateChange = true;
+            }
+        } else if (!currentActiveSession && incoming.active) {
+            // 从无活动会话到有活动会话
+            hasActiveStateChange = true;
+        } else if (currentActiveSession && !incoming.active) {
+            // 从有活动会话到无活动会话
+            hasActiveStateChange = true;
         }
         
         // 如果本地有活动会话，进行更精细的合并
@@ -414,13 +393,14 @@ const applyCloudData = (data) => {
                 (localVersion === remoteVersion && localTimestamp >= remoteTimestamp)) {
                 finalActiveSession = currentActiveSession;
                 
-                // 如果远程会话是不同的任务，提醒用户
-                if (incoming.active.taskId !== currentActiveSession.taskId) {
+                // 如果有状态变化且是任务切换，显示提示
+                if (hasActiveStateChange && incoming.active.taskId !== currentActiveSession.taskId) {
                     pushToast(`本地保留了"${getTask(currentActiveSession.taskId)?.title || '未知任务'}"的计时`, 'info');
                 }
             } else {
                 // 采用远程会话
-                if (incoming.active.taskId !== (currentActiveSession?.taskId || '')) {
+                // 如果有状态变化且是任务切换，显示提示
+                if (hasActiveStateChange && incoming.active.taskId !== (currentActiveSession?.taskId || '')) {
                     const taskTitle = getTask(incoming.active.taskId)?.title || '未知任务';
                     pushToast(`已切换到"${taskTitle}"的计时`, 'info');
                 }
@@ -428,6 +408,23 @@ const applyCloudData = (data) => {
         } else if (currentActiveSession && !incoming.active) {
             // 如果本地有活动会话但远程没有，保留本地会话
             finalActiveSession = currentActiveSession;
+        }
+        
+        // 只有在有状态变化且不是任务切换时才显示通用提示，避免干扰
+        if (hasActiveStateChange) {
+            if (currentActiveSession && incoming.active) {
+                // 暂停/继续状态变化
+                if (currentActiveSession.isPaused !== incoming.active.isPaused) {
+                    pushToast(incoming.active.isPaused ? '计时器已暂停' : '计时器已继续', 'info');
+                }
+            } else if (!currentActiveSession && incoming.active) {
+                // 从无活动会话到有活动会话
+                const taskTitle = getTask(incoming.active.taskId)?.title || '未知任务';
+                pushToast(`"${taskTitle}"的计时已开始`, 'info');
+            } else if (currentActiveSession && !incoming.active) {
+                // 从有活动会话到无活动会话
+                pushToast('计时器已停止', 'info');
+            }
         }
 
         // 更新数据状态
