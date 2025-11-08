@@ -1,7 +1,24 @@
 
-
-
 document.addEventListener('DOMContentLoaded', ()=>{
+
+const rootEl = document.documentElement;
+const isIOSDevice = /iP(hone|od|ad)/i.test(navigator.userAgent) || (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints > 1);
+
+const applyDynamicSafeAreas = () => {
+  if (!isIOSDevice || !window.visualViewport) {
+    rootEl.style.setProperty('--safe-area-bottom-dynamic', '0px');
+    return;
+  }
+  const vv = window.visualViewport;
+  const bottomInset = Math.max(0, window.innerHeight - (vv.height + vv.offsetTop));
+  rootEl.style.setProperty('--safe-area-bottom-dynamic', `${Math.round(bottomInset)}px`);
+};
+
+applyDynamicSafeAreas();
+if (isIOSDevice && window.visualViewport) {
+  ['resize','orientationchange'].forEach(evt => window.addEventListener(evt, applyDynamicSafeAreas));
+  ['resize','scroll'].forEach(evt => window.visualViewport.addEventListener(evt, applyDynamicSafeAreas));
+}
 
 // ⚠️ ========================================================== ⚠️
 // ⚠️  在此处粘贴你的腾讯云 CloudBase 环境 ID!
@@ -25,7 +42,8 @@ let isApplyingRemoteSnapshot = false;
 
 // Cross-device sync state
 let timerHeartbeatInterval = null;
-const HEARTBEAT_INTERVAL_MS = 5000;
+const HEARTBEAT_INTERVAL_MS = 2000; // 减少到2秒，提高实时性
+const DEVICE_TIMEOUT_MS = 30000; // 30秒无心跳则视为离线
 
 
 if (isCloudBaseConfigured) {
@@ -35,7 +53,9 @@ if (isCloudBaseConfigured) {
     isCloudBaseConfigured = false;
   } else {
     try {
-      app = cloudbase.init(cloudbaseConfig);
+      app = cloudbase.init({
+        env: cloudbaseConfig.env
+      });
       auth = app.auth({ persistence: "local" });
       db = app.database();
       console.log("Tencent CloudBase initialized successfully.");
@@ -175,6 +195,10 @@ function persistLocalState() {
 }
 
 function getFullStateSnapshot(syncStamp = Date.now()) {
+    // 增加版本号，确保数据同步的可靠性
+    const currentVersion = (state.syncVersion || 0) + 1;
+    state.syncVersion = currentVersion;
+    
     return {
         tasks: state.tasks,
         agg: state.agg,
@@ -183,9 +207,11 @@ function getFullStateSnapshot(syncStamp = Date.now()) {
         rates: RATE_BY_DIFFICULTY,
         funshop: FUNSHOP,
         rewardParams: REWARD_PARAMS,
+        syncVersion: currentVersion, // 新增版本号字段
         syncMeta: {
             clientId: CLIENT_ID,
             updatedAt: syncStamp,
+            version: currentVersion, // 在元数据中也包含版本号
         },
     };
 }
@@ -200,7 +226,9 @@ function getFullStateSnapshot(syncStamp = Date.now()) {
     tasks: [], 
     agg: {totalHQ:0,totalSeconds:0}, 
     active: null,
-    selectedTaskId: null
+    selectedTaskId: null,
+    syncVersion: 0, // 添加同步版本号
+    saveRetryCount: 0, // 添加保存重试计数
   });
 
   const getInitialMeta = () => ({
@@ -271,14 +299,62 @@ const applyCloudData = (data) => {
         delete incoming._id;
 
         const syncMeta = incoming.syncMeta || {};
-        if (syncMeta.clientId === CLIENT_ID) return;
+        if (syncMeta.clientId === CLIENT_ID) {
+            // 检查版本号，如果是旧数据则忽略
+            const localVersion = state.syncVersion || 0;
+            const remoteVersion = syncMeta.version || 0;
+            if (remoteVersion <= localVersion) {
+                console.log("Ignoring outdated data from cloud");
+                isApplyingRemoteSnapshot = false;
+                return;
+            }
+        }
 
         const remoteStamp = typeof syncMeta.updatedAt === 'number' ? syncMeta.updatedAt : Date.parse(syncMeta.updatedAt);
         if (!isNaN(remoteStamp) && remoteStamp <= lastRemoteSyncStamp) {
+            console.log("Ignoring data with older timestamp");
+            isApplyingRemoteSnapshot = false;
             return;
         }
 
-        pushToast('接收到云端同步数据...', 'info');
+        // 检查活动会话是否有重大状态变化（开始、结束、暂停）
+        const localActiveSession = state.active;
+        const remoteActiveSession = incoming.active;
+        let hasActiveStateChange = false;
+        
+        if (localActiveSession && remoteActiveSession) {
+            // 检查状态变化：isPaused、taskId、是否存在等
+            const localStateKey = `${localActiveSession.taskId}|${localActiveSession.isPaused}|${localActiveSession.isStopped || false}`;
+            const remoteStateKey = `${remoteActiveSession.taskId}|${remoteActiveSession.isPaused}|${remoteActiveSession.isStopped || false}`;
+            
+            if (localStateKey !== remoteStateKey) {
+                hasActiveStateChange = true;
+                
+                // 根据变化类型显示不同的提示
+                if (localActiveSession.taskId !== remoteActiveSession.taskId) {
+                    const taskTitle = getTask(remoteActiveSession.taskId)?.title || '未知任务';
+                    pushToast(`已切换到"${taskTitle}"的计时`, 'info');
+                } else if (localActiveSession.isPaused !== remoteActiveSession.isPaused) {
+                    pushToast(remoteActiveSession.isPaused ? '计时器已暂停' : '计时器已继续', 'info');
+                } else if (remoteActiveSession.isStopped) {
+                    pushToast('计时器已停止', 'info');
+                }
+            }
+        } else if (!localActiveSession && remoteActiveSession) {
+            // 从无活动会话到有活动会话
+            hasActiveStateChange = true;
+            const taskTitle = getTask(remoteActiveSession.taskId)?.title || '未知任务';
+            pushToast(`"${taskTitle}"的计时已开始`, 'info');
+        } else if (localActiveSession && !remoteActiveSession) {
+            // 从有活动会话到无活动会话
+            hasActiveStateChange = true;
+            pushToast('计时器已停止', 'info');
+        }
+        
+        // 只有在有状态变化时才显示通用提示，避免干扰
+        if (!hasActiveStateChange) {
+            pushToast('接收到云端同步数据...', 'info');
+        }
 
         // --- Data Integrity Firewall ---
         const isValidNumber = (val) => typeof val === 'number' && !isNaN(val) && val >= 0;
@@ -313,28 +389,76 @@ const applyCloudData = (data) => {
             validatedTasks.push(...state.tasks);
         }
 
+        // 优化活动会话状态同步逻辑
         const incomingIsActive = !!incoming.active;
-        const localWasLeader = !!state.active && state.active.leaderClientId === CLIENT_ID;
-        const incomingLeaderId = incomingIsActive ? incoming.active.leaderClientId : null;
-
-        if (localWasLeader && incomingLeaderId !== CLIENT_ID) {
-            if (timerHeartbeatInterval) {
-                clearInterval(timerHeartbeatInterval);
-                timerHeartbeatInterval = null;
-            }
+        const localActiveSession = state.active;
+        
+        let finalActiveSession = incoming.active;
+        
+        // 检查远程会话是否标记为已停止
+        if (finalActiveSession && finalActiveSession.isStopped) {
+            finalActiveSession = null; // 清除活动会话
         }
         
-        const localIsLeader = state.active && state.active.leaderClientId === CLIENT_ID;
-        const localActiveSession = localIsLeader ? { ...state.active } : null;
+        // 如果本地有活动会话，进行更精细的合并
+        if (localActiveSession && incoming.active) {
+            const localTimestamp = localActiveSession.lastUpdatedAt || localActiveSession.startTime || 0;
+            const remoteTimestamp = incoming.active.lastUpdatedAt || incoming.active.startTime || 0;
+                
+            // 使用版本号和时间戳进行更精确的冲突解决
+            const localVersion = localActiveSession.version || 0;
+            const remoteVersion = incoming.active.version || 0;
+            
+            // 如果本地版本更新或者时间戳更新，保留本地会话
+            if ((localVersion > remoteVersion) || 
+                (localVersion === remoteVersion && localTimestamp >= remoteTimestamp)) {
+                finalActiveSession = localActiveSession;
+                
+                // 如果远程会话是不同的任务，提醒用户
+                if (incoming.active.taskId !== localActiveSession.taskId) {
+                    pushToast(`本地保留了"${getTask(localActiveSession.taskId)?.title || '未知任务'}"的计时`, 'info');
+                }
+            } else {
+                // 采用远程会话
+                if (incoming.active.taskId !== (localActiveSession?.taskId || '')) {
+                    const taskTitle = getTask(incoming.active.taskId)?.title || '未知任务';
+                    pushToast(`已切换到"${taskTitle}"的计时`, 'info');
+                }
+            }
+        } else if (localActiveSession && !incoming.active) {
+            // 如果本地有活动会话但远程没有，保留本地会话
+            finalActiveSession = localActiveSession;
+        }
 
+        // 更新数据状态
         state.tasks = validatedTasks;
         state.agg = validatedAgg;
         meta = { ...getInitialMeta(), ...incoming.meta };
         RATE_BY_DIFFICULTY = incoming.rates || DEFAULT_RATES;
         FUNSHOP = incoming.funshop || FUNSHOP;
-        REWARD_PARAMS = incoming.rewardParams || DEFAULT_REWARD_PARAMS;
+        REWARD_PARAMS = incoming.rewardParams || REWARD_PARAMS;
         
-        state.active = localActiveSession || incoming.active || null;
+        // 更新同步版本号
+        state.syncVersion = Math.max(state.syncVersion || 0, (syncMeta.version || 0) + 1);
+        
+        state.active = finalActiveSession || null;
+        
+        // 如果有活动会话且未暂停，启动心跳
+        if (state.active && !state.active.isPaused) {
+            // 更新服务器时间检查点
+            if (incoming.lastServerTimeCheck) {
+                state.active.lastServerTime = incoming.lastServerTimeCheck;
+            }
+            
+            if (timerHeartbeatInterval) clearInterval(timerHeartbeatInterval);
+            timerHeartbeatInterval = setInterval(sendTimerHeartbeat, HEARTBEAT_INTERVAL_MS);
+        } else {
+            // 如果没有活动会话或已暂停，清除心跳
+            if (timerHeartbeatInterval) {
+                clearInterval(timerHeartbeatInterval);
+                timerHeartbeatInterval = null;
+            }
+        }
         
         if (!isNaN(remoteStamp)) {
             lastRemoteSyncStamp = remoteStamp;
@@ -430,6 +554,8 @@ const applyCloudData = (data) => {
     loginMask: $('#loginMask'), btnCloseLogin: $('#btnCloseLogin'), loginEmail: $('#loginEmail'),
     loginPassword: $('#loginPassword'), btnDoLogin: $('#btnDoLogin'), btnDoRegister: $('#btnDoRegister'),
     loginResult: $('#loginResult'),
+    // Sync status elements
+    syncStatus: $('#syncStatus'), syncStatusText: $('#syncStatusText'),
   };
 
   const sessionFlip = new FlipCounter($('#sessionFlip'), {digits:6,comma:true,large:true});
@@ -491,7 +617,7 @@ const applyCloudData = (data) => {
   let saveQueued = false;
   let isSavingToCloud = false;
 
-  const processSaveQueue = async () => {
+const processSaveQueue = async () => {
     if (isSavingToCloud || !saveQueued) {
         return;
     }
@@ -505,12 +631,32 @@ const applyCloudData = (data) => {
     if (isCloudBaseConfigured && cloudSyncReady && !isApplyingRemoteSnapshot && uid) {
         const syncStamp = Date.now();
         const payload = getFullStateSnapshot(syncStamp);
+        
         try {
-            await db.collection('users').doc(uid).set(payload);
-            lastRemoteSyncStamp = Math.max(lastRemoteSyncStamp, syncStamp);
+            // 使用事务操作确保数据一致性
+            const transaction = await db.startTransaction();
+            try {
+                await transaction.collection('users').doc(uid).set(payload);
+                await transaction.commit();
+                lastRemoteSyncStamp = Math.max(lastRemoteSyncStamp, syncStamp);
+            } catch (txError) {
+                await transaction.rollback();
+                throw txError;
+            }
         } catch (err) {
             console.error("CloudBase save error:", err);
-            pushToast('云端同步失败', 'warn');
+            pushToast('云端同步失败，将重试', 'warn');
+            
+            // 如果同步失败，标记需要重试
+            saveQueued = true;
+            
+            // 指数退避重试机制
+            const retryDelay = Math.min(1000 * Math.pow(2, state.saveRetryCount || 0), 30000);
+            state.saveRetryCount = (state.saveRetryCount || 0) + 1;
+            
+            setTimeout(() => {
+                if (saveQueued) processSaveQueue();
+            }, retryDelay);
         }
     }
     
@@ -521,7 +667,7 @@ const applyCloudData = (data) => {
     if (saveQueued) {
         processSaveQueue();
     }
-  };
+};
 
   function save() {
     persistLocalState();
@@ -710,16 +856,8 @@ const applyCloudData = (data) => {
 
 function setControls(){
     const btnStart = el.btnStart; const btnPause = el.btnPause; const btnStop  = el.btnStop; if(!btnStart || !btnPause || !btnStop) return;
-    const isFollower = state.active && state.active.leaderClientId !== CLIENT_ID;
 
-    if (isFollower) {
-        btnStart.disabled = true;
-        btnPause.disabled = true;
-        btnStop.disabled = true;
-        btnStart.textContent = '开始';
-        return;
-    }
-
+    // 多设备协同控制：任何设备都可以控制计时器
     const setStartState = (disabled, label) => { btnStart.disabled = disabled; btnStart.textContent = label; btnStart.setAttribute('aria-label', label); };
     setStartState(true, '开始'); btnPause.disabled = true; btnStop.disabled  = true;
     
@@ -731,13 +869,56 @@ function setControls(){
         } else {
             setStartState(false, '继续'); btnPause.disabled = true; btnStop.disabled = false;
         }
+        
+        // 更新同步状态显示
+        updateSyncStatus(state.active);
     } else if (state.selectedTaskId) {
         const task = getTask(state.selectedTaskId);
         if (task) el.activeHint.textContent = `已选择：${task.title}（难度 ${task.difficulty}）`;
         setStartState(false, '开始');
+        
+        // 隐藏同步状态
+        if (el.syncStatus) el.syncStatus.style.display = 'none';
     } else {
         el.activeHint.textContent = '未选择任务';
+        
+        // 隐藏同步状态
+        if (el.syncStatus) el.syncStatus.style.display = 'none';
     }
+}
+
+// 更新同步状态显示的函数
+function updateSyncStatus(activeSession) {
+    if (!el.syncStatus || !el.syncStatusText) return;
+    
+    const now = Date.now();
+    const lastHeartbeatAt = activeSession.lastHeartbeatAt || 0;
+    const lastHeartbeatFrom = activeSession.lastHeartbeatFrom || '';
+    const isCurrentDevice = lastHeartbeatFrom === CLIENT_ID;
+    const isTimedOut = now - lastHeartbeatAt > DEVICE_TIMEOUT_MS;
+    
+    // 确定状态类型和消息
+    let statusClass = '';
+    let statusText = '';
+    
+    if (isCurrentDevice) {
+        statusClass = '';
+        statusText = '当前设备控制中';
+    } else if (isTimedOut) {
+        statusClass = 'error';
+        statusText = '控制设备已离线';
+    } else {
+        statusClass = 'warning';
+        statusText = `其他设备控制中 (${lastHeartbeatFrom.slice(-6)})`;
+    }
+    
+    // 更新DOM
+    el.syncStatus.className = `sync-status ${statusClass}`;
+    el.syncStatus.innerHTML = `
+        <span class="sync-indicator"></span>
+        <span>${statusText}</span>
+    `;
+    el.syncStatus.style.display = 'flex';
 }
 
   function showPauseIndicator(sec){ if(!el.pauseIndicator||!el.pauseTime) return; el.pauseIndicator.style.display='flex'; el.pauseTime.textContent=fmtPause(sec); }
@@ -784,10 +965,6 @@ function setControls(){
 
   function selectTask(id){
     const t=getTask(id); if(!t) return;
-    if(state.active && state.active.leaderClientId !== CLIENT_ID) {
-        pushToast('计时正在其他设备上运行，无法选择新任务。', 'warn');
-        return;
-    }
     if(state.active && state.active.taskId !== id) {
         pushToast('当前有任务正在计时，请先结束。', 'warn');
         return;
@@ -808,102 +985,326 @@ function setControls(){
     if (mobileMedia.matches) { setView('timerCard'); }
   }
   
-function sendTimerHeartbeat() {
-    if (!state.active || state.active.isPaused || state.active.leaderClientId !== CLIENT_ID) {
+async function sendTimerHeartbeat() {
+    if (!state.active || state.active.isPaused) {
         if (timerHeartbeatInterval) clearInterval(timerHeartbeatInterval);
         return;
     }
     const a = state.active;
     const task = getTask(a.taskId);
     if (!task) return;
-    const elapsed = a.startTime ? (Date.now() - a.startTime) / 1000 : 0;
-    const sessionSeconds = (a.accumulatedSeconds || 0) + (elapsed > 0 ? elapsed : 0);
-    const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
-    const currentSessionHQ = sessionSeconds * rate;
-    a.currentSeconds = Math.max(0, sessionSeconds);
-    a.currentHQ = Math.max(0, currentSessionHQ);
-    save();
+    
+    try {
+        // 获取同步后的时间作为基准
+        await syncTimeOffset(); // 确保时间偏移量是最新的
+        const localTime = Date.now();
+        const now = getSyncedTime(); // 统一使用同步后的时间
+        
+        // 检查会话状态是否已停止（可能由其他设备停止）
+        if (a.isStopped) {
+            console.log("Session was stopped by another device, updating local state");
+            // 强制获取最新数据
+            const uid = currentLoginState?.user?.uid;
+            if (uid) {
+                try {
+                    const docRes = await db.collection('users').doc(uid).get();
+                    if (docRes.data && !docRes.data.active) {
+                        // 会话确实已被停止，更新本地状态
+                        applyCloudData(docRes.data);
+                        return; // 退出当前心跳
+                    }
+                } catch (error) {
+                    console.error("Error checking session status:", error);
+                }
+            }
+        }
+        
+        // 计算经过的时间，始终使用服务器时间
+        let elapsed = 0;
+        if (a.startTime) {
+            // 如果有服务器时间基准，使用服务器时间计算
+            if (a.serverStartTime) {
+                elapsed = (now - a.serverStartTime) / 1000;
+            } else {
+                // 如果没有serverStartTime，计算并存储
+                a.serverStartTime = now - ((localTime - a.startTime) / 1000) * 1000;
+                elapsed = (now - a.serverStartTime) / 1000;
+            }
+        }
+        
+        const sessionSeconds = (a.accumulatedSeconds || 0) + (elapsed > 0 ? elapsed : 0);
+        const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
+        const currentSessionHQ = sessionSeconds * rate;
+        
+        // 更新当前设备的心跳信息
+        a.currentSeconds = Math.max(0, sessionSeconds);
+        a.currentHQ = Math.max(0, currentSessionHQ);
+        a.lastHeartbeatFrom = CLIENT_ID;
+        a.lastHeartbeatAt = now;
+        a.lastServerTime = now; // 记录最新的服务器时间
+        
+        // 检查是否需要接管计时器（设备接管机制）
+        checkAndTakeOverTimer(a, now);
+        
+        // 优化保存频率：减少不必要的保存，只在必要时保存
+        const shouldSave = !a.lastUpdatedBy || 
+                         a.lastUpdatedBy === CLIENT_ID || 
+                         now - (a.lastUpdatedAt || 0) > HEARTBEAT_INTERVAL_MS ||
+                         Math.abs((a.currentSeconds || 0) - sessionSeconds) > 1; // 秒数变化超过1秒时保存
+        
+        if (shouldSave) {
+            // 增加版本号，确保数据同步的可靠性
+            a.version = (a.version || 0) + 1;
+            a.lastUpdatedAt = now;
+            a.lastUpdatedBy = CLIENT_ID;
+            
+            // 使用防抖机制，避免频繁保存
+            if (a.saveTimeout) clearTimeout(a.saveTimeout);
+            a.saveTimeout = setTimeout(() => {
+                save();
+                delete a.saveTimeout;
+            }, 1000); // 延迟1秒保存，减少网络请求
+        }
+    } catch (error) {
+        console.error("Error in sendTimerHeartbeat:", error);
+        // 如果获取服务器时间失败，回退到本地时间
+        const now = Date.now();
+        const elapsed = a.startTime ? (now - a.startTime) / 1000 : 0;
+        const sessionSeconds = (a.accumulatedSeconds || 0) + (elapsed > 0 ? elapsed : 0);
+        const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
+        const currentSessionHQ = sessionSeconds * rate;
+        
+        a.currentSeconds = Math.max(0, sessionSeconds);
+        a.currentHQ = Math.max(0, currentSessionHQ);
+        a.lastHeartbeatFrom = CLIENT_ID;
+        a.lastHeartbeatAt = now;
+        
+        // 检查是否需要接管计时器（设备接管机制）
+        checkAndTakeOverTimer(a, now);
+        
+        // 优化保存频率
+        const shouldSave = !a.lastUpdatedBy || 
+                         a.lastUpdatedBy === CLIENT_ID || 
+                         now - (a.lastUpdatedAt || 0) > HEARTBEAT_INTERVAL_MS;
+        
+        if (shouldSave) {
+            a.version = (a.version || 0) + 1;
+            a.lastUpdatedAt = now;
+            a.lastUpdatedBy = CLIENT_ID;
+            
+            if (a.saveTimeout) clearTimeout(a.saveTimeout);
+            a.saveTimeout = setTimeout(() => {
+                save();
+                delete a.saveTimeout;
+            }, 1000);
+        }
+    }
 }
 
-function startTimer() {
-    if (state.active && !state.active.isPaused) return;
-    if (state.active && state.active.leaderClientId !== CLIENT_ID) {
-        pushToast('无法开始，计时正在其他设备上运行。', 'warn');
-        return;
+// 检查并接管计时器的函数
+function checkAndTakeOverTimer(activeSession, currentTime) {
+    const lastHeartbeatAt = activeSession.lastHeartbeatAt || 0;
+    const lastHeartbeatFrom = activeSession.lastHeartbeatFrom || '';
+    
+    // 如果最后心跳不是来自当前设备，且已超时，则显示接管选项
+    if (lastHeartbeatFrom !== CLIENT_ID && (currentTime - lastHeartbeatAt > DEVICE_TIMEOUT_MS)) {
+        // 如果用户尚未被提示过接管选项
+        if (!activeSession.takeoverOfferedAt || (currentTime - activeSession.takeoverOfferedAt > 60000)) {
+            const task = getTask(activeSession.taskId);
+            const taskTitle = task ? task.title : '未知任务';
+            
+            // 显示接管提示
+            pushToast(`${taskTitle} 的控制设备可能已离线，您现在可以完全控制计时器`, 'info', 8000);
+            
+            // 标记已提示过
+            activeSession.takeoverOfferedAt = currentTime;
+            activeSession.lastUpdatedBy = CLIENT_ID;
+            activeSession.lastUpdatedAt = currentTime;
+            save();
+        }
     }
+}
+
+// 获取服务器时间的函数
+async function getServerTime() {
+    if (!isCloudBaseConfigured || !db) return null;
+    
+    try {
+        // 使用CloudBase的服务器时间戳
+        const serverTimestamp = await db.serverDate();
+        return serverTimestamp.getTime();
+    } catch (error) {
+        console.error("Failed to get server time:", error);
+        return null;
+    }
+}
+
+// 同步时间偏移量，确保所有设备使用相同的时间基准
+async function syncTimeOffset() {
+    if (!isCloudBaseConfigured || !db) return;
+    
+    try {
+        const serverTime = await getServerTime();
+        const localTime = Date.now();
+        
+        if (serverTime) {
+            // 更新全局时间偏移量
+            window.GLOBAL_TIME_OFFSET = serverTime - localTime;
+            console.log("Time offset synced:", window.GLOBAL_TIME_OFFSET, "ms");
+            
+            // 如果有活动会话，更新其时间信息
+            if (state.active) {
+                state.active.lastServerTime = serverTime;
+                if (!state.active.serverStartTime && state.active.startTime) {
+                    // 如果还没有服务器开始时间，计算并设置
+                    state.active.serverStartTime = serverTime - ((localTime - state.active.startTime) / 1000) * 1000;
+                }
+            }
+        }
+    } catch (error) {
+        console.error("Failed to sync time offset:", error);
+    }
+}
+
+// 获取同步后的时间（服务器时间）
+function getSyncedTime() {
+    const localTime = Date.now();
+    return window.GLOBAL_TIME_OFFSET ? localTime + window.GLOBAL_TIME_OFFSET : localTime;
+}
+
+async function startTimer() {
+    if (state.active && !state.active.isPaused) return;
+    
     const taskId = state.active ? state.active.taskId : state.selectedTaskId;
     if (!taskId) { playSound(sfx.warn); alert('请先选择任务'); return; }
     const task = getTask(taskId);
     if (!task) return;
     playSound(sfx.timerStart);
-    let newTimerState;
-    const now = Date.now();
-    if (state.active && state.active.isPaused) {
-        const pausedDurationSec = (now - (state.active.pauseTime || now)) / 1000;
-        newTimerState = {
-            ...state.active,
-            startTime: now,
-            isPaused: false,
-            pauseTime: null,
-            pauses: (state.active.pauses || 0) + (pausedDurationSec > ECON.pauseBreakSec ? 1 : 0),
-        };
-    } else {
-        newTimerState = {
-            taskId: taskId,
-            startTime: now,
-            accumulatedSeconds: 0,
-            isPaused: false,
-            pauseTime: null,
-            pauses: 0,
-            leaderClientId: CLIENT_ID,
-        };
-    }
     
-    if (timerHeartbeatInterval) clearInterval(timerHeartbeatInterval);
-    const isLeaderNow = newTimerState.leaderClientId === CLIENT_ID;
-    if (isLeaderNow && !newTimerState.isPaused) {
+        try {
+        // 获取同步后的时间作为基准
+        await syncTimeOffset(); // 确保时间偏移量是最新的
+        const localTime = Date.now();
+        const now = getSyncedTime();
+        
+        let newTimerState;
+        if (state.active && state.active.isPaused) {
+            // 恢复暂停的计时
+            // 计算暂停时长，使用服务器时间
+            let pausedDurationSec = 0;
+            if (state.active.pauseTime) {
+                if (state.active.serverPauseTime) {
+                    pausedDurationSec = (now - state.active.serverPauseTime) / 1000;
+                } else {
+                    // 如果没有服务器暂停时间，估算
+                    const localPauseDuration = (localTime - state.active.pauseTime) / 1000;
+                    pausedDurationSec = localPauseDuration;
+                }
+            }
+            
+            newTimerState = {
+                ...state.active,
+                startTime: localTime, // 保留本地开始时间作为备份
+                serverStartTime: now, // 使用服务器时间作为主要基准
+                isPaused: false,
+                pauseTime: null,
+                serverPauseTime: null, // 清除服务器暂停时间
+                pauses: (state.active.pauses || 0) + (pausedDurationSec > ECON.pauseBreakSec ? 1 : 0),
+                lastUpdatedBy: CLIENT_ID,
+                lastUpdatedAt: now,
+                lastServerTime: now, // 记录最新的服务器时间
+                version: (state.active.version || 0) + 1, // 增加版本号，确保同步
+            };
+        } else {
+            // 开始新的计时
+            newTimerState = {
+                taskId: taskId,
+                startTime: localTime, // 保留本地开始时间作为备份
+                serverStartTime: now, // 使用服务器时间作为主要基准
+                accumulatedSeconds: 0,
+                isPaused: false,
+                pauseTime: null,
+                serverPauseTime: null,
+                pauses: 0,
+                lastUpdatedBy: CLIENT_ID,
+                lastUpdatedAt: now,
+                lastServerTime: now, // 记录最新的服务器时间
+                version: 1, // 新会话的初始版本号
+            };
+        }
+        
+        // 启动心跳定时器（多设备都可以发送心跳）
+        if (timerHeartbeatInterval) clearInterval(timerHeartbeatInterval);
         timerHeartbeatInterval = setInterval(sendTimerHeartbeat, HEARTBEAT_INTERVAL_MS);
+        
+        state.selectedTaskId = null;
+        state.active = newTimerState;
+        save();
+        
+        el.activeHint.textContent = `进行中：${task.title}（难度 ${task.difficulty}）`;
+        renderTasks();
+        updateRate();
+        setControls();
+        hidePauseIndicator();
+    } catch (error) {
+        console.error("Error starting timer:", error);
+        pushToast("启动计时器失败，请重试", "warn");
     }
-    
-    state.selectedTaskId = null;
-    state.active = newTimerState;
-    save();
-    
-    el.activeHint.textContent = `进行中：${task.title}（难度 ${task.difficulty}）`;
-    renderTasks();
-    updateRate();
-    setControls();
-    hidePauseIndicator();
 }
 
-function pauseTimer() {
-    if (!state.active || state.active.isPaused || state.active.leaderClientId !== CLIENT_ID) return;
+async function pauseTimer() {
+    if (!state.active || state.active.isPaused) return;
     if (timerHeartbeatInterval) {
         clearInterval(timerHeartbeatInterval);
         timerHeartbeatInterval = null;
     }
     playSound(sfx.timerPause);
-    const now = Date.now();
-    const elapsedSec = (now - (state.active.startTime || now)) / 1000;
-    const newTimerState = {
-        ...state.active,
-        accumulatedSeconds: (state.active.accumulatedSeconds || 0) + elapsedSec,
-        isPaused: true,
-        pauseTime: now,
-        startTime: null,
-    };
-    state.active = newTimerState;
-    save();
-    setControls();
-    const task = getTask(state.active.taskId);
-    if (task) {
-        const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
-        const finalSessionHQ = (state.active.accumulatedSeconds || 0) * rate;
-        const finalSessionSeconds = state.active.accumulatedSeconds || 0;
-        sessionFlip.setValue(Math.floor(finalSessionHQ), true);
-        el.sessionTime.textContent = fmtTime(finalSessionSeconds);
-        el.taskTotal.textContent = String(Math.floor((task.totalHQ || 0) + finalSessionHQ));
-        el.taskTime.textContent = fmtTime((task.totalSeconds || 0) + finalSessionSeconds);
+    
+    try {
+        // 获取同步后的时间作为基准
+        await syncTimeOffset(); // 确保时间偏移量是最新的
+        const localTime = Date.now();
+        const now = getSyncedTime();
+        
+        // 计算经过的时间，使用同步后的时间基准
+        let elapsedSec = 0;
+        if (state.active.serverStartTime) {
+            // 使用同步后的时间计算
+            elapsedSec = (now - state.active.serverStartTime) / 1000;
+        } else {
+            // 回退到本地开始时间计算
+            const startTime = state.active.startTime || localTime;
+            elapsedSec = (now - startTime) / 1000;
+        }
+        
+        const newTimerState = {
+            ...state.active,
+            accumulatedSeconds: (state.active.accumulatedSeconds || 0) + elapsedSec,
+            isPaused: true,
+            pauseTime: localTime, // 保留本地暂停时间作为备份
+            serverPauseTime: now, // 使用服务器时间作为主要基准
+            startTime: null,
+            lastUpdatedBy: CLIENT_ID,
+            lastUpdatedAt: now,
+            lastServerTime: now, // 记录最新的服务器时间
+            version: (state.active.version || 0) + 1, // 增加版本号，确保同步
+        };
+        state.active = newTimerState;
+        save();
+        setControls();
+        const task = getTask(state.active.taskId);
+        if (task) {
+            const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
+            const finalSessionHQ = (state.active.accumulatedSeconds || 0) * rate;
+            const finalSessionSeconds = state.active.accumulatedSeconds || 0;
+            sessionFlip.setValue(Math.floor(finalSessionHQ), true);
+            el.sessionTime.textContent = fmtTime(finalSessionSeconds);
+            el.taskTotal.textContent = String(Math.floor((task.totalHQ || 0) + finalSessionHQ));
+            el.taskTime.textContent = fmtTime((task.totalSeconds || 0) + finalSessionSeconds);
+        }
+    } catch (error) {
+        console.error("Error pausing timer:", error);
+        pushToast("暂停计时器失败，请重试", "warn");
     }
 }
 
@@ -979,7 +1380,7 @@ function pauseTimer() {
   }
 
 function stopTimer() {
-    if (!state.active || state.active.leaderClientId !== CLIENT_ID) return;
+    if (!state.active) return;
     if (timerHeartbeatInterval) {
         clearInterval(timerHeartbeatInterval);
         timerHeartbeatInterval = null;
@@ -991,10 +1392,17 @@ function stopTimer() {
     
     // --- START OF IMMEDIATE, ATOMIC UPDATE ---
     
-    // 1. Calculate session results
+    // 1. Calculate session results using synced time for consistency
     let sessionSeconds = activeSession.accumulatedSeconds || 0;
-    if (!activeSession.isPaused && activeSession.startTime) {
-        sessionSeconds += (Date.now() - activeSession.startTime) / 1000;
+    if (!activeSession.isPaused && activeSession.serverStartTime) {
+        // 使用同步后的时间计算经过时间
+        const now = getSyncedTime();
+        const elapsed = (now - activeSession.serverStartTime) / 1000;
+        sessionSeconds += elapsed > 0 ? elapsed : 0;
+    } else if (!activeSession.isPaused && activeSession.startTime) {
+        // 回退到本地时间计算
+        const now = getSyncedTime();
+        sessionSeconds += (now - activeSession.startTime) / 1000;
     }
     sessionSeconds = Math.max(0, Math.floor(sessionSeconds));
     
@@ -1029,10 +1437,22 @@ function stopTimer() {
     // 6. Clean up task list and active session state
     state.tasks = state.tasks.filter(task => task.id !== activeSession.taskId);
     if (state.selectedTaskId === activeSession.taskId) state.selectedTaskId = null;
+    
+    // 在清除活动会话前，先标记为已停止，以便其他设备能够正确同步
+    activeSession.isStopped = true;
+    activeSession.lastUpdatedAt = Date.now();
+    activeSession.lastUpdatedBy = CLIENT_ID;
+    
+    // 临时保存已停止的会话状态，然后清除
+    const stoppedSession = { ...activeSession };
     state.active = null;
 
     // 7. Save the fully consistent state
+    // 先保存已停止的会话状态，然后再保存最终状态
     save();
+    
+    // 保存后清除已停止的会话标记（避免重复处理）
+    state.active = null;
     
     // --- END OF ATOMIC UPDATE ---
 
@@ -1066,9 +1486,9 @@ function stopTimer() {
 
   let lastRenderedState = {};
 function loop() {
-    const now = Date.now();
+    // 使用同步后的时间，确保所有设备时间一致
+    const now = getSyncedTime();
     const isActive = !!state.active;
-    const isLeader = isActive && state.active.leaderClientId === CLIENT_ID;
     const baseTotalHQ = Math.floor(state.agg.totalHQ || 0);
     let sessionHQInt = 0;
 
@@ -1080,42 +1500,84 @@ function loop() {
             let sessionSeconds;
             let currentSessionHQ;
 
-            if (isLeader) {
-                // LEADER LOGIC: Calculate real-time progress for smooth local display
-                if (a.isPaused) {
-                    sessionSeconds = a.accumulatedSeconds || 0;
-                    const pausedFor = a.pauseTime ? (now - a.pauseTime) / 1000 : 0;
-                    showPauseIndicator(pausedFor);
-                } else {
-                    const elapsed = a.startTime ? (now - a.startTime) / 1000 : 0;
-                    sessionSeconds = (a.accumulatedSeconds || 0) + (elapsed > 0 ? elapsed : 0);
-                    hidePauseIndicator();
+            // 多设备协同控制：任何设备都可以计算实时进度
+            if (a.isPaused) {
+                sessionSeconds = a.accumulatedSeconds || 0;
+                // 使用服务器暂停时间计算已暂停时长
+                let pausedFor = 0;
+                if (a.serverPauseTime) {
+                    pausedFor = (now - a.serverPauseTime) / 1000;
+                } else if (a.pauseTime) {
+                    // 如果没有服务器暂停时间，使用本地暂停时间
+                    pausedFor = (now - a.pauseTime) / 1000;
                 }
-                const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
-                currentSessionHQ = sessionSeconds * rate;
-            } else {
-                // FOLLOWER LOGIC: Display last known progress from leader's heartbeat
-                sessionSeconds = a.currentSeconds || a.accumulatedSeconds || 0;
-                const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
-                currentSessionHQ = a.currentHQ || (sessionSeconds * rate);
-
-                const lastUpdate = lastRemoteSyncStamp || 0;
-                if (now - lastUpdate > 20000 && !a.isPaused) { // 20 second threshold
-                    if (el.activeHint) el.activeHint.textContent = `与主设备同步丢失...`;
-                } else {
-                     if (el.activeHint) el.activeHint.textContent = `计时正在其他设备上运行...`;
-                }
+                showPauseIndicator(pausedFor);
                 
-                if (a.isPaused) {
-                    showPauseIndicator(0);
+                // 显示上次更新设备的提示
+                if (a.lastUpdatedBy && a.lastUpdatedBy !== CLIENT_ID) {
+                    if (el.activeHint) el.activeHint.textContent = `暂停中 (由其他设备操作)`;
+                }
+            } else {
+            // 计算实时进度，使用服务器时间基准
+            let elapsed;
+            if (a.startTime) {
+                // 优先使用服务器时间基准
+                if (a.serverStartTime && a.lastServerTime) {
+                    // 使用服务器时间计算当前进度
+                    elapsed = (a.lastServerTime - a.serverStartTime) / 1000;
+                } else if (a.serverStartTime) {
+                    // 如果有服务器开始时间但没有最新服务器时间，使用同步后的时间
+                    const syncedNow = getSyncedTime();
+                    elapsed = (syncedNow - a.serverStartTime) / 1000;
                 } else {
-                    hidePauseIndicator();
+                    // 回退到本地时间计算，但会尽力通过心跳更新
+                    elapsed = (now - a.startTime) / 1000;
+                }
+            } else {
+                elapsed = 0;
+            }
+                
+                sessionSeconds = (a.accumulatedSeconds || 0) + (elapsed > 0 ? elapsed : 0);
+                hidePauseIndicator();
+                
+                // 显示上次更新设备的提示
+                if (a.lastUpdatedBy && a.lastUpdatedBy !== CLIENT_ID) {
+                    if (el.activeHint) el.activeHint.textContent = `进行中：${task.title} (由其他设备操作)`;
+                } else if (a.lastUpdatedBy === CLIENT_ID) {
+                    if (el.activeHint) el.activeHint.textContent = `进行中：${task.title}`;
+                } else {
+                    if (el.activeHint) el.activeHint.textContent = `进行中：${task.title}`;
                 }
             }
+            
+            // 更新同步状态显示
+            updateSyncStatus(a);
+            
+            const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
+            currentSessionHQ = sessionSeconds * rate;
             
             sessionSeconds = Math.max(0, sessionSeconds);
             currentSessionHQ = Math.max(0, currentSessionHQ);
             sessionHQInt = Math.floor(currentSessionHQ);
+            
+            // 检查是否需要强制刷新UI（处理远程状态变化）
+            if (a.lastUpdatedBy && a.lastUpdatedBy !== CLIENT_ID) {
+                const timeSinceLastUpdate = now - (a.lastUpdatedAt || 0);
+                // 如果有状态变化但UI未更新，强制刷新
+                if (timeSinceLastUpdate < 3000) { // 最近3秒内更新
+                    const shouldRefresh = (
+                        (sessionSeconds !== lastRenderedState.sessionSeconds) ||
+                        (a.isPaused !== lastRenderedState.isPaused) ||
+                        (a.taskId !== lastRenderedState.taskId)
+                    );
+                    
+                    if (shouldRefresh) {
+                        console.log("Forcing UI refresh due to remote state change");
+                        setControls(); // 更新按钮状态
+                        renderTasks(); // 更新任务列表
+                    }
+                }
+            }
 
             // UI updates for timer card
             if (sessionHQInt !== lastRenderedState.sessionHQ) {
@@ -1341,7 +1803,22 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   if (el.charNameInput) { el.charNameInput.onblur = () => { meta.character.name = el.charNameInput.value.trim(); save(); }; }
   if (el.charTitleInput) { el.charTitleInput.onblur = () => { meta.character.title = el.charTitleInput.value.trim(); save(); }; }
 
-  function renderInitial(){ renderTasks(); renderKPI(); renderDaily(); renderInventory(); renderWorkshop(); renderFunshop(); renderYou(); renderHeaderStatus(); hidePauseIndicator(); setControls(); updateModeButton();}
+  function renderInitial(){ 
+    renderTasks(); 
+    renderKPI(); 
+    renderDaily(); 
+    renderInventory(); 
+    renderWorkshop(); 
+    renderFunshop(); 
+    renderYou(); 
+    renderHeaderStatus(); 
+    hidePauseIndicator(); 
+    setControls(); 
+    updateModeButton();
+    
+    // 重置渲染状态，确保UI更新
+    lastRenderedState = {};
+  }
 
   if(el.btnFunshopEdit) el.btnFunshopEdit.onclick=()=>{ playSound(sfx.modalOpen); const acts=meta.funshop.activities||[];
     const lines=acts.map(a=>{ const need=Object.entries(a.need||{}).map(([k,v])=>`${k}*${v}`).join(',');
@@ -1490,19 +1967,176 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   const setupCloudBaseListener = (uid) => {
     if (realtimeListener) realtimeListener.close();
     
-    realtimeListener = db.collection('users').doc(uid).watch({
-      onChange: (snapshot) => {
-        const docs = snapshot?.docs || [];
-        if (docs.length > 0) {
-          applyCloudData(docs[0]);
+    // 增强监听器，添加错误重试机制和主动检查机制
+    let retryCount = 0;
+    const maxRetries = 5;
+    let lastKnownVersion = state.syncVersion || 0;
+    
+    const createListener = () => {
+        try {
+            realtimeListener = db.collection('users').doc(uid).watch({
+                onChange: (snapshot) => {
+                    retryCount = 0; // 重置重试计数
+                    
+                    const docs = snapshot?.docs || [];
+                    if (docs.length > 0) {
+                        // 添加数据验证，确保接收到的数据有效
+                        const data = docs[0];
+                        if (data && typeof data === 'object' && data.syncMeta) {
+                            // 检查版本号，确保处理最新数据
+                            const newVersion = data.syncVersion || 0;
+                            if (newVersion > lastKnownVersion) {
+                                lastKnownVersion = newVersion;
+                                applyCloudData(data);
+                            } else if (newVersion < lastKnownVersion) {
+                                // 如果接收到较旧的数据，强制刷新当前状态
+                                console.log("Received older version, forcing sync");
+                                save();
+                            }
+                        } else {
+                            console.warn("Received invalid data structure from CloudBase listener");
+                        }
+                    }
+                },
+                onError: (err) => {
+                    console.error("CloudBase listener error:", err);
+                    pushToast(`与云端同步时出错 (尝试 ${retryCount + 1}/${maxRetries})`, 'warn');
+                    
+                    // 指数退避重试
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+                        
+                        setTimeout(() => {
+                            if (currentLoginState?.user?.uid === uid) {
+                                createListener();
+                            }
+                        }, delay);
+                    } else {
+                        pushToast('云端同步重试次数已达上限，请刷新页面', 'err');
+                        hideLoader();
+                    }
+                }
+            });
+            
+            // 添加主动检查机制，定期检查数据同步状态
+            setInterval(async () => {
+                if (currentLoginState?.user?.uid === uid) {
+                    try {
+                        // 同时获取文档和服务器时间
+                        const [docRes, serverTime] = await Promise.all([
+                            db.collection('users').doc(uid).get(),
+                            getServerTime().catch(() => Date.now()) // 获取服务器时间，失败则用本地时间
+                        ]);
+                        
+                        if (docRes.data && typeof docRes.data === 'object') {
+                            const currentVersion = docRes.data.syncVersion || 0;
+                            if (currentVersion > lastKnownVersion) {
+                                console.log("Detected newer version during periodic check");
+                                lastKnownVersion = currentVersion;
+                                
+                                // 将服务器时间附加到数据中
+                                docRes.data.lastServerTimeCheck = serverTime;
+                                applyCloudData(docRes.data);
+                            }
+                        }
+                    } catch (error) {
+                        console.error("Error during periodic sync check:", error);
+                    }
+                }
+            }, 3000); // 减少到3秒检查一次，提高同步频率
+            
+            // 添加页面可见性变化和网络状态监听，确保重新连接时立即同步
+            const forceSyncOnReconnect = async () => {
+                if (currentLoginState?.user?.uid === uid) {
+                    try {
+                        console.log("Forcing sync due to reconnection");
+                        await syncTimeOffset(); // 立即同步时间
+                        
+                        // 获取最新数据
+                        const docRes = await db.collection('users').doc(uid).get();
+                        if (docRes.data && typeof docRes.data === 'object') {
+                            const currentVersion = docRes.data.syncVersion || 0;
+                            if (currentVersion !== lastKnownVersion) {
+                                console.log("Forcing data refresh after reconnection");
+                                lastKnownVersion = currentVersion;
+                                docRes.data.lastServerTimeCheck = Date.now();
+                                applyCloudData(docRes.data);
+                            }
+                        }
+                    } catch (error) {
+                        console.error("Error during force sync:", error);
+                    }
+                }
+            };
+            
+            // 监听页面可见性变化
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden && currentLoginState?.user?.uid === uid) {
+                    // 页面重新可见时，强制同步
+                    forceSyncOnReconnect();
+                }
+            });
+            
+            // 监听网络状态变化
+            window.addEventListener('online', () => {
+                console.log("Network restored, forcing sync");
+                // 网络恢复时，强制同步
+                setTimeout(forceSyncOnReconnect, 1000); // 延迟1秒执行，确保网络完全恢复
+            });
+            
+            // 初始同步
+            forceSyncOnReconnect();
+            
+            // 添加会话状态检查机制，确保活动会话的状态一致性
+            setInterval(async () => {
+                if (currentLoginState?.user?.uid === uid && state.active) {
+                    try {
+                        // 检查活动会话是否仍然有效
+                        const docRes = await db.collection('users').doc(uid).get();
+                        if (docRes.data && typeof docRes.data === 'object') {
+                            const remoteActive = docRes.data.active;
+                            const localActive = state.active;
+                            
+                            // 如果远程没有活动会话，但本地有，说明会话已被停止
+                            if (!remoteActive && localActive) {
+                                console.log("Session was stopped remotely, forcing update");
+                                docRes.data.lastServerTimeCheck = Date.now();
+                                applyCloudData(docRes.data);
+                            }
+                            // 如果远程有活动会话，但状态不同，同步最新状态
+                            else if (remoteActive && localActive && (
+                                remoteActive.isPaused !== localActive.isPaused ||
+                                remoteActive.taskId !== localActive.taskId ||
+                                (remoteActive.isStopped && !localActive.isStopped)
+                            )) {
+                                console.log("Session state changed remotely, forcing update");
+                                docRes.data.lastServerTimeCheck = Date.now();
+                                applyCloudData(docRes.data);
+                            }
+                        }
+                    } catch (error) {
+                        console.error("Error checking session validity:", error);
+                    }
+                }
+            }, 5000); // 每5秒检查一次会话状态
+            
+        } catch (error) {
+            console.error("Failed to create CloudBase listener:", error);
+            if (retryCount < maxRetries) {
+                retryCount++;
+                const delay = Math.min(1000 * Math.pow(2, retryCount), 30000);
+                
+                setTimeout(() => {
+                    if (currentLoginState?.user?.uid === uid) {
+                        createListener();
+                    }
+                }, delay);
+            }
         }
-      },
-      onError: (err) => {
-        console.error("CloudBase listener error:", err);
-        pushToast('与云端同步时出错', 'warn');
-        hideLoader();
-      }
-    });
+    };
+    
+    createListener();
   };
 
   async function initializeApp() {
@@ -1557,6 +2191,13 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
                 if (timerHeartbeatInterval) clearInterval(timerHeartbeatInterval);
                 timerHeartbeatInterval = setInterval(sendTimerHeartbeat, HEARTBEAT_INTERVAL_MS);
             }
+            // 立即同步时间偏移量
+            syncTimeOffset().then(() => {
+                // 设置定期时间同步
+                if (window.timeSyncInterval) clearInterval(window.timeSyncInterval);
+                window.timeSyncInterval = setInterval(syncTimeOffset, 30000); // 每30秒同步一次时间
+            });
+            
             setupCloudBaseListener(user.uid);
             cloudSyncReady = true;
           } catch (err) {

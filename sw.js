@@ -1,9 +1,8 @@
-const CACHE_NAME = 'haoqing-cache-v12';
+const CACHE_NAME = 'haoqing-cache-v4';
 const URLS_TO_CACHE = [
   '/',
   'index.html',
   'index.js',
-  'https://static.cloudbase.net/cloudbase-js-sdk/2.22.4/cloudbase.full.js',
   'assets/sfx/nav_tasks.mp3',
   'assets/sfx/nav_timer.mp3',
   'assets/sfx/nav_backpack.mp3',
