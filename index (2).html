@@ -1,0 +1,1007 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<title>豪情在天 · 任务与计时</title>
+<meta name="theme-color" content="#f5f5f7">
+<link rel="manifest" href="manifest.json">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="豪情计时">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23007aff'/%3E%3Cpath d='M25 50 L45 70 L75 30' stroke='white' stroke-width='10' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --bg: #f5f5f7;
+    --panel: #ffffff;
+    --panel-2: #fdfdfd;
+    --text: #1d1d1f;
+    --muted: #666;
+    --primary: #007aff;
+    --primary-hover: #0071e3;
+    --accent: #007aff;
+    --danger: #ff3b30;
+    --danger-hover: #ff453a;
+    --success: #34c759;
+    --warning: #ff9500;
+    --border: #dcdcdc;
+    --ring-bg: #e5e5ea;
+    --shadow: 0 4px 12px rgba(0,0,0,.08);
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+    --safe-area-top-static: env(safe-area-inset-top, 0px);
+    --safe-area-bottom-static: env(safe-area-inset-bottom, 0px);
+    --safe-area-bottom-dynamic: 0px;
+    --safe-area-top: var(--safe-area-top-static);
+    --safe-area-bottom: calc(var(--safe-area-bottom-static) + var(--safe-area-bottom-dynamic));
+  }
+
+  @supports (padding: constant(safe-area-inset-top)) {
+    :root{
+      --safe-area-top-static: constant(safe-area-inset-top);
+      --safe-area-bottom-static: constant(safe-area-inset-bottom);
+    }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  *{box-sizing:border-box}
+  html{background-color:var(--bg);height:100%;min-height:-webkit-fill-available;}
+  body{
+    margin:0;
+    font-family:var(--font-sans);
+    color:var(--text);
+    background:var(--bg);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    min-height:100vh;
+    min-height:100dvh;
+    min-height:-webkit-fill-available;
+  }
+  .app{
+    max-width:1220px;
+    margin:0 auto;
+    padding:calc(30px + var(--safe-area-top)) 16px calc(60px + var(--safe-area-bottom));
+    animation: fadeIn .5s .1s ease-out forwards;
+    opacity:0;
+  }
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+  h1{font-size:28px;margin:0;font-weight:800}
+  h2{font-size:18px;font-weight:700;margin:0 0 1em}
+  h3{font-size:16px;font-weight:600;margin:0 0 .8em}
+  h4{font-weight:700}
+  .workspace{display:grid;gap:28px;grid-template-columns:minmax(0,1.3fr) minmax(380px,0.7fr)}
+  .column{display:flex;flex-direction:column;gap:24px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
+  .card.compact .bd{padding:16px 24px}
+  .card .hd{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--panel);}
+  .card .bd{padding:24px}
+  .control-dock{display:grid;gap:16px}
+  .control-group{border:1px solid var(--border);border-radius:10px;padding:14px;background:#fdfdfd}
+  .control-group h4{margin:0 0 12px;font-size:11px;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+  .dock-buttons{display:flex;flex-wrap:wrap;gap:10px}
+  .dock-buttons .btn{flex:1;min-width:120px;text-align:center}
+  .muted{color:var(--muted)}
+  .row{display:flex;gap:12px;flex-wrap:wrap}
+  input,select{background: #fdfdfd;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:12px 14px;outline:none;font-family:inherit;font-size:15px;transition:border-color .2s ease,box-shadow .2s ease}
+  input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0, 122, 255, 0.25)}
+  .btn{appearance:none;border:none;background:#e9e9eb;color:var(--text);padding:12px 20px;border-radius:8px;cursor:pointer;font-weight:600;font-family:inherit;font-size:15px;transition:background-color .2s ease, transform .1s ease;}
+  .btn:hover{background-color:#dadadf}
+  .btn:active{transform:scale(.98)}
+  .btn.primary{background:var(--primary);border:none;color:#fff}
+  .btn.primary:hover{background:var(--primary-hover)}
+  .btn.accent{background:var(--accent);border:none;color:#fff}
+  .btn.accent:hover{background:var(--primary-hover)}
+  .btn.danger{background:var(--danger);border:none;color:#fff}
+  .btn.danger:hover{background:var(--danger-hover)}
+  .btn.small{padding:9px 14px;border-radius:8px;font-size:14px;font-weight:600}
+  .btn[disabled]{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none;background-color:#e9e9eb !important;color:var(--muted) !important;}
+  body.is-saving .btn { pointer-events: none; opacity: 0.7; }
+  .kpi{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .kpi .chip{padding:12px 18px;border-radius:10px;font-size:14px;color:var(--muted);display:flex;align-items:center;gap:8px;background:var(--panel); border:1px solid var(--border);}
+  .kpi-main-chip strong{font-size:1.6em;font-weight:700;color:var(--text);margin-left:6px;font-variant-numeric:tabular-nums}
+  .auth-chip .btn{white-space:nowrap}
+  .auth-status{display:none;font-size:12px;color:var(--muted);font-weight:600}
+  .auth-chip.logged-in .auth-status{display:inline-flex;align-items:center;gap:8px; color:var(--success)}
+  .auth-chip.logged-in .auth-status .user-avatar { width: 24px; height: 24px; border-radius: 999px; background-size: cover; background-position: center; background-color: var(--ring-bg); }
+  .auth-chip.logged-in .btn-login{display:none}
+  .auth-chip:not(.logged-in) .btn-logout {display: none;}
+  .tag{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:5px 10px;border-radius:999px;background-color:#f0f0f2;border:1px solid transparent;color:var(--muted)}
+  .tasks{display:flex;flex-direction:column;gap:12px}
+  .task{display:grid;grid-template-columns:auto 1fr auto auto;gap:12px;align-items:center;padding:16px;border:1px solid var(--border);border-radius:10px;background:var(--panel-2);transition:all .2s ease}
+  .task:hover{border-color:#84abea;background:#fafafd}
+  .task.selected{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0, 122, 255, 0.25);background:#e5f2ff}
+  .task-title { font-weight: 600; font-size: 15px; }
+  .task-meta { font-size: 12px; margin-top: 4px; color: var(--muted); }
+  .task-meta b { font-weight: 600; color: var(--text); }
+  .task-actions-footer { display: flex; gap: 10px; margin-top: 16px; }
+  .task .reward-tag{margin-top:8px;display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid transparent;background:rgba(0, 122, 255, 0.15);color:var(--accent)}
+  .compose-grid{display:grid;grid-template-columns:minmax(0,1fr) 160px minmax(0,220px);gap:14px;align-items:end;margin-bottom:20px}
+  .compose-grid .field{display:flex;flex-direction:column;gap:6px}
+  .compose-grid label{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .compose-grid .actions{display:flex;gap:8px}
+  .compose-grid .actions .btn{flex:1}
+  .pane{border:1px solid var(--border);border-radius:10px;padding:14px; background:#fdfdfd;}
+  .timer{display:grid;grid-template-rows:auto 1fr auto;min-height:520px}
+  .timer .bd{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+  .timer-label{font-size:12px;color:var(--muted);text-transform:uppercase;font-weight:600;letter-spacing:.08em}
+  .centerFlip{pointer-events:none}
+  .timer-kpis{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:24px}
+  .timer-kpis .pill{border:1px solid var(--border);padding:10px 16px;border-radius:999px;color:var(--muted);font-size:14px;background:var(--panel-2)}
+  .timer-kpis .pill strong { color: var(--text); font-weight: 600; margin-left: 6px; }
+  .timer-kpis .pill.warn{border-color:var(--danger);color:var(--danger);background:rgba(255, 59, 48, 0.1)}
+  .flip{display:inline-flex;gap:6px;align-items:flex-end}
+  .flip .col{position:relative;width:24px;height:32px;overflow:hidden;border-radius:6px;background:#f0f0f2;border:1px solid var(--border)}
+  .flip.large .col{width:36px;height:48px;border-radius:8px}
+  .flip.small .col{width:18px;height:24px}
+  .flip .digits{position:absolute;left:0;top:0;width:100%;display:flex;flex-direction:column;align-items:center;transition:transform .22s cubic-bezier(.2,.6,.2,1)}
+  .flip .digit{width:100%;height:32px;display:grid;place-items:center;font-variant-numeric:tabular-nums;font-size:20px;font-weight:800;color:var(--text)}
+  .flip.large .digit{height:48px;font-size:32px}
+  .flip.small .digit{height:24px;font-size:14px}
+  .flip .sep{width:6px;text-align:center;color:var(--muted);font-weight:800;user-select:none}
+  .flip.large .sep{width:10px}
+  .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;align-items:center;justify-content:center;z-index:110;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+  .modal{width:min(640px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);color:var(--text);padding-bottom:var(--safe-area-bottom)}
+  .modal .mh{padding:20px 24px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  .modal .mb{padding:24px}
+  .result-bar{margin-top:10px;padding:12px 14px;border-radius:8px;border:1px solid transparent;}
+  .result-ok{border-color:var(--success);background-color:rgba(52, 199, 89, 0.1)}
+  .result-warn{border-color:var(--warning);background-color:rgba(255, 149, 0, 0.1)}
+  .result-err{border-color:var(--danger);background-color:rgba(255, 59, 48, 0.1)}
+  .badge{display:inline-block;margin-right:8px;margin-bottom:8px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:#fdfdfd;font-size:13px}
+  .choice{display:flex;gap:10px;margin-top:8px;flex-wrap:wrap}
+  .choice .opt{flex:1;min-width:120px;text-align:center;border:1px solid var(--border);border-radius:10px;padding:12px 14px;background:#fdfdfd;cursor:pointer;transition:all .2s ease}
+  .choice .opt:hover{border-color:var(--accent);background:rgba(0, 122, 255, 0.1)}
+  .loots{display:inline-flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .loot{padding:4px 8px;border:1px solid var(--border);border-radius:8px;font-size:12px; background:var(--panel);}
+  details.workshop{margin-top:12px;border:1px solid var(--border);border-radius:10px;padding:12px;background:#fafafd;transition:background .2s ease}
+  details[open]{background:#fdfdfd}
+  summary{cursor:pointer;font-weight:600}
+  .workshop-body{margin-top:12px;display:grid;gap:14px}
+  .workshop-section{border:1px solid var(--border);border-radius:10px;padding:12px}
+  .badge-card{border:1px solid var(--border);border-radius:10px;padding:12px;display:grid;gap:6px;background:var(--panel-2)}
+  .loadout-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+  .loadout-slot{border:1px solid var(--border);border-radius:10px;padding:12px;display:grid;gap:8px;background:#fdfdfd}
+  .cooldown-label{font-size:12px;color:var(--muted)}
+  .badge-tier-rare{color:#007aff}
+  .badge-tier-epic{color:#af52de}
+  .badge-tier-legend{color:#ff9500}
+  .toast-container{position:fixed;top:calc(16px + var(--safe-area-top));right:16px;display:flex;flex-direction:column;gap:10px;z-index:120;pointer-events:none}
+  .toast{background:rgba(250,250,250,.9);border:1px solid var(--border);border-left:4px solid var(--accent);padding:12px 16px;border-radius:8px;color:var(--text);min-width:240px;max-width:320px;box-shadow:var(--shadow);opacity:0;transform:translateY(14px);transition:opacity .3s ease,transform .3s ease;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .toast.show{opacity:1;transform:translateY(0)}
+  .funshop-list{display:grid;gap:12px}
+  .funshop-item{border:1px solid var(--border);border-radius:10px;padding:12px;background:#fdfdfd;display:grid;gap:8px}
+  .funshop-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .funshop-need{display:inline-flex;gap:6px;align-items:center;background:#f0f0f2;border:1px solid var(--border);border-radius:999px;padding:4px 8px;color:var(--muted);font-size:12px}
+  .mini-timer{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--border);border-radius:8px;padding:4px 8px;background:#fdfdfd;font-size:12px;color:var(--muted)}
+  .funshop-muted{color:var(--muted);font-size:12px}
+  .funshop-grid-2{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+  .fb-line{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .fb-chip{display:inline-flex;align-items:center;gap:4px;font-size:12px;border-radius:999px;padding:4px 9px;border:1px solid transparent;background:#f0f0f2}
+  .fb-rare{border-color:#007aff33;color:#007aff}
+  .fb-epic{border-color:#af52de33;color:#af52de}
+  .fb-legend{border-color:#ff950033;color:#ff9500}
+  .fb-util{border-color:#a0a0a533;color:#a0a0a5}
+  .fb-bad{border-color:#ff3b3033;color:#ff3b30}
+  .modal .note{font-size:13px;color:var(--muted);line-height:1.6}
+  
+  pre.note { background: #f5f5f7 !important; border-color: var(--border) !important; color: #555; }
+  textarea { background: #fafafa !important; color: var(--text) !important; border-color: var(--border) !important; width: 100%; min-height: 120px; font-family: ui-monospace, monospace; }
+
+  .completion-animation-container{position:fixed;inset:0;pointer-events:none;z-index:9999;overflow:hidden}
+  .completion-text{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(.5);font-size:clamp(3rem,12vw,5rem);font-weight:900;color:var(--primary);text-shadow:0 0 20px rgba(0, 122, 255, 0.3);opacity:0;white-space:nowrap;animation:complete-anim 1.8s cubic-bezier(.18,.89,.32,1.28) forwards}
+  @keyframes complete-anim{0%{opacity:0;transform:translate(-50%,-50%) scale(.5) rotate(-15deg)}40%,60%{opacity:1;transform:translate(-50%,-50%) scale(1.1) rotate(5deg)}100%{opacity:0;transform:translate(-50%,-50%) scale(.8) rotate(-10deg) translateY(40px)}}
+  .confetti{position:absolute;width:8px;height:16px;opacity:0;animation:confetti-fall 2.5s ease-out forwards}
+  @keyframes confetti-fall{0%{opacity:1;transform:translateY(-10vh) rotate(0deg)}100%{opacity:0;transform:translateY(110vh) rotate(720deg)}}
+
+  .bottom-nav{display:none;position:fixed;bottom:0;left:0;right:0;height:calc(55px + var(--safe-area-bottom));padding-bottom:var(--safe-area-bottom);background:rgba(249,249,249,.9);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-top:1px solid #c7c7c9;z-index:100}
+  .bottom-nav .tab-btn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--muted);background:none;border:none;font-size:10px;cursor:pointer;transition:color .2s ease;padding-top:4px}
+  .bottom-nav .tab-btn svg{width:24px;height:24px;stroke-width:2}
+  .bottom-nav .tab-btn.active{color:var(--accent)}
+  
+  #devBtnWrapper { display: none; }
+  
+  #dailyList { display:flex; flex-direction:column; gap:12px; }
+  .daily-task-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-2);
+  }
+  .daily-task-info { flex: 1; min-width: 0; }
+  .daily-task-label { font-weight: 500; font-size: 14px; color: var(--text); }
+  .daily-task-progress { font-size: 12px; margin-top: 4px; }
+
+  .dev-input { width: 100%; }
+  #devBody label.muted { font-size: 11px; margin-bottom: 4px; display: block; text-transform: none; letter-spacing: 0; }
+  .kpi-row { display: contents; }
+  .code-block-wrapper { position: relative; }
+  .code-block-wrapper .btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+  }
+
+  @keyframes modal-slide-up{from{transform:translateY(100%)}to{transform:translateY(0)}}
+
+  .desktop-tabs { display: none; }
+  
+  #modeSwitchWrapper, #helpBtnWrapper, #devBtnWrapper, #authChipWrapper {
+    padding: 0;
+  }
+  #modeSwitchWrapper .btn, #helpBtnWrapper .btn, #devBtnWrapper .btn, #authChipWrapper .btn {
+    padding: 12px 18px;
+    font-size: 14px;
+  }
+  
+  /* "You" Page Styles */
+  .you-pane-workspace { display: flex; gap: 24px; }
+  .you-right-col { flex: 1; min-width: 0; }
+  .char-card { display: flex; flex-direction: column; gap: 16px; }
+  .avatar-container { display: flex; align-items: center; gap: 20px; }
+  .avatar-uploader {
+    width: 120px; height: 120px;
+    flex-shrink: 0;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    background-color: var(--ring-bg);
+    background-size: cover;
+    background-position: center;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--muted);
+    font-size: 12px;
+    text-align: center;
+    transition: all .2s ease;
+  }
+  .avatar-uploader:hover { border-color: var(--primary); background-color: #e0e0e0; }
+  .char-info-grid { display: grid; gap: 12px; flex: 1; }
+  .char-info-grid .field { display: flex; flex-direction: column; gap: 4px; }
+  .char-info-grid label { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+  .char-info-grid input { padding: 10px 12px; font-size: 14px; }
+
+  .char-status-card, .char-buffs-card {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel-2);
+    padding: 16px;
+  }
+  .char-status-card h3, .char-buffs-card h3 { margin: 0 0 10px; font-size: 14px; }
+  .char-status-tag { display: inline-block; padding: 4px 10px; background: var(--ring-bg); border-radius: 8px; font-size: 13px; font-weight: 600; }
+  .char-buffs-list { display: flex; flex-direction: column; gap: 6px; }
+  .char-buff-item { font-size: 13px; }
+
+  /* New Block EXP Bar Styles */
+  .exp-bar-container {
+    margin-top: 14px;
+    user-select: none;
+    font-family: ui-monospace, monospace;
+  }
+  .exp-bar-header {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    color: #9aa0b0;
+    margin-bottom: 4px;
+  }
+  .exp-bar {
+    position: relative;
+    width: 100%;
+    height: 10px;
+    background-color: #1e2433;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .exp-bar-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    background-color: #5f80f8;
+    border-radius: 6px;
+    width: 0%;
+    transition: width 0.15s linear;
+    box-shadow: inset 0 -1px 0 rgba(255,255,255,0.15);
+  }
+  .exp-bar-info {
+    display: flex;
+    justify-content: space-between;
+    font-size: 12px;
+    color: #9aa0b0;
+    margin-top: 4px;
+  }
+  .exp-gap {
+    opacity: 0.8;
+  }
+  
+  .sync-status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background-color: rgba(0, 122, 255, 0.1);
+    border: 1px solid rgba(0, 122, 255, 0.2);
+  }
+  
+  .sync-status.warning {
+    background-color: rgba(255, 149, 0, 0.1);
+    border-color: rgba(255, 149, 0, 0.2);
+  }
+  
+  .sync-status.error {
+    background-color: rgba(255, 59, 48, 0.1);
+    border-color: rgba(255, 59, 48, 0.2);
+  }
+  
+  .sync-status .sync-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: var(--success);
+    display: inline-block;
+  }
+  
+  .sync-status.warning .sync-indicator {
+    background-color: var(--warning);
+  }
+  
+  .sync-status.error .sync-indicator {
+    background-color: var(--danger);
+  }
+
+  .loading-overlay {
+    position: fixed; inset: 0;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9998;
+    font-weight: 600;
+    color: var(--muted);
+  }
+  
+  /* Desktop and Tablet Styles */
+  @media (min-width: 768px) {
+    .card .desktop-tabs {
+      display: flex;
+      gap: 8px;
+      padding: 12px 24px 0;
+      border-bottom: 1px solid var(--border);
+    }
+    .desktop-tab {
+      padding: 10px 16px;
+      border: none;
+      background: none;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--muted);
+      border-bottom: 3px solid transparent;
+      transition: all .2s ease;
+    }
+    .desktop-tab:hover { color: var(--text); }
+    .desktop-tab.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+    .workspace {
+      align-items: stretch;
+    }
+    .column > .card {
+      flex-grow: 1;
+    }
+    .bottom-nav {
+      display: none !important;
+    }
+    .tab-pane > .hd {
+        display: none;
+    }
+  }
+  
+  /* Tablet: Single Column Layout */
+  @media (max-width: 1100px) {
+    .workspace{grid-template-columns:1fr}
+  }
+
+  /* Mobile Styles */
+  @media (max-width: 767px) or (max-height: 500px){
+    :root{--panel:#ffffff;--panel-2:#fdfdfd;--border:#e5e5e5;--bg:#f0f0f2}
+    body{-webkit-tap-highlight-color:transparent; overscroll-behavior-y: contain;}
+    .app{padding:var(--safe-area-top) 16px calc(60px + var(--safe-area-bottom));margin:0 auto}
+    .workspace{grid-template-columns:1fr;gap:0; margin-top: 16px;}
+    .column { gap: 16px; }
+    header{flex-direction:column;align-items:center;gap:16px;padding:16px 0 0; margin-bottom: 0;}
+    h1{font-size:28px;font-weight:800}
+    h3 {font-size: 16px;}
+    .kpi{width:100%;gap:12px;flex-direction:column;align-items:stretch}
+    .kpi .chip{width:100%;justify-content:space-between;border-radius:10px;background:var(--panel);padding:14px;font-size:18px}
+    #helpBtnWrapper { display: none; }
+    #authChipWrapper {
+      order: 10;
+    }
+    .desktop-tabs { display: none; }
+    .kpi-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      width: 100%;
+      border-radius: 10px;
+      background: var(--panel);
+      padding: 14px;
+      border: 1px solid var(--border);
+    }
+    .kpi-row > .chip {
+      width: auto;
+      padding: 0;
+      border: none;
+      background: none;
+      box-shadow: none;
+    }
+    .desktop-only-kpi { display: none; }
+    .mobile-header-card {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        width: 100%;
+    }
+    .mobile-char-avatar {
+        flex-shrink: 0;
+        flex-basis: 30%;
+        max-width: 80px;
+        aspect-ratio: 1 / 1;
+        border-radius: 10px;
+        background-color: var(--ring-bg);
+        background-size: cover;
+        background-position: center;
+        border: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 32px;
+        color: var(--muted);
+    }
+    .mobile-char-details {
+        flex: 1;
+        min-width: 0;
+    }
+    .mobile-char-status {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        width: 100%;
+    }
+    .mobile-char-status .char-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: 0 2px;
+    }
+    .mobile-char-status .char-name {
+        font-weight: 700;
+        font-size: 18px;
+        color: var(--text);
+    }
+    .mobile-char-status .char-title {
+        font-size: 12px;
+        font-weight: 500;
+        color: var(--muted);
+    }
+    .mobile-char-status .exp-bar-container {
+        margin-top: 0;
+    }
+    .mobile-char-status .exp-bar-header {
+        font-size: 12px;
+        margin-bottom: 4px;
+    }
+    .mobile-char-status .exp-bar {
+        height: 8px;
+    }
+    .mobile-char-status .exp-bar-header .exp-buffs {
+      font-weight: 600;
+      color: var(--accent);
+      font-size: 11px;
+    }
+    #authChipWrapper {
+      padding: 0;
+      border: none;
+      background: transparent;
+    }
+    #authChipWrapper .btn {
+      width: 100%;
+    }
+    .auth-chip{gap:8px}
+    .auth-chip .btn-login{flex:1}
+    .auth-chip .auth-status{justify-content:flex-start}
+    .bottom-nav{display:flex}
+    .column-main.mobile-hidden, .column-side.mobile-hidden {display:none}
+    .card{border-radius:12px;border:1px solid var(--border);background:var(--panel);box-shadow:none;}
+    .card .hd { padding: 18px 20px; }
+    .card .hd h2 { font-size: 22px; }
+    .card .bd{padding:20px}
+    .row{flex-direction:column;align-items:stretch}
+    .row > *{width:100%}
+    .tasks{gap:12px}
+    .task-title { font-size: 16px; }
+    .task-actions-footer { display: grid; grid-template-columns: repeat(auto-fit, minmax(100px, 1fr)); gap: 10px; margin-top: 16px; }
+    .compose-grid{grid-template-columns:1fr;gap:16px}
+    .compose-grid .actions{flex-direction:column}
+    .compose-grid .field{gap:8px}
+    .compose-grid label{font-size:12px;font-weight:600}
+    input,select{border-radius:8px;background:var(--bg);border-color:var(--border);padding:14px;font-size:16px}
+    .btn{border-radius:10px;font-size:16px;padding:14px}
+    .btn.small{border-radius:8px;font-size:13px;padding:10px}
+    .task{display:flex;flex-direction:column;align-items:stretch;gap:10px;border-radius:10px;padding:14px;background:#fdfdfd}
+    .task .controls{display:flex;gap:8px}
+    .task .controls .btn{flex:1}
+    .task > div:last-child .btn{width:100%}
+    #inventoryActionsModule { display: none; }
+    .loadout-grid { grid-template-columns: 1fr; }
+    .loadout-slot { 
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+    }
+    .loadout-slot .muted { flex: 1; }
+    .loadout-slot .btn { flex-shrink: 0; white-space: nowrap; }
+    .section-2col{grid-template-columns:1fr;gap:12px}
+    .timer{min-height:440px}
+    .timer .bd{padding:18px}
+    .timer-label { font-size: 13px; }
+    .timer-kpis{gap:10px;flex-direction:column;align-items:stretch;width:100%;margin-top:24px}
+    .timer-kpis .pill{width:100%;justify-content:space-between;display:flex;border-radius:10px;padding:12px;font-size:15px}
+    .toast-container{top:calc(16px + var(--safe-area-top));right:16px;left:16px;width:auto}
+    .modal-mask{align-items:flex-end;justify-content:center}
+    .modal-mask[style*="display: flex"] .modal{animation:modal-slide-up .4s cubic-bezier(.16,1,.3,1)}
+    .modal{width:100%;max-height:90vh;overflow-y:auto;border-radius:16px 16px 0 0;border:none;background:var(--panel);box-shadow:0 -10px 40px rgba(0,0,0,.2);padding-bottom:var(--safe-area-bottom)}
+    .modal .mb{padding:16px}
+    .modal .mh::before{content:'';position:absolute;top:8px;left:50%;transform:translateX(-50%);width:40px;height:5px;background:#cccccc;border-radius:99px}
+    .modal .mh{padding-top:24px;border:none}
+    #dailyTasksSection { margin-top: 16px; }
+    #dailyTasksSection h3, #dailyTasksSection > small { display: none; }
+    .daily-task-label { font-size: 15px; }
+    #modeSwitchWrapper { padding: 0; border: none; background: transparent; }
+    #modeSwitchBtn { width: 100%; }
+    
+    .you-pane-workspace { flex-direction: column; gap: 16px; }
+    .avatar-container { flex-direction: column; align-items: stretch; text-align: center; }
+    .avatar-uploader {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1/1;
+    }
+    .you-page-actions .btn {
+      width: 100%;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>豪情在天</h1>
+    <div class="kpi">
+      <div class="kpi-row desktop-only-kpi">
+        <span class="chip" id="totalValorChip">总豪情值：<strong id="kpiTotalValue">0</strong></span>
+        <span class="chip">累计用时：<strong id="kpiTime">0:00:00</strong></span>
+      </div>
+      <div class="kpi-row" id="mobileHeaderStatus"></div>
+      <span class="chip" id="modeSwitchWrapper"><button class="btn" id="modeSwitchBtn">专注模式</button></span>
+      <span class="chip" id="helpBtnWrapper"><button class="btn" id="btnHelp">帮助 ❓</button></span>
+      <span class="chip auth-chip" id="authChipWrapper">
+          <button class="btn btn-login" id="btnLogin">登录/注册</button>
+          <span class="auth-status">
+              <span class="user-avatar" id="userAvatar"></span>
+              <span id="authStatusText">已登录</span>
+          </span>
+          <button class="btn small btn-logout" id="btnLogout">登出</button>
+      </span>
+      <span class="chip" id="devBtnWrapper"><button class="btn" id="btnDev">调试 ⚙️</button></span>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <div class="column column-main" id="mainColumn">
+      <section class="card">
+        <div class="desktop-tabs">
+            <button class="desktop-tab active" data-desktop-target="tasks-pane" data-sound-id="sfxNavTasks">任务</button>
+            <button class="desktop-tab" data-desktop-target="backpack-pane" data-sound-id="sfxNavBackpack">背包</button>
+            <button class="desktop-tab" data-desktop-target="club-pane" data-sound-id="sfxNavClub">俱乐部</button>
+            <button class="desktop-tab" data-desktop-target="you-pane" data-sound-id="sfxNavYou">你</button>
+        </div>
+
+        <div class="tab-pane" id="tasks-pane">
+            <div class="hd">
+              <h2>任务清单</h2>
+              <span class="muted">创建 → 选择 → 开始</span>
+            </div>
+            <div class="bd">
+              <div class="compose-grid">
+                <div class="field">
+                  <label for="taskTitle">任务标题</label>
+                  <input id="taskTitle" type="text" placeholder="任务标题（如：论文引言改写）" />
+                </div>
+                <div class="field" style="max-width:160px">
+                  <label for="taskDiff">难度</label>
+                  <select id="taskDiff">
+                    <option value="1">难度 1 · 轻松</option>
+                    <option value="2">难度 2</option>
+                    <option value="3" selected>难度 3 · 标准</option>
+                    <option value="4">难度 4</option>
+                    <option value="5">难度 5 · 硬仗</option>
+                  </select>
+                </div>
+                <div class="field actions">
+                  <button class="btn primary" id="btnAdd">添加任务</button>
+                  <button class="btn" id="btnClearAll">清空数据</button>
+                </div>
+              </div>
+              <div class="tasks" id="taskList"></div>
+              <div class="muted" id="emptyTask" style="display:none;padding:18px;text-align:center">暂无任务，先在上方添加一个。</div>
+              
+              <div id="dailyTasksSection" style="margin-top: 24px;">
+                 <h3 style="margin:0 0 12px;font-size:14px;border-top:1px solid var(--border);padding-top:16px;">每日任务</h3>
+                 <div id="dailyList"></div>
+                 <small class="muted" style="display: block; margin-top: 10px;font-size:12px;">每日首刷免费，可在下方按钮区快速刷新或导入任务。</small>
+              </div>
+
+              <div class="task-actions-footer">
+                <button class="btn small" id="btnDailyRefresh">刷新任务</button>
+                <button class="btn small" id="btnTaskLibrary">任务库</button>
+                <button class="btn small" id="btnTodayDone">今日已完成</button>
+              </div>
+            </div>
+        </div>
+
+        <div class="tab-pane" id="backpack-pane" style="display: none;">
+            <div class="hd">
+              <h2>背包</h2>
+              <span class="muted">库存与工坊</span>
+            </div>
+            <div class="bd" style="display: flex; flex-direction: column; gap: 16px;">
+               <div class="pane">
+                <h3>库存快照</h3>
+                <div class="badge-row" id="invRow"></div>
+               </div>
+               <div class="pane">
+                <h3>徽章工坊</h3>
+                <div class="workshop-body" id="badgeWorkshopBody"></div>
+               </div>
+            </div>
+        </div>
+
+        <div class="tab-pane" id="club-pane" style="display: none;">
+            <div class="hd">
+              <h2>俱乐部</h2>
+              <span class="muted">奖励与娱乐</span>
+            </div>
+            <div class="bd" style="display: flex; flex-direction: column; gap: 16px;">
+                <div class="control-group">
+                  <h4>幸运轮</h4>
+                  <div style="display:grid;place-items:center;gap:10px">
+                    <div id="prizeTicker" style="min-height:48px;font-size:20px;font-weight:800;letter-spacing:1px;padding:12px 16px;border:1px dashed var(--border);border-radius:8px;background:#fdfdfd;width:100%;text-align:center">
+                      点击“开始抽奖”
+                    </div>
+                    <div class="muted" style="font-size:12px">消耗抽卡券×1，名称将快速跳动，停止即为结果</div>
+                  </div>
+                  <div style="display:flex;gap:8px;justify-content:center;margin-top:8px">
+                    <button class="btn primary" id="btnSpin">开始抽奖</button>
+                  </div>
+                  <div id="wheelResult" class="wheel-result muted" aria-live="polite" style="text-align:center;margin-top:6px"></div>
+                </div>
+                <div class="control-group">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+                      <h4 style="margin:0">娱乐活动</h4>
+                      <button class="btn small" id="btnFunshopEdit">调试/导入</button>
+                    </div>
+                    <div class="note" style="margin-bottom:8px;font-size:12px">
+                      点“兑换”将检验并消耗所需徽章数量；若配置了磨损，将累计到对应徽章的磨损池，达到上限会按倍数销毁徽章。
+                    </div>
+                    <div id="funshopList" class="funshop-list"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane" id="you-pane" style="display: none;">
+            <div class="hd">
+              <h2>你</h2>
+              <span class="muted">角色状态</span>
+            </div>
+            <div class="bd">
+                <div class="you-pane-workspace">
+                    <div class="you-right-col">
+                        <div class="char-card">
+                            <div class="avatar-container">
+                                <div class="avatar-uploader" id="avatarUploader">点击<br>上传头像</div>
+                                <input type="file" id="avatarInput" accept="image/*" style="display: none;">
+                            </div>
+                            
+                            <div class="exp-bar-container">
+                              <div class="exp-bar-header">
+                                <span class="exp-level">Lv.<span id="expLevelNow">1</span></span>
+                                <span class="exp-level exp-next">Lv.<span id="expLevelNext">2</span></span>
+                              </div>
+                              <div class="exp-bar">
+                                <div class="exp-bar-fill" id="expBarFill"></div>
+                              </div>
+                              <div class="exp-bar-info">
+                                <span id="expValueText">0 / 1000</span>
+                                <span class="exp-gap">距下级：1000 豪情值</span>
+                              </div>
+                            </div>
+                            
+                            <div class="char-info-grid">
+                                <div class="field">
+                                    <label for="charNameInput">名称</label>
+                                    <input id="charNameInput" type="text" placeholder="你的角色名">
+                                </div>
+                                <div class="field">
+                                    <label for="charTitleInput">称号</label>
+                                    <input id="charTitleInput" type="text" placeholder="你的称号">
+                                </div>
+                            </div>
+
+                            <div class="char-status-card">
+                                <h3>状态</h3>
+                                <p>当前：<span id="charStatusTag" class="char-status-tag">离线</span></p>
+                                <p>等级：<b id="charLevelText">Lv. 1</b></p>
+                                <p>总豪情值：<b id="charTotalHQText">0 HQ</b></p>
+                            </div>
+                            <div class="char-buffs-card">
+                                <h3>增益效果</h3>
+                                <div id="charBuffsList" class="char-buffs-list">
+                                    <div class="char-buff-item muted">无</div>
+                                </div>
+                            </div>
+                            <div class="you-page-actions" style="margin-top: 16px;">
+                              <button class="btn" id="youPageHelpBtn">帮助</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+      </section>
+    </div>
+    <div class="column column-side" id="timerCard">
+      <div class="card timer">
+          <div class="hd">
+              <h2>计时器</h2>
+              <div style="display: flex; flex-direction: column; gap: 4px;">
+                  <span class="muted" id="activeHint">未选择任务</span>
+                  <div class="sync-status" id="syncStatus" style="display: none; font-size: 12px; color: var(--muted);">
+                      <span id="syncStatusText"></span>
+                  </div>
+              </div>
+          </div>
+          <div class="bd">
+              <div class="timer-label">本次豪情值</div>
+              <div id="sessionFlip" class="centerFlip"></div>
+              <div class="timer-kpis">
+                  <div class="pill">本次用时: <strong id="sessionTime">0:00:00</strong></div>
+                  <div class="pill">速率: <strong id="rateText">0</strong></div>
+                  <div class="pill">任务总值: <strong id="taskTotal">0</strong></div>
+                  <div class="pill">任务总时: <strong id="taskTime">0:00:00</strong></div>
+              </div>
+              <div id="pauseIndicator" style="display: none; margin-top: 24px; color: var(--warning); font-weight: 600; text-align: center;">已暂停 <span id="pauseTime" style="font-variant-numeric: tabular-nums; margin-left: 8px;"></span></div>
+          </div>
+          <div class="hd" style="border-top: 1px solid var(--border); border-bottom: none;">
+              <div class="dock-buttons">
+                  <button class="btn primary" id="btnStart" disabled>开始</button>
+                  <button class="btn" id="btnPause" disabled>暂停</button>
+                  <button class="btn danger" id="btnStop" disabled>结束并结算</button>
+              </div>
+          </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="bottom-nav">
+      <button class="tab-btn active" data-mobile-target="tasks-pane" data-sound-id="sfxNavTasks">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          <span>任务</span>
+      </button>
+      <button class="tab-btn" data-mobile-target="timerCard" data-sound-id="sfxNavTimer">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          <span>计时</span>
+      </button>
+      <button class="tab-btn" data-mobile-target="backpack-pane" data-sound-id="sfxNavBackpack">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path><line x1="3" y1="6" x2="21" y2="6"></line><path d="M16 10a4 4 0 0 1-8 0"></path></svg>
+          <span>背包</span>
+      </button>
+      <button class="tab-btn" data-mobile-target="club-pane" data-sound-id="sfxNavClub">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l.34.28a2 2 0 0 0 2.32 0l3.03-2.5A2 2 0 0 1 20 2.06V8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V2.06a2 2 0 0 1 2.31-1.63l3.03 2.5a2 2 0 0 0 2.32 0L12 2.69z"></path><path d="M4 10v10a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V10"></path><path d="M12 16a2 2 0 1 0 0-4 2 2 0 0 0 0 4z"></path></svg>
+          <span>俱乐部</span>
+      </button>
+      <button class="tab-btn" data-mobile-target="you-pane" data-sound-id="sfxNavYou">
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+          <span>你</span>
+      </button>
+  </div>
+</div>
+
+<div id="loadingOverlay" class="loading-overlay">加载中...</div>
+<div id="completion-animation-container" class="completion-animation-container"></div>
+<div id="toastContainer" class="toast-container"></div>
+<div style="display: none;" id="sfxContainer">
+    <audio id="sfxNavTasks" src="assets/sfx/nav_tasks.mp3" preload="auto"></audio>
+    <audio id="sfxNavTimer" src="assets/sfx/nav_timer.mp3" preload="auto"></audio>
+    <audio id="sfxNavBackpack" src="assets/sfx/nav_backpack.mp3" preload="auto"></audio>
+    <audio id="sfxNavClub" src="assets/sfx/nav_club.mp3" preload="auto"></audio>
+    <audio id="sfxNavYou" src="assets/sfx/nav_you.mp3" preload="auto"></audio>
+    <audio id="sfxAddTask" src="assets/sfx/add.mp3" preload="auto"></audio>
+    <audio id="sfxSelectTask" src="assets/sfx/select.mp3" preload="auto"></audio>
+    <audio id="sfxDeleteTask" src="assets/sfx/delete.mp3" preload="auto"></audio>
+    <audio id="sfxTimerStart" src="assets/sfx/timer_start.mp3" preload="auto"></audio>
+    <audio id="sfxTimerPause" src="assets/sfx/timer_pause.mp3" preload="auto"></audio>
+    <audio id="sfxTimerStop" src="assets/sfx/timer_stop.mp3" preload="auto"></audio>
+    <audio id="sfxModalOpen" src="assets/sfx/modal_open.mp3" preload="auto"></audio>
+    <audio id="sfxModalClose" src="assets/sfx/modal_close.mp3" preload="auto"></audio>
+    <audio id="sfxSuccess" src="assets/sfx/success.mp3" preload="auto"></audio>
+    <audio id="sfxWarn" src="assets/sfx/warn.mp3" preload="auto"></audio>
+    <audio id="sfxClick" src="assets/sfx/click.mp3" preload="auto"></audio>
+</div>
+
+<!-- Modals -->
+<div class="modal-mask" id="rewardMask">
+  <div class="modal">
+    <div class="mh"><h3>任务结算</h3><button class="btn small" id="btnCloseReward">关闭</button></div>
+    <div class="mb" id="rewardBody"></div>
+  </div>
+</div>
+
+<div class="modal-mask" id="helpMask">
+    <div class="modal">
+        <div class="mh"><h3>帮助文档</h3><button class="btn small" id="btnCloseHelp">关闭</button></div>
+        <div class="mb" style="display: flex; flex-direction: column; gap: 16px;">
+            <div class="pane">
+                <h4>核心玩法</h4>
+                <p class="note">添加任务 → 选择任务 → 开始计时。完成计时后，任务将从清单中移除，并根据时长、难度、连击数等结算“豪情值” (HQ)。</p>
+            </div>
+            <div class="pane">
+                <h4>模式</h4>
+                <p class="note"><b>专注模式：</b>标准模式，稳定获取豪情值。<br><b>街机模式：</b>高风险高回报，可选择将完成任务的基础奖励作为赌注，赢取更多或全部失去。</p>
+            </div>
+            <div class="pane">
+                <h4>每日与背包</h4>
+                <p class="note">每日任务提供额外奖励。背包中的“徽章工坊”允许消耗碎片来换取道具或加成，深化游戏体验。</p>
+            </div>
+            <div class="pane">
+                <h4>云同步</h4>
+                <p class="note">注册并登录后，您的所有数据（任务、进度、库存等）将自动在您的所有设备间实时同步。</p>
+            </div>
+            <div class="pane">
+              <button class="btn small" id="btnToggleSound">音效：开启</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-mask" id="loginMask">
+    <div class="modal">
+        <div class="mh"><h3>登录 / 注册</h3><button class="btn small" id="btnCloseLogin">关闭</button></div>
+        <div class="mb" style="display:flex; flex-direction: column; gap: 12px;">
+            <p class="note">使用用户名（非邮箱）和密码登录。如果没有账户，将自动为您创建。</p>
+            <input id="loginEmail" type="text" placeholder="用户名" />
+            <input id="loginPassword" type="password" placeholder="密码（至少6位）" />
+            <div id="loginResult" style="display:none;"></div>
+            <div class="row">
+                <button class="btn primary" id="btnDoLogin">登录</button>
+                <button class="btn" id="btnDoRegister">注册</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal-mask" id="taskLibraryMask">
+  <div class="modal">
+    <div class="mh"><h3>任务库</h3><button class="btn small" id="btnCloseTaskLibrary">关闭</button></div>
+    <div class="mb">
+      <p class="note">批量导入任务，每行一个。格式：<br><code>标题|难度(1-5)|奖励类型|奖励数量</code><br>后两项可选。奖励类型：<code>hq, ticket, freeze, rare_gem, epic_gem, rare_token, epic_token, legend_token</code></p>
+      <pre class="note" style="background: #eee; padding: 8px; border-radius: 6px; border: 1px solid #ddd; font-size: 12px; margin-bottom: 12px;">论文引言改写|3|hq|200\n阅读文献综述|4|ticket|1</pre>
+      <textarea id="taskLibraryInput" rows="8" placeholder="在此粘贴任务..."></textarea>
+      <button class="btn primary" id="btnImportTasks" style="margin-top:12px; width: 100%;">导入</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="todayDoneMask">
+  <div class="modal">
+    <div class="mh"><h3>今日已完成</h3><button class="btn small" id="btnCloseTodayDone">关闭</button></div>
+    <div class="mb" id="todayDoneBody" style="display: flex; flex-direction: column; gap: 12px;"></div>
+  </div>
+</div>
+
+<div class="modal-mask" id="funshopEditMask">
+  <div class="modal">
+    <div class="mh"><h3>编辑娱乐活动</h3><button class="btn small" id="btnCloseFunshopEdit">关闭</button></div>
+    <div class="mb">
+       <p class="note">每行一个活动。格式：<code>标题|秒数|需求: id*数量|磨损: id*数量|时段: HH:MM-HH:MM</code><br>需求、磨损和时段为可选项。</p>
+        <div class="code-block-wrapper">
+          <textarea id="funshopInput" rows="8"></textarea>
+          <button class="btn small" id="btnCopyFunshopFormat">复制格式</button>
+        </div>
+        <button class="btn primary" id="btnFunshopImport" style="margin-top:12px; width: 100%;">导入并覆盖</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="devMask">
+  <div class="modal">
+    <div class="mh"><h3>调试面板</h3><button class="btn small" id="btnCloseDev">关闭</button></div>
+    <div class="mb" id="devBody" style="display: flex; flex-direction: column; gap: 16px;">
+      <div class="pane">
+        <h4>速率配置 (HQ/秒)</h4>
+        <div class="row">
+          <div class="field"><label class="muted">D1</label><input type="number" id="rate1" class="dev-input"></div>
+          <div class="field"><label class="muted">D2</label><input type="number" id="rate2" class="dev-input"></div>
+          <div class="field"><label class="muted">D3</label><input type="number" id="rate3" class="dev-input"></div>
+          <div class="field"><label class="muted">D4</label><input type="number" id="rate4" class="dev-input"></div>
+          <div class="field"><label class="muted">D5</label><input type="number" id="rate5" class="dev-input"></div>
+        </div>
+        <div class="row" style="margin-top: 8px;"><button class="btn" id="btnSaveRates">保存速率</button><button class="btn" id="btnResetRates">恢复默认</button></div>
+      </div>
+      <div class="pane">
+        <h4>资源库存</h4>
+        <div class="row">
+          <div class="field"><label class="muted">总豪情值</label><input type="number" id="devTotalHQ" class="dev-input"></div>
+          <div class="field"><label class="muted">抽卡券</label><input type="number" id="devTickets" class="dev-input"></div>
+          <div class="field"><label class="muted">冻结卡</label><input type="number" id="devFreeze" class="dev-input"></div>
+        </div>
+         <div class="row" style="margin-top: 8px;">
+          <div class="field"><label class="muted">稀有碎片</label><input type="number" id="devRareGem" class="dev-input"></div>
+          <div class="field"><label class="muted">史诗碎片</label><input type="number" id="devEpicGem" class="dev-input"></div>
+          <div class="field"><label class="muted">稀有徽章</label><input type="number" id="devRareToken" class="dev-input"></div>
+        </div>
+        <div class="row" style="margin-top: 8px;">
+          <div class="field"><label class="muted">史诗徽章</label><input type="number" id="devEpicToken" class="dev-input"></div>
+          <div class="field"><label class="muted">传说徽章</label><input type="number" id="devLegendToken" class="dev-input"></div>
+        </div>
+        <div class="row" style="margin-top: 8px;"><button class="btn" id="btnSaveResources">保存资源</button></div>
+      </div>
+       <div class="pane">
+          <h4>街机模式赔率</h4>
+          <div class="row">
+            <div class="field"><label class="muted">基础概率</label><input type="number" step="0.01" id="devRewardBaseChance" class="dev-input"></div>
+            <div class="field"><label class="muted">押注系数</label><input type="number" step="0.01" id="devRewardBetCoeff" class="dev-input"></div>
+            <div class="field"><label class="muted">最高概率</label><input type="number" step="0.01" id="devRewardMaxChance" class="dev-input"></div>
+            <div class="field"><label class="muted">怜悯增量</label><input type="number" step="0.001" id="devRewardPityInc" class="dev-input"></div>
+          </div>
+          <div class="row" style="margin-top:8px"><button class="btn" id="btnSaveRewardParams">保存赔率</button><button class="btn" id="btnResetRewardParams">恢复默认</button></div>
+       </div>
+      <div class="pane">
+        <h4>数据与状态</h4>
+        <textarea id="devStateText" placeholder="在此粘贴状态JSON进行导入..."></textarea>
+        <div class="row" style="margin-top: 8px;"><button class="btn" id="btnExportState">导出状态</button><button class="btn primary" id="btnImportState">导入状态</button></div>
+      </div>
+      <div class="pane">
+        <h4>危险操作</h4>
+        <div class="row">
+          <button class="btn" id="btnSimulateNextDay">模拟下一天</button>
+          <button class="btn" id="btnResetDaily">重置每日</button>
+          <button class="btn danger" id="btnHardReset">硬重置</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="//static.cloudbase.net/cloudbase-js-sdk/2.22.4/cloudbase.full.js"></script>
+<script src="index.js" defer></script>
+</body>
+</html>

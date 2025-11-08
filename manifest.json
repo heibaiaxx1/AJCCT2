@@ -1,23 +1,16 @@
 {
   "name": "豪情在天 · 任务与计时",
   "short_name": "豪情计时",
-  "start_url": ".",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#f5f5f7",
   "theme_color": "#007aff",
-  "description": "为你的豪情任务计时，为你的豪情目标奋斗，为你的豪情人生喝彩。",
+  "description": "高效的任务管理与计时应用，支持全平台实时同步",
   "icons": [
     {
       "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23007aff'/%3E%3Cpath d='M25 50 L45 70 L75 30' stroke='white' stroke-width='10' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
       "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='20' fill='%23007aff'/%3E%3Cpath d='M25 50 L45 70 L75 30' stroke='white' stroke-width='10' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E",
-      "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "type": "image/svg+xml"
     }
   ]
 }

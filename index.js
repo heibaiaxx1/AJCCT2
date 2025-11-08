@@ -2051,17 +2051,49 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
                 if (currentLoginState?.user?.uid === uid) {
                     try {
                         console.log("Forcing sync due to reconnection");
-                        await syncTimeOffset(); // 立即同步时间
                         
-                        // 获取最新数据
-                        const docRes = await db.collection('users').doc(uid).get();
-                        if (docRes.data && typeof docRes.data === 'object') {
-                            const currentVersion = docRes.data.syncVersion || 0;
-                            if (currentVersion !== lastKnownVersion) {
-                                console.log("Forcing data refresh after reconnection");
-                                lastKnownVersion = currentVersion;
+                        // 针对iOS浏览器，强制清除缓存并重新获取数据
+                        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                        if (isIOS) {
+                            // iOS浏览器的特殊处理，确保获取最新数据
+                            console.log("iOS force sync: bypassing cache");
+                            
+                            // 禁用缓存，强制获取最新数据
+                            const docRes = await db.collection('users').doc(uid).get({
+                                // 添加时间戳参数，绕过缓存
+                                timestamp: Date.now()
+                            });
+                            
+                            if (docRes.data && typeof docRes.data === 'object') {
+                                // 无论版本是否变化，都强制应用数据
+                                console.log("iOS force sync: applying latest data regardless of version");
+                                lastKnownVersion = docRes.data.syncVersion || 0;
                                 docRes.data.lastServerTimeCheck = Date.now();
+                                
+                                // 应用数据前先重置渲染状态，确保UI完全更新
+                                lastRenderedState = {};
                                 applyCloudData(docRes.data);
+                                
+                                // 强制重新渲染所有组件
+                                setTimeout(() => {
+                                    renderInitial();
+                                    console.log("iOS force sync: complete UI refresh");
+                                }, 100);
+                            }
+                        } else {
+                            // 非iOS设备的常规处理
+                            await syncTimeOffset(); // 立即同步时间
+                            
+                            // 获取最新数据
+                            const docRes = await db.collection('users').doc(uid).get();
+                            if (docRes.data && typeof docRes.data === 'object') {
+                                const currentVersion = docRes.data.syncVersion || 0;
+                                if (currentVersion !== lastKnownVersion) {
+                                    console.log("Forcing data refresh after reconnection");
+                                    lastKnownVersion = currentVersion;
+                                    docRes.data.lastServerTimeCheck = Date.now();
+                                    applyCloudData(docRes.data);
+                                }
                             }
                         }
                     } catch (error) {
@@ -2070,10 +2102,48 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
                 }
             };
             
-            // 监听页面可见性变化
+            // 监听页面可见性变化，特别优化iOS浏览器体验
             document.addEventListener('visibilitychange', () => {
                 if (!document.hidden && currentLoginState?.user?.uid === uid) {
                     // 页面重新可见时，强制同步
+                    console.log("Page became visible, forcing sync");
+                    
+                    // 针对iOS浏览器的特殊处理
+                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                    if (isIOS) {
+                        // iOS浏览器可能有缓存问题，强制刷新状态
+                        console.log("iOS browser detected, forcing immediate sync");
+                        
+                        // 立即同步，不延迟
+                        forceSyncOnReconnect().then(() => {
+                            // 添加二次检查，确保状态完全更新
+                            setTimeout(async () => {
+                                try {
+                                    const uid = currentLoginState?.user?.uid;
+                                    if (uid) {
+                                        const docRes = await db.collection('users').doc(uid).get();
+                                        if (docRes.data && typeof docRes.data === 'object') {
+                                            console.log("iOS double-check: applying latest state");
+                                            docRes.data.lastServerTimeCheck = Date.now();
+                                            applyCloudData(docRes.data);
+                                        }
+                                    }
+                                } catch (error) {
+                                    console.error("Error during iOS double-check sync:", error);
+                                }
+                            }, 1000); // 1秒后二次检查，确保状态更新
+                        });
+                    } else {
+                        // 非iOS设备的常规处理
+                        forceSyncOnReconnect();
+                    }
+                }
+            });
+            
+            // 添加页面焦点事件监听，处理iOS多任务切换
+            window.addEventListener('focus', () => {
+                if (currentLoginState?.user?.uid === uid) {
+                    console.log("Window gained focus, forcing sync");
                     forceSyncOnReconnect();
                 }
             });
