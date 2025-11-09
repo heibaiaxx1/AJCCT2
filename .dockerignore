@@ -1,0 +1,37 @@
+# 忽略日志文件
+*.log
+npm-debug.log*
+
+# 忽略依赖缓存
+.npm
+.npmrc
+
+# 忽略开发环境文件
+.git
+.gitignore
+README.md
+
+# 忽略 IDE 文件
+.vscode
+.idea
+*.swp
+*.swo
+
+# 忽略测试文件
+coverage
+.nyc_output
+
+# 忽略临时文件
+.tmp
+.cache
+
+# 忽略本地配置文件
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 忽略构建产物（如果使用前端构建）
+dist
+build

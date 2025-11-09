@@ -45,6 +45,246 @@ let timerHeartbeatInterval = null;
 const HEARTBEAT_INTERVAL_MS = 2000; // 减少到2秒，提高实时性
 const DEVICE_TIMEOUT_MS = 30000; // 30秒无心跳则视为离线
 
+  // 实时监听器状态管理
+let realtimeWatchers = {
+    tasks: null,
+    timers: null,
+    meta: null
+};
+let isRealtimeConnected = false;
+let lastConnectionCheck = 0;
+const RECONNECT_INTERVAL = 10000; // 10秒重连检查
+
+// 实时监听器管理函数
+function initRealtimeListeners() {
+    if (!isCloudBaseConfigured || !cloudSyncReady || !currentLoginState?.user?.uid) {
+        console.log("Skipping realtime listener initialization - not ready");
+        return;
+    }
+    
+    const uid = currentLoginState.user.uid;
+    
+    // 主用户数据监听器
+    if (!realtimeWatchers.tasks) {
+        realtimeWatchers.tasks = db.collection('users').doc(uid).watch({
+            onChange: (snapshot) => {
+                const docs = snapshot?.docs || [];
+                if (docs.length > 0) {
+                    const data = docs[0];
+                    if (data && typeof data === 'object' && data.syncMeta) {
+                        console.log("Real-time data change received from CloudBase");
+                        // 检查是否是当前设备的数据，避免循环更新
+                        if (data.syncMeta.clientId !== CLIENT_ID) {
+                            applyCloudData(data);
+                            
+                            // 更新时间戳
+                            lastConnectionCheck = Date.now();
+                            isRealtimeConnected = true;
+                            
+                            // 更新UI状态
+                            updateSyncStatus(true, '实时同步中');
+                        }
+                    }
+                }
+            },
+            onError: (err) => {
+                console.error("Real-time listener error:", err);
+                isRealtimeConnected = false;
+                updateSyncStatus(false, `连接异常: ${err.message || '未知错误'}`);
+                
+                // 智能重试机制：根据错误类型调整重试间隔
+                const retryDelay = getRetryDelay(err);
+                
+                setTimeout(() => {
+                    if (currentLoginState?.user?.uid === uid) {
+                        console.log("Attempting to reconnect real-time listener after", retryDelay, "ms");
+                        closeRealtimeListeners();
+                        initRealtimeListeners();
+                    }
+                }, retryDelay);
+            }
+        });
+    }
+}
+
+// 关闭所有实时监听器
+function closeRealtimeListeners() {
+    Object.values(realtimeWatchers).forEach(watcher => {
+        if (watcher && typeof watcher.close === 'function') {
+            watcher.close();
+        }
+    });
+    
+    realtimeWatchers = {
+        tasks: null,
+        timers: null,
+        meta: null
+    };
+    
+    isRealtimeConnected = false;
+    updateSyncStatus(false, "连接已断开");
+}
+
+// 增强的同步状态显示函数
+function updateSyncStatus(activeSessionOrConnected, message = "") {
+    if (!el.syncStatus) return;
+    
+    // 判断参数类型：是布尔值（连接状态）还是活跃会话对象
+    if (typeof activeSessionOrConnected === 'boolean') {
+        // 布尔值模式：表示连接状态
+        const connected = activeSessionOrConnected;
+        
+        el.syncStatus.style.display = 'flex';
+        
+        if (connected) {
+            el.syncStatus.className = 'sync-status';
+            el.syncStatus.innerHTML = `
+                <span class="sync-indicator"></span>
+                <span>实时同步中</span>
+            `;
+        } else {
+            el.syncStatus.className = 'sync-status warning';
+            el.syncStatus.innerHTML = `
+                <span class="sync-indicator"></span>
+                <span>${message || '同步异常'}</span>
+            `;
+        }
+    } else if (activeSessionOrConnected && typeof activeSessionOrConnected === 'object') {
+        // 活跃会话对象模式：显示计时器控制状态
+        const activeSession = activeSessionOrConnected;
+        
+        const now = Date.now();
+        const lastHeartbeatAt = activeSession.lastHeartbeatAt || 0;
+        const lastHeartbeatFrom = activeSession.lastHeartbeatFrom || '';
+        const isCurrentDevice = lastHeartbeatFrom === CLIENT_ID;
+        const isTimedOut = now - lastHeartbeatAt > DEVICE_TIMEOUT_MS;
+        const timeSinceLastHeartbeat = Math.round((now - lastHeartbeatAt) / 1000);
+        
+        // 确定状态类型和消息
+        let statusClass = '';
+        let statusText = '';
+        
+        if (isCurrentDevice) {
+            statusClass = '';
+            statusText = '当前设备控制中';
+        } else if (isTimedOut) {
+            statusClass = 'error';
+            statusText = '控制设备已离线';
+        } else {
+            statusClass = 'warning';
+            statusText = `其他设备控制中 (${lastHeartbeatFrom.slice(-6)})`;
+            
+            // 添加时间信息
+            if (timeSinceLastHeartbeat > 0) {
+                statusText += ` - ${timeSinceLastHeartbeat}s前`;
+            }
+        }
+        
+        // 添加实时连接状态
+        if (isRealtimeConnected) {
+            statusText += ' ✓';
+        } else {
+            statusText += ' ✗';
+        }
+        
+        // 更新DOM
+        el.syncStatus.className = `sync-status ${statusClass}`;
+        el.syncStatus.innerHTML = `
+            <span class="sync-indicator"></span>
+            <span>${statusText}</span>
+        `;
+        el.syncStatus.style.display = 'flex';
+    }
+}
+
+// 实时监听器管理函数
+function initRealtimeListeners() {
+    if (!isCloudBaseConfigured || !cloudSyncReady || !currentLoginState?.user?.uid) {
+        console.log("Skipping realtime listener initialization - not ready");
+        return;
+    }
+    
+    const uid = currentLoginState.user.uid;
+    
+    // 主用户数据监听器
+    if (!realtimeWatchers.tasks) {
+        realtimeWatchers.tasks = db.collection('users').doc(uid).watch({
+            onChange: (snapshot) => {
+                const docs = snapshot?.docs || [];
+                if (docs.length > 0) {
+                    const data = docs[0];
+                    if (data && typeof data === 'object' && data.syncMeta) {
+                        console.log("Real-time data change received from CloudBase");
+                        // 检查是否是当前设备的数据，避免循环更新
+                        if (data.syncMeta.clientId !== CLIENT_ID) {
+                            applyCloudData(data);
+                            
+                            // 更新时间戳
+                            lastConnectionCheck = Date.now();
+                            isRealtimeConnected = true;
+                            
+                            // 更新UI状态
+                            updateSyncStatus(true, '实时同步中');
+                        }
+                    }
+                }
+            },
+            onError: (err) => {
+                console.error("Real-time listener error:", err);
+                isRealtimeConnected = false;
+                updateSyncStatus(false, `连接异常: ${err.message || '未知错误'}`);
+                
+                // 智能重试机制：根据错误类型调整重试间隔
+                const retryDelay = getRetryDelay(err);
+                
+                setTimeout(() => {
+                    if (currentLoginState?.user?.uid === uid) {
+                        console.log("Attempting to reconnect real-time listener after", retryDelay, "ms");
+                        closeRealtimeListeners();
+                        initRealtimeListeners();
+                    }
+                }, retryDelay);
+            }
+        });
+    }
+}
+
+// 关闭所有实时监听器
+function closeRealtimeListeners() {
+    Object.values(realtimeWatchers).forEach(watcher => {
+        if (watcher && typeof watcher.close === 'function') {
+            watcher.close();
+        }
+    });
+    
+    realtimeWatchers = {
+        tasks: null,
+        timers: null,
+        meta: null
+    };
+    
+    isRealtimeConnected = false;
+    updateSyncStatus(false, "连接已断开");
+}
+
+// 更新同步状态显示
+function updateSyncStatus(connected, message = "") {
+    const syncStatusEl = el.syncStatus;
+    const syncStatusTextEl = el.syncStatusText;
+    
+    if (!syncStatusEl || !syncStatusTextEl) return;
+    
+    syncStatusEl.style.display = 'flex';
+    
+    if (connected) {
+        syncStatusEl.className = 'sync-status';
+        syncStatusTextEl.textContent = '实时同步中';
+    } else {
+        syncStatusEl.className = 'sync-status warning';
+        syncStatusTextEl.textContent = message || '同步异常';
+    }
+}
+
 
 if (isCloudBaseConfigured) {
   if (typeof cloudbase === 'undefined') {
@@ -212,6 +452,7 @@ function getFullStateSnapshot(syncStamp = Date.now()) {
             clientId: CLIENT_ID,
             updatedAt: syncStamp,
             version: currentVersion, // 在元数据中也包含版本号
+            lastServerTime: Date.now(), // 记录服务器时间用于时间同步
         },
     };
 }
@@ -1081,11 +1322,8 @@ async function sendTimerHeartbeat() {
         // 检查是否需要接管计时器（设备接管机制）
         checkAndTakeOverTimer(a, now);
         
-        // 优化保存频率：减少不必要的保存，只在必要时保存
-        const shouldSave = !a.lastUpdatedBy || 
-                         a.lastUpdatedBy === CLIENT_ID || 
-                         now - (a.lastUpdatedAt || 0) > HEARTBEAT_INTERVAL_MS ||
-                         Math.abs((a.currentSeconds || 0) - sessionSeconds) > 1; // 秒数变化超过1秒时保存
+        // 智能保存策略：基于数据变化和网络状况优化保存频率
+        const shouldSave = needsImmediateSave(a, now, sessionSeconds);
         
         if (shouldSave) {
             // 增加版本号，确保数据同步的可靠性
@@ -1093,13 +1331,76 @@ async function sendTimerHeartbeat() {
             a.lastUpdatedAt = now;
             a.lastUpdatedBy = CLIENT_ID;
             
-            // 使用防抖机制，避免频繁保存
+            // 智能防抖机制：根据网络状况调整保存延迟
+            const saveDelay = getOptimalSaveDelay();
+            
             if (a.saveTimeout) clearTimeout(a.saveTimeout);
             a.saveTimeout = setTimeout(() => {
                 save();
                 delete a.saveTimeout;
-            }, 1000); // 延迟1秒保存，减少网络请求
+            }, saveDelay);
         }
+    }
+}
+
+// 智能保存判断函数
+function needsImmediateSave(activeSession, currentTime, sessionSeconds) {
+    // 如果是当前设备发起的会话，需要更频繁地保存
+    if (activeSession.leaderClientId === CLIENT_ID) {
+        return !activeSession.lastUpdatedBy || 
+               activeSession.lastUpdatedBy === CLIENT_ID || 
+               currentTime - (activeSession.lastUpdatedAt || 0) > HEARTBEAT_INTERVAL_MS ||
+               Math.abs((activeSession.currentSeconds || 0) - sessionSeconds) > 0.5; // 时间变化超过0.5秒时保存
+    }
+    
+    // 如果是其他设备发起的会话，减少保存频率
+    return currentTime - (activeSession.lastUpdatedAt || 0) > HEARTBEAT_INTERVAL_MS * 2 ||
+           Math.abs((activeSession.currentSeconds || 0) - sessionSeconds) > 1.5; // 时间变化超过1.5秒时保存
+}
+
+// 获取最优保存延迟时间
+function getOptimalSaveDelay() {
+    // 根据网络状况调整保存延迟
+    if (isRealtimeConnected) {
+        // 连接稳定时使用较短的延迟
+        return 800;
+    } else {
+        // 连接不稳定时使用较长的延迟，避免过度请求
+        return 2000;
+    }
+}
+
+// 增强的计时器接管机制
+function checkAndTakeOverTimer(activeSession, currentTime) {
+    if (!activeSession.leaderClientId || !activeSession.lastHeartbeatAt) {
+        return;
+    }
+    
+    // 判断当前设备是否可以接管计时器
+    const timeSinceLastHeartbeat = currentTime - activeSession.lastHeartbeatAt;
+    const leaderIsActive = timeSinceLastHeartbeat < DEVICE_TIMEOUT_MS;
+    const shouldTakeOver = !leaderIsActive && 
+                          activeSession.leaderClientId !== CLIENT_ID &&
+                          timeSinceLastHeartbeat > DEVICE_TIMEOUT_MS / 2; // 等待一半超时时间再接管
+    
+    if (shouldTakeOver) {
+        console.log(`Taking over timer from device ${activeSession.leaderClientId} - no heartbeat for ${Math.round(timeSinceLastHeartbeat/1000)}s`);
+        
+        // 接管计时器
+        activeSession.leaderClientId = CLIENT_ID;
+        activeSession.lastTakeoverAt = currentTime;
+        
+        // 如果是暂停状态，重新计算暂停时间
+        if (activeSession.isPaused) {
+            activeSession.lastPauseTime = currentTime;
+        }
+        
+        // 立即保存接管状态
+        save();
+        
+        pushToast(`已接管计时器（原设备${activeSession.lastHeartbeatFrom}已离线）`, 'info');
+    }
+}
     } catch (error) {
         console.error("Error in sendTimerHeartbeat:", error);
         // 如果获取服务器时间失败，回退到本地时间
@@ -2254,6 +2555,12 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
             });
             
             setupCloudBaseListener(user.uid);
+            
+            // 启动连接状态监控
+            if (!window.connectionMonitorInterval) {
+                startConnectionMonitor();
+            }
+            
             cloudSyncReady = true;
           } catch (err) {
               console.error("Error during initial data sync:", err);
@@ -2271,6 +2578,16 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
             clearInterval(timerHeartbeatInterval);
             timerHeartbeatInterval = null;
           }
+          
+          // 停止连接状态监控
+          if (window.connectionMonitorInterval) {
+            clearInterval(window.connectionMonitorInterval);
+            window.connectionMonitorInterval = null;
+          }
+          
+          // 关闭所有实时监听器
+          closeRealtimeListeners();
+          
           cloudSyncReady = false;
           el.authChipWrapper.classList.remove('logged-in');
           resetAppToDefaults();
