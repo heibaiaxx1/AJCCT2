@@ -64,6 +64,7 @@ let CLIENT_ID = '';
 let lastRemoteSyncStamp = 0;
 let isApplyingRemoteSnapshot = false;
 let isFirebaseConnected = false; // Firebase 连接状态
+let realtimeListener = null; // 实时监听器
 
 // =================== 计时器同步状态 ===================
 let timerData = null; // 当前计时器状态
@@ -367,8 +368,18 @@ function getRetryDelay(error) {
 
 // 增强的同步状态显示函数
 function updateSyncStatus(activeSessionOrConnected, message = "") {
-    // 先检查 el 是否已定义，如果未定义则跳过
-    if (!window.el || !window.el.syncStatus) return;
+    // 安全检查：确保 el 对象已定义
+    if (!window.el || !window.el.syncStatus) {
+        // 如果 el 未定义，等待 DOM 加载完成后再尝试
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => {
+                if (window.el && window.el.syncStatus) {
+                    updateSyncStatus(activeSessionOrConnected, message);
+                }
+            });
+        }
+        return;
+    }
     
     // 判断参数类型：是布尔值（连接状态）还是活跃会话对象
     if (typeof activeSessionOrConnected === 'boolean') {
@@ -1580,7 +1591,8 @@ async function getServerTime() {
     try {
         // 使用CloudBase的服务器时间戳
         const serverTimestamp = await db.serverDate();
-        return serverTimestamp.getTime();
+        // 确保返回的是时间戳数字
+        return serverTimestamp ? new Date(serverTimestamp).getTime() : null;
     } catch (error) {
         console.error("Failed to get server time:", error);
         return null;
