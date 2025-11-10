@@ -3467,7 +3467,3 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
 
   initializeApp();
 });
-
-})(); // 文件结束标志
-
-})(); // 文件结束标志
