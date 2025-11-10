@@ -1546,41 +1546,6 @@ function checkAndTakeOverTimer(activeSession, currentTime) {
         pushToast(`已接管计时器（原设备${activeSession.lastHeartbeatFrom}已离线）`, 'info');
     }
 }
-    } catch (error) {
-        console.error("Error in sendTimerHeartbeat:", error);
-        // 如果获取服务器时间失败，回退到本地时间
-        const now = Date.now();
-        const elapsed = a.startTime ? (now - a.startTime) / 1000 : 0;
-        const sessionSeconds = (a.accumulatedSeconds || 0) + (elapsed > 0 ? elapsed : 0);
-        const rate = effectiveRate(baseRateOfTask(task), task.difficulty);
-        const currentSessionHQ = sessionSeconds * rate;
-        
-        a.currentSeconds = Math.max(0, sessionSeconds);
-        a.currentHQ = Math.max(0, currentSessionHQ);
-        a.lastHeartbeatFrom = CLIENT_ID;
-        a.lastHeartbeatAt = now;
-        
-        // 检查是否需要接管计时器（设备接管机制）
-        checkAndTakeOverTimer(a, now);
-        
-        // 优化保存频率
-        const shouldSave = !a.lastUpdatedBy || 
-                         a.lastUpdatedBy === CLIENT_ID || 
-                         now - (a.lastUpdatedAt || 0) > HEARTBEAT_INTERVAL_MS;
-        
-        if (shouldSave) {
-            a.version = (a.version || 0) + 1;
-            a.lastUpdatedAt = now;
-            a.lastUpdatedBy = CLIENT_ID;
-            
-            if (a.saveTimeout) clearTimeout(a.saveTimeout);
-            a.saveTimeout = setTimeout(() => {
-                save();
-                delete a.saveTimeout;
-            }, 1000);
-        }
-    }
-}
 
 // 检查并接管计时器的函数
 function checkAndTakeOverTimer(activeSession, currentTime) {
