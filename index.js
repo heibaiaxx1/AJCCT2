@@ -1483,6 +1483,8 @@ async function sendTimerHeartbeat() {
                 delete a.saveTimeout;
             }, saveDelay);
         }
+    } catch (error) {
+        console.error('发送计时器心跳时出错:', error);
     }
 }
 
