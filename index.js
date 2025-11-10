@@ -150,7 +150,9 @@ function saveTimerToFirebase(sessionData = null) {
 let realtimeWatchers = {
     tasks: null,
     timers: null,
-    meta: null
+    meta: null,
+    dailyStats: null,
+    streakState: null
 };
 let isRealtimeConnected = false;
 let lastConnectionCheck = 0;
@@ -164,6 +166,7 @@ function initRealtimeListeners() {
     }
     
     const uid = currentLoginState.user.uid;
+    const today = getToday().toISOString().split('T')[0];
     
     // 主用户数据监听器
     if (!realtimeWatchers.tasks) {
@@ -206,6 +209,97 @@ function initRealtimeListeners() {
             }
         });
     }
+    
+    // 每日统计数据监听器 - 监控云函数更新后的数据
+    if (!realtimeWatchers.dailyStats) {
+        realtimeWatchers.dailyStats = db.collection('dailyStats')
+            .where({
+                userId: uid,
+                date: today
+            })
+            .watch({
+                onChange: (snapshot) => {
+                    const docs = snapshot?.docs || [];
+                    console.log("Daily stats real-time update received:", docs.length, "documents");
+                    
+                    if (docs.length > 0) {
+                        const latestStats = docs[0];
+                        console.log("Latest daily stats:", latestStats);
+                        
+                        // 更新本地的连击状态
+                        if (latestStats.streak !== undefined) {
+                            meta.streak = latestStats.streak;
+                        }
+                        if (latestStats.shields !== undefined) {
+                            meta.shields = latestStats.shields;
+                        }
+                        if (latestStats.weeklyEffDays !== undefined) {
+                            meta.weeklyEffDays = latestStats.weeklyEffDays;
+                        }
+                        
+                        save();
+                        
+                        // 如果当前打开了每日总结界面，则刷新界面
+                        if (el.todayDoneMask && el.todayDoneMask.style.display === 'flex') {
+                            renderTodayDone();
+                            pushToast('每日统计数据已更新', 'info');
+                        }
+                        
+                        // 更新UI状态
+                        updateSyncStatus(true, '实时同步中');
+                    }
+                },
+                onError: (err) => {
+                    console.warn("Daily stats listener error:", err);
+                    // 非致命错误，不阻止其他监听器
+                }
+            });
+    }
+    
+    // 连击状态监听器
+    if (!realtimeWatchers.streakState) {
+        realtimeWatchers.streakState = db.collection('streakState')
+            .where({
+                userId: uid,
+                date: today
+            })
+            .watch({
+                onChange: (snapshot) => {
+                    const docs = snapshot?.docs || [];
+                    console.log("Streak state real-time update received:", docs.length, "documents");
+                    
+                    if (docs.length > 0) {
+                        const latestStreak = docs[0];
+                        console.log("Latest streak state:", latestStreak);
+                        
+                        // 更新本地的连击状态
+                        if (latestStreak.streak !== undefined) {
+                            meta.streak = latestStreak.streak;
+                        }
+                        if (latestStreak.shields !== undefined) {
+                            meta.shields = latestStreak.shields;
+                        }
+                        if (latestStreak.weeklyEffDays !== undefined) {
+                            meta.weeklyEffDays = latestStreak.weeklyEffDays;
+                        }
+                        
+                        save();
+                        
+                        // 如果当前打开了每日总结界面，则刷新界面
+                        if (el.todayDoneMask && el.todayDoneMask.style.display === 'flex') {
+                            renderTodayDone();
+                            pushToast('连击状态已更新', 'info');
+                        }
+                    }
+                },
+                onError: (err) => {
+                    console.warn("Streak state listener error:", err);
+                    // 非致命错误，不阻止其他监听器
+                }
+            });
+    }
+    
+    console.log("All real-time listeners initialized successfully");
 }
 
 // 关闭所有实时监听器
@@ -1850,6 +1944,25 @@ function stopTimer() {
 
     // --- START OF UI/EFFECTS ---
     
+    // 8. 挑战系统集成：评估今日挑战
+    const todayChallenge = JSON.parse(localStorage.getItem('todayChallenge') || '{}');
+    if (todayChallenge.date === getTodayString()) {
+        // 收集今日统计数据用于挑战评估
+        const todayStats = {
+            effMin: Math.floor(todayObj().progressSec / 60),
+            sessions: todayObj().sessions,
+            longestEffMin: getLongestSessionMinutes(),
+            pauseCount: meta.today?.pauseCount || 0,
+            focusRate: calculateTodayFocusRate()
+        };
+        
+        // 评估挑战结果
+        evaluateChallenge(todayStats, todayChallenge);
+        
+        // 更新挑战进度显示
+        renderChallenge(todayChallenge);
+    }
+    
     triggerCompletionAnimation();
     renderTasks();
     renderKPI();
@@ -2055,11 +2168,254 @@ function loop() {
   const refreshMissionsAction = () => { playSound(sfx.click); const ok = rollMissions(false, false); if (ok) { save(); renderDaily(); renderInventory(); pushToast('已刷新每日任务', 'success'); } };
   el.btnDailyRefresh.onclick = refreshMissionsAction;
 
+// ==================== 连击数值调试面板 ====================
+
+// 调试面板状态管理
+const TUNING_KEY = 'hx:tuning:v1';
+const defaultTuning = {
+  s_enable: true,
+  s_min: 25,
+  s_cap: 6,
+  s_idle: 30,
+  s_reward_mode: 'fixed',
+  s_fixed: 4,
+  s_ladder: [5,4,3,3,2,2],
+  s_combo_base: 2,
+  s_combo_step: 1,
+  s_combo_cap: 5,
+  s_daily_cap: 24
+};
+let tuning = loadTuning();
+
+// 今日段连击状态
+let sStreak = 0;
+let sDailyRewardAcc = 0;
+let sIdleTimer = null;
+
+function loadTuning(){
+  try { return { ...defaultTuning, ...JSON.parse(localStorage.getItem(TUNING_KEY) || '{}') }; }
+  catch(_) { return { ...defaultTuning }; }
+}
+
+function saveTuning(){
+  localStorage.setItem(TUNING_KEY, JSON.stringify(tuning));
+}
+
+// 面板显隐控制
+function toggleTuningPanel(show){
+  const panel = document.getElementById('tuningPanel');
+  if (panel) panel.style.display = show ? '' : 'none';
+}
+
+// 键盘快捷键
+if (typeof document !== 'undefined') {
+  document.addEventListener('keydown', (e)=>{
+    if(e.ctrlKey && e.shiftKey && e.code==='KeyD') {
+      const panel = document.getElementById('tuningPanel');
+      if (panel) toggleTuningPanel(panel.style.display==='none');
+    }
+  });
+}
+
+// URL参数自动显示
+if (typeof window !== 'undefined' && window.location.search.includes('dev=1')) {
+  setTimeout(() => toggleTuningPanel(true), 100);
+}
+
+// 工具函数
+function clampInt(v,min,max){ v=parseInt(v||0,10); return Math.max(min, Math.min(max, v)); }
+function parseCSVInt(s, fallback){ try{ return s.split(',').map(x=>parseInt(x.trim(),10)).filter(x=>!isNaN(x)); }catch(_){return fallback;} }
+
+// 绑定调试面板控件
+function bindTuningInputs(){
+  const getVal = id => document.getElementById(id).value;
+  const show = id => { const el = document.getElementById(id); if(el) el.style.display = ''; };
+  const hide = id => { const el = document.getElementById(id); if(el) el.style.display = 'none'; };
+
+  function refreshModeUI(){
+    const mode = document.getElementById('cfg_s_reward_mode').value;
+    if(mode==='fixed'){ show('cfg_s_reward_fixed'); hide('cfg_s_reward_ladder'); hide('cfg_s_reward_combo'); }
+    if(mode==='ladder'){ hide('cfg_s_reward_fixed'); show('cfg_s_reward_ladder'); hide('cfg_s_reward_combo'); }
+    if(mode==='combo'){ hide('cfg_s_reward_fixed'); hide('cfg_s_reward_ladder'); show('cfg_s_reward_combo'); }
+  }
+
+  // 初始化控件值
+  const setVal = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
+  const setChecked = (id, val) => { const el = document.getElementById(id); if(el) el.checked = val; };
+
+  setChecked('cfg_s_enable', tuning.s_enable);
+  setVal('cfg_s_min', tuning.s_min);
+  setVal('cfg_s_cap', tuning.s_cap);
+  setVal('cfg_s_idle', tuning.s_idle);
+  setVal('cfg_s_reward_mode', tuning.s_reward_mode);
+  setVal('cfg_s_fixed', tuning.s_fixed);
+  setVal('cfg_s_ladder', tuning.s_ladder.join(','));
+  setVal('cfg_s_combo_base', tuning.s_combo_base);
+  setVal('cfg_s_combo_step', tuning.s_combo_step);
+  setVal('cfg_s_combo_cap', tuning.s_combo_cap);
+  setVal('cfg_s_daily_cap', tuning.s_daily_cap);
+
+  refreshModeUI();
+
+  // 事件绑定
+  const modeSelect = document.getElementById('cfg_s_reward_mode');
+  if (modeSelect) modeSelect.onchange = refreshModeUI;
+
+  const saveBtn = document.getElementById('btn_save_tuning');
+  if (saveBtn) saveBtn.onclick = () => {
+    tuning.s_enable = document.getElementById('cfg_s_enable').checked;
+    tuning.s_min = clampInt(getVal('cfg_s_min'),5,60);
+    tuning.s_cap = clampInt(getVal('cfg_s_cap'),1,12);
+    tuning.s_idle = clampInt(getVal('cfg_s_idle'),5,120);
+    tuning.s_reward_mode = getVal('cfg_s_reward_mode');
+    tuning.s_fixed = clampInt(getVal('cfg_s_fixed'),0,20);
+    tuning.s_ladder = parseCSVInt(getVal('cfg_s_ladder'), [5,4,3,3,2,2]);
+    tuning.s_combo_base = clampInt(getVal('cfg_s_combo_base'),0,10);
+    tuning.s_combo_step = clampInt(getVal('cfg_s_combo_step'),0,10);
+    tuning.s_combo_cap = clampInt(getVal('cfg_s_combo_cap'),0,20);
+    tuning.s_daily_cap = clampInt(getVal('cfg_s_daily_cap'),0,200);
+    saveTuning();
+    pushToast('已保存调试参数', 'success');
+  };
+
+  const resetBtn = document.getElementById('btn_reset_tuning');
+  if (resetBtn) resetBtn.onclick = () => {
+    tuning = { ...defaultTuning };
+    saveTuning();
+    bindTuningInputs();
+    pushToast('已恢复默认', 'success');
+  };
+
+  const refreshDBtn = document.getElementById('btn_refresh_d');
+  if (refreshDBtn) refreshDBtn.onclick = refreshDStreakFromBackend;
+}
+
+// 今日段连击显示控制
+function renderSStreak(n){ 
+  const el = document.getElementById('sStreakDisplay');
+  if (!el) return;
+  el.innerHTML = `今日段连击：<strong>${n}</strong>`;
+  el.style.opacity = '1';
+}
+
+function fadeSStreak(){ 
+  const el = document.getElementById('sStreakDisplay');
+  if (el) el.style.opacity = '0.5';
+}
+
+// 奖励计算函数
+function calcSegmentBonus(currentS){
+  const mode = tuning.s_reward_mode;
+  if (mode === 'fixed') return tuning.s_fixed;
+  if (mode === 'ladder') {
+    const arr = tuning.s_ladder;
+    return currentS <= arr.length ? arr[currentS-1] : arr[arr.length-1];
+  }
+  if (mode === 'combo') {
+    return Math.min(tuning.s_combo_cap, tuning.s_combo_base + (currentS-1)*tuning.s_combo_step);
+  }
+  return 0;
+}
+
+// 日连击展示刷新
+async function refreshDStreakFromBackend(){
+  try {
+    const today = new Date().toISOString().slice(0,10);
+    const db = cloud.database();
+    const snap = await db.collection('streakState').where({ userId, date: today }).get();
+    const doc = snap.data && snap.data[0] ? snap.data[0] : null;
+    const streak = doc?.streak || 0;
+    const shields = doc?.shields || 0;
+    const el = document.getElementById('dStreakDisplay');
+    if (el) el.innerHTML = `已连续坚持：<strong>${streak}</strong>天｜护盾：<strong>${shields}</strong>枚`;
+  } catch (error) {
+    console.error('刷新日连击失败:', error);
+  }
+}
+
+// 午夜清零
+function onDayBoundary(){
+  sStreak = 0;
+  sDailyRewardAcc = 0;
+  renderSStreak(0);
+  // 保留现有的切换逻辑
+}
+
+// 初始化调试面板
+setTimeout(() => {
+  if (typeof document !== 'undefined') {
+    bindTuningInputs();
+    renderSStreak(0);
+    refreshDStreakFromBackend();
+    
+    // 添加键盘快捷键：Ctrl+Shift+D 切换调试面板显示
+    document.addEventListener('keydown', (e) => {
+      if (e.ctrlKey && e.shiftKey && e.key === 'D') {
+        e.preventDefault();
+        const devMask = document.getElementById('devMask');
+        if (devMask) {
+          const isVisible = devMask.style.display === 'flex';
+          devMask.style.display = isVisible ? 'none' : 'flex';
+          playSound(isVisible ? sfx.modalClose : sfx.modalOpen);
+          pushToast(isVisible ? '调试面板已隐藏' : '调试面板已显示', 'info');
+        }
+      }
+    });
+  }
+}, 100);
+
+// ==================== 今日段连击逻辑 ====================
+
 function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] = { progressSec: 0, hardSec: 0, sessions: 0, zeroPauseSessions: 0, missions: null, refreshUsed: false, done: {}, completed: [] }; } if (!Array.isArray(meta.daily[k].completed)) { meta.daily[k].completed = []; } return meta.daily[k]; }
   const FIXED_MISSIONS=[{id:'total25',type:'totalSec',need:25*60,label:'今日累计 ≥ 25 分钟',reward:{ticket:1}},{id:'total45',type:'totalSec',need:45*60,label:'今日累计 ≥ 45 分钟',reward:{freeze:1}}];
   const RANDOM_POOL=[{id:'total90',type:'totalSec',need:90*60,label:'今日累计 ≥ 90 分钟',reward:{ticket:2}},{id:'single15',type:'singleSec',need:15*60,label:'单次 ≥ 15 分钟',reward:{ticket:1}},{id:'single30',type:'singleSec',need:30*60,label:'单次 ≥ 30 分钟',reward:{ticket:2}},{id:'hard20',type:'hardSec',need:20*60,label:'难度≥4 今日累计 ≥ 20 分钟',reward:{ticket:1}},{id:'noPause10',type:'noPauseSingle',need:10*60,label:'单次 ≥ 10 分钟且无暂停',reward:{freeze:1}},{id:'sessions3',type:'sessions',need:3,label:'今日完成 ≥ 3 次计时',reward:{ticket:1}}];
   function addTodayProgress({seconds,difficulty,pauses}){const d=todayObj(); d.progressSec+=seconds; if(difficulty>=4) d.hardSec+=seconds; d.sessions+=1; if(pauses===0 && seconds>=10*60) d.zeroPauseSessions+=1; save(); renderDaily();}
-  function onSegmentEnd_base(seconds,difficulty,pauses){ if(seconds>=ECON.baseFloorMinSec){ meta.streak=+(meta.streak+ECON.streakStep).toFixed(2)} addTodayProgress({seconds,difficulty,pauses}); save(); }
+  
+  // 今日段连击核心逻辑
+  function onSegmentEnd_base(seconds,difficulty,pauses){ 
+    if(seconds>=ECON.baseFloorMinSec){ 
+      meta.streak=+(meta.streak+ECON.streakStep).toFixed(2);
+    } 
+    
+    // 今日段连击逻辑
+    if (tuning.s_enable && seconds >= tuning.s_min * 60) {
+      // 检查是否达到每日上限
+      if (sStreak < tuning.s_cap) {
+        // 增加段连击
+        sStreak++;
+        
+        // 计算段奖励
+        const segmentBonus = calcSegmentBonus(sStreak);
+        
+        // 检查每日奖励上限
+        if (sDailyRewardAcc + segmentBonus <= tuning.s_daily_cap) {
+          sDailyRewardAcc += segmentBonus;
+          
+          // 添加到总豪情值
+          state.agg.totalHQ = (state.agg.totalHQ || 0) + segmentBonus;
+          
+          // 显示段奖励提示
+          pushToast(`今日段连击 ${sStreak}！获得 +${segmentBonus} 豪情值`, 'success');
+        } else {
+          pushToast(`今日段奖励已达上限 ${tuning.s_daily_cap}`, 'warn');
+        }
+        
+        // 更新显示
+        renderSStreak(sStreak);
+      }
+      
+      // 启动空闲灰化计时器
+      if (sIdleTimer) clearTimeout(sIdleTimer);
+      sIdleTimer = setTimeout(() => {
+        fadeSStreak();
+        sIdleTimer = null;
+      }, tuning.s_idle * 60 * 1000);
+    }
+    
+    addTodayProgress({seconds,difficulty,pauses}); 
+    save(); 
+  }
+  
   function singleMissionJudge(seconds,diff,pauses){ const d=todayObj(); if(!d.missions) return; d.missions.forEach((m)=>{ if(d.done[m.id]) return; if(m.type==='singleSec' && seconds>=m.need) d.done[m.id]=true; if(m.type==='noPauseSingle' && seconds>=m.need && pauses===0) d.done[m.id]=true; }); save(); renderDaily(); }
   function rollMissions(firstFree=false,useRare=false){
     const d=todayObj(); if(useRare){ if((meta.badges.rare_gem||0)<6){alert('稀有碎片不足');return false;} meta.badges.rare_gem-=6; }
@@ -2117,6 +2473,208 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   const openTodayDone = () => { playSound(sfx.modalOpen); renderTodayDone(); el.todayDoneMask.style.display = 'flex'; };
   el.btnTodayDone.onclick = openTodayDone;
   el.btnCloseTodayDone.onclick = () => { playSound(sfx.modalClose); el.todayDoneMask.style.display = 'none'; };
+
+  // 每日总结功能 - 数据同步和实时更新
+  function renderTodayDone() {
+    if (!el.todayDoneBody) return;
+    
+    const d = todayObj();
+    const today = getToday();
+    const todayKey = today.toISOString().split('T')[0];
+    
+    // 获取当前用户的连击状态
+    let currentStreak = meta.streak || 0;
+    let currentShields = meta.shields || 0;
+    let weeklyEffDays = meta.weeklyEffDays || 0;
+    
+    // 同步云端数据
+    syncDailyStats();
+    
+    // 渲染今日总结界面
+    el.todayDoneBody.innerHTML = `
+      <div class="today-summary-section">
+        <div class="section-title">今日完成情况</div>
+        <div class="today-stats-grid">
+          <div class="stat-card">
+            <div class="stat-value">${fmtTime(d.progressSec || 0)}</div>
+            <div class="stat-label">累计时长</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${d.sessions || 0}</div>
+            <div class="stat-label">任务次数</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${fmtTime(d.hardSec || 0)}</div>
+            <div class="stat-label">高难时长</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${d.zeroPauseSessions || 0}</div>
+            <div class="stat-label">无暂停任务</div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="today-summary-section">
+        <div class="section-title">连击状态</div>
+        <div class="streak-info">
+          <div class="streak-display">
+            <span class="streak-label">当前连击：</span>
+            <span class="streak-value">${currentStreak} 天</span>
+          </div>
+          <div class="shields-display">
+            <span class="shields-label">护盾数量：</span>
+            <span class="shields-value">${currentShields} 枚</span>
+          </div>
+          <div class="weekly-info">
+            <span class="weekly-label">本周有效天数：</span>
+            <span class="weekly-value">${weeklyEffDays} 天</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="today-summary-section">
+        <div class="section-title">任务完成情况</div>
+        <div class="tasks-completed">
+          ${d.completed && d.completed.length > 0 ? 
+            d.completed.map(task => `<div class="completed-task">${task}</div>`).join('') : 
+            '<div class="no-tasks">今日暂无完成任务</div>'
+          }
+        </div>
+      </div>
+      
+      <div class="today-summary-section">
+        <div class="section-title">操作</div>
+        <div class="today-actions">
+          <button class="btn secondary" id="btnSyncToday">同步云端数据</button>
+          <button class="btn secondary" id="btnManualSettlement">手动结算</button>
+          <button class="btn secondary" id="btnResetToday">重置今日数据</button>
+        </div>
+      </div>
+    `;
+    
+    // 绑定事件
+    const bindTodayAction = (id, fn) => {
+      const btn = document.getElementById(id);
+      if (btn) btn.onclick = fn;
+    };
+    
+    bindTodayAction('btnSyncToday', syncDailyStats);
+    bindTodayAction('btnManualSettlement', manualSettlement);
+    bindTodayAction('btnResetToday', resetTodayData);
+  }
+
+  // 同步每日统计数据
+  async function syncDailyStats() {
+    if (!isCloudBaseConfigured || !currentLoginState?.user) {
+      pushToast('请先登录以同步云端数据', 'warn');
+      return;
+    }
+    
+    try {
+      showLoader('同步每日统计数据...');
+      
+      const today = getToday();
+      const todayKey = today.toISOString().split('T')[0];
+      const userId = currentLoginState.user.uid;
+      
+      // 获取最新的每日统计数据
+      const dailyStatsRes = await db.collection('dailyStats')
+        .where({
+          userId: userId,
+          date: todayKey
+        })
+        .get();
+      
+      if (dailyStatsRes.data && dailyStatsRes.data.length > 0) {
+        const stats = dailyStatsRes.data[0];
+        // 同步数据到本地
+        meta.streak = stats.streak || 0;
+        meta.shields = stats.shields || 0;
+        meta.weeklyEffDays = stats.weeklyEffDays || 0;
+        
+        save();
+        pushToast('每日统计数据同步成功', 'success');
+      } else {
+        pushToast('今日暂无云端数据', 'info');
+      }
+      
+      // 刷新界面
+      renderTodayDone();
+      
+    } catch (error) {
+      console.error('同步每日统计数据失败:', error);
+      pushToast('同步失败，请检查网络连接', 'warn');
+    } finally {
+      hideLoader();
+    }
+  }
+
+  // 手动结算
+  async function manualSettlement() {
+    if (!isCloudBaseConfigured || !currentLoginState?.user) {
+      pushToast('请先登录以执行结算', 'warn');
+      return;
+    }
+    
+    try {
+      showLoader('执行手动结算...');
+      
+      const today = getToday();
+      const todayKey = today.toISOString().split('T')[0];
+      const d = todayObj();
+      
+      // 计算今日统计数据
+      const sessions = state.tasks.map(task => ({
+        taskId: task.id,
+        taskTitle: task.title,
+        duration: task.totalSeconds,
+        difficulty: task.difficulty
+      })).filter(session => session.duration > 0);
+      
+      // 调用云函数进行结算
+      const result = await db.callFunction({
+        name: 'dailySettlement',
+        data: {
+          userId: currentLoginState.user.uid,
+          date: todayKey,
+          effMin: Math.floor(d.progressSec / 60),
+          longestEffMin: Math.floor(d.progressSec / 60), // 简化计算
+          focusRate: d.sessions > 0 ? Math.round((d.sessions / (d.sessions + 1)) * 100) : 0,
+          sessions: sessions
+        }
+      });
+      
+      if (result.success) {
+        pushToast('手动结算成功', 'success');
+        // 同步最新的连击状态
+        await syncDailyStats();
+      } else {
+        pushToast(`结算失败: ${result.error}`, 'warn');
+      }
+      
+    } catch (error) {
+      console.error('手动结算失败:', error);
+      pushToast('结算失败，请稍后重试', 'warn');
+    } finally {
+      hideLoader();
+    }
+  }
+
+  // 重置今日数据
+  function resetTodayData() {
+    if (confirm('确定要重置今日数据吗？这将清除今天的任务进度和统计数据。')) {
+      playSound(sfx.click);
+      const d = todayObj();
+      d.progressSec = 0;
+      d.hardSec = 0;
+      d.sessions = 0;
+      d.zeroPauseSessions = 0;
+      d.completed = [];
+      save();
+      renderTodayDone();
+      pushToast('今日数据已重置', 'success');
+    }
+  }
   el.btnSpin.onclick=startNameTicker;
   
   function renderYou() {
@@ -2625,6 +3183,294 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
       await handleLoginStateChange(loginState);
     }
   }
+
+  // ========== 挑战系统核心代码 ==========
+  
+  // 挑战类型定义
+  const challengeTypes = [
+    { id: 'compare_yesterday', desc: '比昨天多10%', reward: 8, difficulty: 'medium' },
+    { id: 'segment_count', desc: '完成3段计时', reward: 6, difficulty: 'easy' },
+    { id: 'long_focus', desc: '单段≥40分钟', reward: 8, difficulty: 'hard' },
+    { id: 'few_pauses', desc: '暂停≤2次', reward: 5, difficulty: 'medium' },
+    { id: 'focus_rate', desc: '专注率≥70%', reward: 7, difficulty: 'medium' }
+  ];
+
+  // 挑战配置
+  const challengeConfig = {
+    enabled: true,
+    minMultiplier: 1.05,
+    maxMultiplier: 1.15,
+    minBound: 20,
+    maxBound: 180,
+    streakUpThreshold: 2,
+    baseReward: 8,
+    weeklyTolerance: 2
+  };
+
+  // 生成今日挑战
+  function generateDailyChallenge(todayStats) {
+    if (!challengeConfig.enabled) return null;
+    
+    // 获取最近3天的有效分钟数平均值
+    const avgEff = getRecentAverageEffMin(3);
+    if (avgEff <= 0) return null;
+    
+    // 计算目标时间（随机增长5%-15%）
+    const multiplier = Math.random() * (challengeConfig.maxMultiplier - challengeConfig.minMultiplier) + challengeConfig.minMultiplier;
+    let target = Math.round(avgEff * multiplier);
+    
+    // 限制目标范围
+    target = Math.max(challengeConfig.minBound, Math.min(challengeConfig.maxBound, target));
+    
+    // 获取上次挑战结果
+    const lastChallenge = loadLastChallengeResult();
+    
+    // 根据历史结果调整难度
+    let availableTypes = [...challengeTypes];
+    if (lastChallenge?.successCount >= challengeConfig.streakUpThreshold) {
+      // 连续成功，提升难度
+      availableTypes = availableTypes.filter(type => type.difficulty === 'hard');
+    } else if (lastChallenge?.failed) {
+      // 上次失败，降低难度
+      availableTypes = availableTypes.filter(type => type.difficulty === 'easy');
+    }
+    
+    if (availableTypes.length === 0) availableTypes = [...challengeTypes];
+    
+    // 随机选择挑战类型
+    const randomType = availableTypes[Math.floor(Math.random() * availableTypes.length)];
+    
+    return {
+      type: randomType.id,
+      desc: randomType.desc,
+      target: target,
+      reward: randomType.reward,
+      date: getTodayString(),
+      difficulty: randomType.difficulty
+    };
+  }
+
+  // 判定挑战结果
+  function evaluateChallenge(todayStats, challenge) {
+    if (!challenge || !todayStats) return false;
+    
+    let success = false;
+    
+    switch(challenge.type) {
+      case 'compare_yesterday':
+        const yesterdayEff = getYesterdayEffMin();
+        success = todayStats.effMin >= yesterdayEff * 1.1;
+        break;
+        
+      case 'segment_count':
+        success = todayStats.sessions && todayStats.sessions.length >= 3;
+        break;
+        
+      case 'long_focus':
+        success = todayStats.longestEffMin >= 40;
+        break;
+        
+      case 'few_pauses':
+        success = todayStats.pauseCount <= 2;
+        break;
+        
+      case 'focus_rate':
+        success = todayStats.focusRate >= 0.7;
+        break;
+        
+      default:
+        success = todayStats.effMin >= challenge.target;
+    }
+    
+    if (success) {
+      // 成功奖励
+      grantHaoxing(challenge.reward, { tag: 'challenge_success' });
+      pushToast(`🎯 挑战成功！获得 ${challenge.reward} 豪情`, 'success');
+    }
+    
+    // 保存挑战结果
+    saveChallengeResult(challenge, success);
+    return success;
+  }
+
+  // 渲染挑战卡片
+  function renderChallenge(challenge) {
+    if (!challenge) {
+      el.challengeCard.style.display = 'none';
+      return;
+    }
+    
+    el.challengeCard.style.display = 'block';
+    el.challengeDesc.textContent = challenge.desc;
+    el.challengeTarget.textContent = `目标：${challenge.target} 分钟`;
+    el.challengeReward.textContent = `+${challenge.reward} 豪情`;
+    
+    // 更新进度
+    const todayEff = getTodayEffMin() || 0;
+    const progress = Math.min(100, Math.round((todayEff / challenge.target) * 100));
+    el.challengeProgressFill.style.width = `${progress}%`;
+    el.challengeProgressText.textContent = `${progress}%`;
+    
+    // 更新状态
+    if (progress >= 100) {
+      el.challengeStatus.textContent = '已完成';
+      el.challengeStatus.style.color = '#34c759';
+    } else if (progress > 0) {
+      el.challengeStatus.textContent = '进行中';
+      el.challengeStatus.style.color = '#007aff';
+    } else {
+      el.challengeStatus.textContent = '未开始';
+      el.challengeStatus.style.color = '#8e8e93';
+    }
+  }
+
+  // 辅助函数
+  function getRecentAverageEffMin(days) {
+    // 获取最近n天有效分钟数的平均值，使用本地存储的历史数据
+    const today = new Date();
+    let totalEff = 0;
+    let validDays = 0;
+    
+    for (let i = 1; i <= days; i++) {
+      const pastDate = new Date(today);
+      pastDate.setDate(today.getDate() - i);
+      const dateKey = pastDate.toISOString().split('T')[0];
+      
+      // 从本地存储的历史数据中获取
+      const dayStats = JSON.parse(localStorage.getItem(`dailyStats_${dateKey}`) || '{}');
+      
+      if (dayStats.effMin && dayStats.effMin > 0) {
+        totalEff += dayStats.effMin;
+        validDays++;
+      }
+    }
+    
+    // 如果有有效数据，返回平均值；否则返回默认值
+    return validDays > 0 ? Math.round(totalEff / validDays) : 45;
+  }
+  
+  function getYesterdayEffMin() {
+    // 获取昨天的有效分钟数
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const dateKey = yesterday.toISOString().split('T')[0];
+    
+    // 从本地存储的历史数据中获取
+    const yesterdayStats = JSON.parse(localStorage.getItem(`dailyStats_${dateKey}`) || '{}');
+    
+    return yesterdayStats.effMin || 45; // 默认值45分钟
+  }
+  
+  function getTodayEffMin() {
+    // 获取今日的有效分钟数
+    return meta.today?.effMin || 0;
+  }
+  
+  // 获取今日最长会话分钟数
+  function getLongestSessionMinutes() {
+    // 简化实现：返回今日累计时长的最长值
+    return Math.floor(todayObj().progressSec / 60);
+  }
+  
+  // 计算今日专注率
+  function calculateTodayFocusRate() {
+    const totalPauses = meta.today?.pauseCount || 0;
+    const totalSessions = todayObj().sessions || 0;
+    
+    if (totalSessions === 0) return 0;
+    
+    // 简单的专注率计算：无暂停的会话比例
+    return totalPauses === 0 ? 1.0 : 0.5;
+  }
+  
+  function getTodayString() {
+    return new Date().toISOString().split('T')[0];
+  }
+  
+  function loadLastChallengeResult() {
+    return JSON.parse(localStorage.getItem('lastChallengeResult') || '{}');
+  }
+  
+  function saveChallengeResult(challenge, success) {
+    const lastResult = loadLastChallengeResult();
+    
+    if (success) {
+      lastResult.successCount = (lastResult.successCount || 0) + 1;
+      lastResult.failed = false;
+    } else {
+      lastResult.successCount = 0;
+      lastResult.failed = true;
+    }
+    
+    localStorage.setItem('lastChallengeResult', JSON.stringify(lastResult));
+  }
+
+  // 在应用初始化时加载挑战系统
+  function initializeChallengeSystem() {
+    // 检查是否有今日挑战
+    const today = getTodayString();
+    const storedChallenge = JSON.parse(localStorage.getItem('todayChallenge') || '{}');
+    
+    if (storedChallenge.date === today) {
+      // 今日已有挑战，直接渲染
+      renderChallenge(storedChallenge);
+    } else {
+      // 生成新挑战
+      const newChallenge = generateDailyChallenge(meta.today);
+      if (newChallenge) {
+        localStorage.setItem('todayChallenge', JSON.stringify(newChallenge));
+        renderChallenge(newChallenge);
+        pushToast('🎯 今日挑战已生成！查看详情', 'info');
+      }
+    }
+  }
+
+  // 调试面板功能
+  function initializeChallengeDebug() {
+    // 绑定调试按钮事件
+    el.btn_save_challenge?.addEventListener('click', () => {
+      challengeConfig.enabled = el.cfg_challenge_enable.checked;
+      challengeConfig.minMultiplier = parseFloat(el.cfg_challenge_min.value);
+      challengeConfig.maxMultiplier = parseFloat(el.cfg_challenge_max.value);
+      challengeConfig.minBound = parseInt(el.cfg_challenge_min_bound.value);
+      challengeConfig.maxBound = parseInt(el.cfg_challenge_max_bound.value);
+      challengeConfig.streakUpThreshold = parseInt(el.cfg_challenge_streak_up.value);
+      challengeConfig.baseReward = parseInt(el.cfg_challenge_reward.value);
+      challengeConfig.weeklyTolerance = parseInt(el.cfg_challenge_tolerance.value);
+      
+      pushToast('挑战参数已保存', 'success');
+    });
+    
+    el.btn_reset_challenge?.addEventListener('click', () => {
+      el.cfg_challenge_enable.checked = true;
+      el.cfg_challenge_min.value = '1.05';
+      el.cfg_challenge_max.value = '1.15';
+      el.cfg_challenge_min_bound.value = '20';
+      el.cfg_challenge_max_bound.value = '180';
+      el.cfg_challenge_streak_up.value = '2';
+      el.cfg_challenge_reward.value = '8';
+      el.cfg_challenge_tolerance.value = '2';
+      
+      pushToast('挑战参数已重置', 'info');
+    });
+    
+    el.btn_generate_challenge?.addEventListener('click', () => {
+      const newChallenge = generateDailyChallenge(meta.today);
+      if (newChallenge) {
+        localStorage.setItem('todayChallenge', JSON.stringify(newChallenge));
+        renderChallenge(newChallenge);
+        pushToast('新挑战已生成', 'success');
+      }
+    });
+  }
+
+  // 在应用初始化时调用挑战系统
+  setTimeout(() => {
+    initializeChallengeSystem();
+    initializeChallengeDebug();
+  }, 1000);
+
+  // ========== 挑战系统核心代码结束 ==========
 
   initializeApp();
 });

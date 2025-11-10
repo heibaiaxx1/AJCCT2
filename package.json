@@ -1,29 +1,20 @@
 {
-  "name": "cloudbase-run-socket-service",
+  "name": "haoqing-timer-app",
   "version": "1.0.0",
-  "description": "Socket.IO/Express WebSocket real-time synchronization service for CloudBase Run",
-  "main": "index.js",
+  "description": "豪情在天 - 任务与计时管理应用",
   "scripts": {
-    "start": "node server.js",
-    "dev": "nodemon server.js"
+    "start": "npx serve -p 8080",
+    "dev": "npx serve -p 8080"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "socket.io": "^4.7.2",
-    "cors": "^2.8.5"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
-  },
-  "engines": {
-    "node": ">=18.0.0"
+    "serve": "^14.2.5"
   },
   "keywords": [
-    "websocket",
-    "socket.io",
-    "express",
-    "cloudbase",
-    "realtime"
+    "timer",
+    "task-management",
+    "productivity",
+    "html",
+    "javascript"
   ],
   "author": "",
   "license": "MIT"

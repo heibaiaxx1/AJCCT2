@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
@@ -304,6 +304,209 @@
     border-radius: 6px;
     overflow: hidden;
   }
+
+  /* 挑战卡片样式 */
+  .challenge-card {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    background: var(--panel-2);
+    margin-bottom: 20px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  }
+  
+  .challenge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  
+  .challenge-header h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  
+  .challenge-reward {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(0, 122, 255, 0.1);
+    padding: 4px 10px;
+    border-radius: 20px;
+  }
+  
+  .challenge-desc {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--text);
+    margin-bottom: 8px;
+  }
+  
+  .challenge-target {
+    font-size: 14px;
+    color: var(--muted);
+    margin-bottom: 12px;
+  }
+  
+  .challenge-progress {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  
+  .progress-bar {
+    flex: 1;
+    height: 8px;
+    background: var(--border);
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  
+  .progress-fill {
+    height: 100%;
+    background: var(--success);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+  
+  .progress-text {
+    font-size: 12px;
+    color: var(--muted);
+    min-width: 40px;
+    text-align: right;
+  }
+  
+  .challenge-status {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+    text-align: center;
+    padding: 6px 12px;
+    background: rgba(0, 122, 255, 0.05);
+    border-radius: 6px;
+  }
+
+  /* 每日总结界面样式 */
+  .summary-page {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    margin-top: 24px;
+  }
+  
+  .summary-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  
+  .summary-header h2 {
+    margin: 0 0 4px;
+    font-size: 20px;
+    font-weight: 700;
+  }
+  
+  .summary-header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+  
+  .summary-core {
+    padding: 24px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+  }
+  
+  .stat-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 16px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-align: center;
+  }
+  
+  .stat-item span {
+    font-size: 12px;
+    color: var(--muted);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  .stat-item strong {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  
+  #timeGrid {
+    padding: 0 24px 24px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  
+  .grid-cell {
+    width: 24px;
+    height: 24px;
+    border-radius: 4px;
+    background: var(--border);
+    transition: all 0.2s ease;
+  }
+  
+  .grid-cell.active {
+    background: var(--primary);
+    box-shadow: 0 2px 4px rgba(0, 122, 255, 0.3);
+  }
+  
+  #summary-text {
+    padding: 0 24px 24px;
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--text);
+    text-align: center;
+  }
+  
+  .summary-actions {
+    padding: 0 24px 24px;
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+  }
+  
+  .summary-actions .btn {
+    flex: 1;
+    max-width: 200px;
+  }
+  
+  @media (max-width: 767px) {
+    .summary-core {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    
+    .summary-actions {
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    .summary-actions .btn {
+      max-width: 100%;
+      width: 100%;
+    }
+  }
   .exp-bar-fill {
     position: absolute;
     left: 0;
@@ -589,6 +792,297 @@
       width: 100%;
     }
   }
+  
+  /* Desktop-specific modal styles */
+  @media (min-width: 768px) {
+    .modal-mask {
+      align-items: center;
+      justify-content: center;
+    }
+    .modal {
+      width: min(600px, 90vw);
+      max-height: 85vh;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      padding-bottom: 0;
+      animation: none !important;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal .mh {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      position: relative;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--panel);
+      flex-shrink: 0;
+    }
+    .modal .mh::before {
+      content: none;
+    }
+    .modal .mb {
+      padding: 24px;
+      flex: 1;
+      overflow-y: auto;
+      max-height: calc(85vh - 80px);
+      min-height: 200px;
+    }
+    .modal .mb::-webkit-scrollbar {
+      width: 6px;
+    }
+    .modal .mb::-webkit-scrollbar-track {
+      background: var(--bg);
+      border-radius: 3px;
+    }
+    .modal .mb::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+    .modal .mb::-webkit-scrollbar-thumb:hover {
+      background: var(--muted);
+    }
+    #devBody {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      max-height: none;
+      min-height: 100%;
+      overflow-y: visible;
+    }
+    
+    /* 专门针对调试面板的滚动修复 */
+    #devMask .modal {
+      display: flex !important;
+      flex-direction: column !important;
+      max-height: 90vh !important;
+      height: auto !important;
+      overflow: hidden !important;
+    }
+    #devMask .modal .mh {
+      position: sticky !important;
+      top: 0 !important;
+      background: var(--panel) !important;
+      z-index: 10 !important;
+      border-bottom: 1px solid var(--border) !important;
+      flex-shrink: 0 !important;
+    }
+    #devMask .modal .mb {
+      display: block !important;
+      overflow-y: auto !important;
+      overflow-x: hidden !important;
+      max-height: calc(90vh - 70px) !important;
+      height: auto !important;
+      padding: 20px 24px !important;
+      flex: 1 !important;
+      min-height: 0 !important;
+    }
+    #devBody {
+      display: block !important;
+      overflow-y: auto !important;
+      min-height: 400px !important;
+      height: auto !important;
+    }
+    
+    /* 增强滚动修复 - 确保滚动条始终可见 */
+    #devMask .modal .mb::-webkit-scrollbar {
+      width: 8px !important;
+    }
+    #devMask .modal .mb::-webkit-scrollbar-track {
+      background: var(--bg) !important;
+      border-radius: 4px !important;
+    }
+    #devMask .modal .mb::-webkit-scrollbar-thumb {
+      background: var(--border) !important;
+      border-radius: 4px !important;
+    }
+    #devMask .modal .mb::-webkit-scrollbar-thumb:hover {
+      background: var(--muted) !important;
+    }
+    
+    /* 强制启用滚动 */
+    #devMask .modal .mb {
+      -webkit-overflow-scrolling: touch !important;
+      scrollbar-width: thin !important;
+      scrollbar-color: var(--border) var(--bg) !important;
+      overscroll-behavior: contain !important;
+      will-change: scroll-position !important;
+    }
+    
+    /* 针对火狐浏览器的滚动修复 */
+    @-moz-document url-prefix() {
+      #devMask .modal .mb {
+        scrollbar-width: thin !important;
+        scrollbar-color: var(--border) var(--bg) !important;
+      }
+    }
+    
+    /* 确保调试面板内容可以滚动 */
+    #devBody {
+      height: auto !important;
+      min-height: 500px !important;
+      padding-bottom: 20px !important;
+    }
+    
+    /* 确保模态框在DOM中的位置正确 */
+    #devMask {
+      z-index: 1000 !important;
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+    }
+    #devMask .modal .mb::-webkit-scrollbar {
+      width: 8px !important;
+    }
+    #devMask .modal .mb::-webkit-scrollbar-track {
+      background: var(--bg) !important;
+      border-radius: 4px !important;
+    }
+    #devMask .modal .mb::-webkit-scrollbar-thumb {
+      background: var(--border) !important;
+      border-radius: 4px !important;
+    }
+    #devMask .modal .mb::-webkit-scrollbar-thumb:hover {
+      background: var(--muted) !important;
+    }
+  }
+  
+  /* 每日总结功能样式 */
+  .today-summary-section {
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    background: var(--panel-2);
+  }
+  
+  .section-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 8px;
+  }
+  
+  .today-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+  }
+  
+  .stat-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    text-align: center;
+  }
+  
+  .stat-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+  
+  .stat-label {
+    font-size: 12px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  .streak-info {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .streak-display,
+  .shields-display,
+  .weekly-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+  }
+  
+  .streak-label,
+  .shields-label,
+  .weekly-label {
+    font-size: 14px;
+    color: var(--muted);
+  }
+  
+  .streak-value,
+  .shields-value,
+  .weekly-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text);
+  }
+  
+  .tasks-completed {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .completed-task {
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel);
+    font-size: 14px;
+    color: var(--text);
+  }
+  
+  .no-tasks {
+    text-align: center;
+    color: var(--muted);
+    font-size: 14px;
+    padding: 20px;
+  }
+  
+  .today-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  
+  .today-actions .btn {
+    flex: 1;
+    min-width: 120px;
+  }
+  
+  @media (max-width: 767px) {
+    .today-stats-grid {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .today-actions {
+      flex-direction: column;
+    }
+    
+    .today-actions .btn {
+      min-width: auto;
+      width: 100%;
+    }
+  }
   </style>
   
   <!-- CloudBase SDK -->
@@ -620,6 +1114,25 @@
   </header>
 
   <div class="workspace">
+    <!-- 挑战卡片 -->
+    <div class="challenge-card" id="challengeCard" style="display: none;">
+      <div class="challenge-header">
+        <h3>🎯 今日挑战</h3>
+        <span class="challenge-reward" id="challengeReward">+8 豪情</span>
+      </div>
+      <div class="challenge-content">
+        <p class="challenge-desc" id="challengeDesc">加载中...</p>
+        <p class="challenge-target" id="challengeTarget">目标：0 分钟</p>
+        <div class="challenge-progress">
+          <div class="progress-bar">
+            <div class="progress-fill" id="challengeProgressFill" style="width: 0%"></div>
+          </div>
+          <span class="progress-text" id="challengeProgressText">0%</span>
+        </div>
+        <p class="challenge-status" id="challengeStatus">未开始</p>
+      </div>
+    </div>
+    
     <div class="column column-main" id="mainColumn">
       <section class="card">
         <div class="desktop-tabs">
@@ -669,6 +1182,8 @@
                 <button class="btn small" id="btnTaskLibrary">任务库</button>
                 <button class="btn small" id="btnTodayDone">今日已完成</button>
               </div>
+              
+
             </div>
         </div>
 
@@ -801,6 +1316,8 @@
                   <div class="pill">速率: <strong id="rateText">0</strong></div>
                   <div class="pill">任务总值: <strong id="taskTotal">0</strong></div>
                   <div class="pill">任务总时: <strong id="taskTime">0:00:00</strong></div>
+                  <div class="pill" id="sStreakDisplay" style="opacity: 0.5;">今日段连击：<strong>0</strong></div>
+                  <div class="pill" id="dStreakDisplay">已连续坚持：<strong>0</strong>天｜护盾：<strong>0</strong>枚</div>
               </div>
               <div id="pauseIndicator" style="display: none; margin-top: 24px; color: var(--warning); font-weight: 600; text-align: center;">已暂停 <span id="pauseTime" style="font-variant-numeric: tabular-nums; margin-left: 8px;"></span></div>
           </div>
@@ -993,6 +1510,181 @@
         <textarea id="devStateText" placeholder="在此粘贴状态JSON进行导入..."></textarea>
         <div class="row" style="margin-top: 8px;"><button class="btn" id="btnExportState">导出状态</button><button class="btn primary" id="btnImportState">导入状态</button></div>
       </div>
+      <div class="pane">
+        <h4>连击数值调试</h4>
+        
+        <!-- 今日段连击（S-Streak） -->
+        <div class="group" style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 12px;"><input type="checkbox" id="cfg_s_enable" checked> 启用今日段连击</label>
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 8px;">段判定最小时长(分钟)：<input id="cfg_s_min" type="number" value="25" min="5" max="60" style="width: 80px;"></label>
+            <label style="display: block; margin-bottom: 8px;">每日上限(次)：<input id="cfg_s_cap" type="number" value="6" min="1" max="12" style="width: 80px;"></label>
+            <label style="display: block; margin-bottom: 8px;">空闲灰化阈值(分钟)：<input id="cfg_s_idle" type="number" value="30" min="5" max="120" style="width: 80px;"></label>
+          </div>
+          <div style="margin-bottom: 12px;">
+            <label style="display: block;">段奖励模式：
+              <select id="cfg_s_reward_mode" style="width: 150px;">
+                <option value="fixed" selected>固定值</option>
+                <option value="ladder">递减阶梯</option>
+                <option value="combo">随段次递增</option>
+              </select>
+            </label>
+          </div>
+          <div id="cfg_s_reward_fixed" style="margin-bottom: 12px;">
+            <label style="display: block;">固定奖励(豪情)：<input id="cfg_s_fixed" type="number" value="4" min="0" max="20" style="width: 80px;"></label>
+          </div>
+          <div id="cfg_s_reward_ladder" style="display:none; margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 8px;">阶梯(逗号分隔)：<input id="cfg_s_ladder" type="text" value="5,4,3,3,2,2" style="width: 200px;"></label>
+            <small style="font-size: 12px; color: var(--muted);">按当日第1~N段依次取值，超出上限取最后一档</small>
+          </div>
+          <div id="cfg_s_reward_combo" style="display:none; margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 8px;">起始：<input id="cfg_s_combo_base" type="number" value="2" min="0" max="10" style="width: 80px;"></label>
+            <label style="display: block; margin-bottom: 8px;">每段+：<input id="cfg_s_combo_step" type="number" value="1" min="0" max="10" style="width: 80px;"></label>
+            <label style="display: block; margin-bottom: 8px;">封顶：<input id="cfg_s_combo_cap" type="number" value="5" min="0" max="20" style="width: 80px;"></label>
+          </div>
+          <div>
+            <label style="display: block;">当日段奖励封顶(豪情)：<input id="cfg_s_daily_cap" type="number" value="24" min="0" max="200" style="width: 100px;"></label>
+          </div>
+        </div>
+
+        <!-- 日连击（D-Streak，只读展示相关阈值，源于后端） -->
+        <div class="group" style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 8px;">有效日阈值(分钟，只读)：<input id="cfg_d_threshold" type="number" value="10" disabled style="width: 80px;"></label>
+          <label style="display: block; margin-bottom: 8px;">周有效日得护盾阈值(天，只读)：<input id="cfg_d_week" type="number" value="5" disabled style="width: 80px;"></label>
+          <label style="display: block; margin-bottom: 12px;">护盾上限(只读)：<input id="cfg_d_cap" type="number" value="2" disabled style="width: 80px;"></label>
+          <button class="btn small" id="btn_refresh_d">刷新日连击/护盾</button>
+        </div>
+
+        <div class="row" style="display: flex; gap: 12px;">
+          <button class="btn small" id="btn_save_tuning">保存参数</button>
+          <button class="btn small" id="btn_reset_tuning">恢复默认</button>
+        </div>
+      </div>
+
+      <div class="pane">
+        <h4>挑战系统调试</h4>
+        <div class="group" style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 12px;"><input type="checkbox" id="cfg_challenge_enable" checked> 启用每日挑战</label>
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 8px;">增长系数区间：
+              <input id="cfg_challenge_min" type="number" value="1.05" step="0.01" style="width: 80px;"> —
+              <input id="cfg_challenge_max" type="number" value="1.15" step="0.01" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">下限 / 上限 (分钟)：
+              <input id="cfg_challenge_min_bound" type="number" value="20" style="width: 80px;">
+              <input id="cfg_challenge_max_bound" type="number" value="180" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">连续成功提升阈值：
+              <input id="cfg_challenge_streak_up" type="number" value="2" min="1" max="5" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">挑战奖励区间(豪情)：
+              <input id="cfg_challenge_reward" type="number" value="8" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">周宽容次数：
+              <input id="cfg_challenge_tolerance" type="number" value="2" min="0" max="5" style="width: 80px;">
+            </label>
+          </div>
+          <div class="row" style="display: flex; gap: 12px;">
+            <button class="btn small" id="btn_save_challenge">保存挑战参数</button>
+            <button class="btn small" id="btn_reset_challenge">恢复默认</button>
+            <button class="btn small" id="btn_generate_challenge">生成今日挑战</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pane">
+        <h4>挑战系统调试</h4>
+        <div class="group" style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 12px;"><input type="checkbox" id="cfg_challenge_enable" checked> 启用每日挑战</label>
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 8px;">增长系数区间：
+              <input id="cfg_challenge_min" type="number" value="1.05" step="0.01" style="width: 80px;"> —
+              <input id="cfg_challenge_max" type="number" value="1.15" step="0.01" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">下限 / 上限 (分钟)：
+              <input id="cfg_challenge_min_bound" type="number" value="20" style="width: 80px;">
+              <input id="cfg_challenge_max_bound" type="number" value="180" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">连续成功提升阈值：
+              <input id="cfg_challenge_streak_up" type="number" value="2" min="1" max="5" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">挑战奖励区间(豪情)：
+              <input id="cfg_challenge_reward" type="number" value="8" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">周宽容次数：
+              <input id="cfg_challenge_tolerance" type="number" value="2" min="0" max="5" style="width: 80px;">
+            </label>
+          </div>
+          <div class="row" style="display: flex; gap: 12px;">
+            <button class="btn small" id="btn_save_challenge">保存挑战参数</button>
+            <button class="btn small" id="btn_reset_challenge">恢复默认</button>
+            <button class="btn small" id="btn_generate_challenge">生成今日挑战</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pane">
+        <h4>挑战系统调试</h4>
+        <div class="group" style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 12px;"><input type="checkbox" id="cfg_challenge_enable" checked> 启用每日挑战</label>
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 8px;">增长系数区间：
+              <input id="cfg_challenge_min" type="number" value="1.05" step="0.01" style="width: 80px;"> —
+              <input id="cfg_challenge_max" type="number" value="1.15" step="0.01" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">下限 / 上限 (分钟)：
+              <input id="cfg_challenge_min_bound" type="number" value="20" style="width: 80px;">
+              <input id="cfg_challenge_max_bound" type="number" value="180" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">连续成功提升阈值：
+              <input id="cfg_challenge_streak_up" type="number" value="2" min="1" max="5" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">挑战奖励区间(豪情)：
+              <input id="cfg_challenge_reward" type="number" value="8" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">周宽容次数：
+              <input id="cfg_challenge_tolerance" type="number" value="2" min="0" max="5" style="width: 80px;">
+            </label>
+          </div>
+          <div class="row" style="display: flex; gap: 12px;">
+            <button class="btn small" id="btn_save_challenge">保存挑战参数</button>
+            <button class="btn small" id="btn_reset_challenge">恢复默认</button>
+            <button class="btn small" id="btn_generate_challenge">生成今日挑战</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="pane">
+        <h4>挑战系统调试</h4>
+        <div class="group" style="margin-bottom: 20px;">
+          <label style="display: block; margin-bottom: 12px;"><input type="checkbox" id="cfg_challenge_enable" checked> 启用每日挑战</label>
+          <div style="margin-bottom: 12px;">
+            <label style="display: block; margin-bottom: 8px;">增长系数区间：
+              <input id="cfg_challenge_min" type="number" value="1.05" step="0.01" style="width: 80px;"> —
+              <input id="cfg_challenge_max" type="number" value="1.15" step="0.01" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">下限 / 上限 (分钟)：
+              <input id="cfg_challenge_min_bound" type="number" value="20" style="width: 80px;">
+              <input id="cfg_challenge_max_bound" type="number" value="180" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">连续成功提升阈值：
+              <input id="cfg_challenge_streak_up" type="number" value="2" min="1" max="5" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">挑战奖励区间(豪情)：
+              <input id="cfg_challenge_reward" type="number" value="8" style="width: 80px;">
+            </label>
+            <label style="display: block; margin-bottom: 8px;">周宽容次数：
+              <input id="cfg_challenge_tolerance" type="number" value="2" min="0" max="5" style="width: 80px;">
+            </label>
+          </div>
+          <div class="row" style="display: flex; gap: 12px;">
+            <button class="btn small" id="btn_save_challenge">保存挑战参数</button>
+            <button class="btn small" id="btn_reset_challenge">恢复默认</button>
+            <button class="btn small" id="btn_generate_challenge">生成今日挑战</button>
+          </div>
+        </div>
+      </div>
+
       <div class="pane">
         <h4>危险操作</h4>
         <div class="row">

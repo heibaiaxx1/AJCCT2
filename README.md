@@ -16,10 +16,20 @@
 
 [https://cloud1-4g8gnb2uda2a2c54-1367392929.tcloudbaseapp.com/](https://cloud1-4g8gnb2uda2a2c54-1367392929.tcloudbaseapp.com/)
 
-**部署状态：** ✅ **已成功部署** - 最新版本部署于 2025-11-09
-
 ## 使用说明
 
+### 基本功能
+1. **专注计时**：点击开始按钮开始计时，支持暂停/继续
+2. **难度设置**：选择不同的难度级别（1-5级）
+3. **连击系统**：连续完成≥25分钟的计时段可获得连击奖励
+4. **日连击**：查看连续专注天数
+
+### 连击调试功能
+- **调试面板**：按 `Ctrl+Shift+D` 快速打开/关闭调试面板
+- **今日段连击**：配置连击参数、奖励模式、阈值等
+- **实时调试**：修改参数后立即生效，无需重启应用
+
+### 多设备同步
 1. 首次使用需要注册账号并登录
 2. 确保所有设备使用相同的账号登录
 3. 应用会自动处理数据冲突，无需手动干预
@@ -30,29 +40,28 @@
 - 前端：HTML、CSS、JavaScript
 - 后端/存储：腾讯云CloudBase
 - 数据库：CloudBase数据库（NoSQL）
-- 实时同步：WebSocket长连接实时数据同步
-- 多设备支持：自动设备状态同步和心跳检测
 
 ## 部署信息
 
 - **环境 ID**：cloud1-4g8gnb2uda2a2c54
 - **静态网站域名**：cloud1-4g8gnb2uda2a2c54-1367392929.tcloudbaseapp.com
 - **数据库集合**：users（权限：所有人可读，仅文档所有者可写）
-- **部署文件**：
-  - index.html - 主页面文件
-  - index.js - 应用逻辑代码
-  - manifest.json - PWA配置
-  - sw.js - Service Worker
-  - assets/ - 音频资源文件
+- **最新部署时间**：2025-11-10 19:44:13 (北京时间)
+- **部署状态**：✅ 已成功重新部署到腾讯云CloudBase（包含挑战系统）
+- **访问地址**：[https://cloud1-4g8gnb2uda2a2c54-1367392929.tcloudbaseapp.com/](https://cloud1-4g8gnb2uda2a2c54-1367392929.tcloudbaseapp.com/)
 
-## 主要特性
-
-- ✅ **实时数据同步**：使用 CloudBase watch() 实现跨设备实时同步
-- ✅ **多设备支持**：自动设备状态检测和心跳机制
-- ✅ **智能重连**：网络异常时自动重连和状态恢复
-- ✅ **离线优先**：支持离线使用，网络恢复后自动同步
-- ✅ **PWA支持**：可安装为原生应用
-- ✅ **响应式设计**：适配桌面和移动设备
+### 部署内容
+- ✅ 主应用文件 (index.html, index.js)
+- ✅ 离线缓存支持 (manifest.json, sw.js)
+- ✅ 音频资源文件 (assets/ 目录下的mp3文件)
+- ✅ 云函数部署 (dailySettlement - 连击系统每日结算)
+- ✅ 完整的多设备实时同步功能
+- ✅ 统一的调试面板整合（连击数值调试功能）
+- ✅ 动态挑战系统（Dynamic Target Generator）
+- ✅ 动态挑战系统（Dynamic Target Generator）
+- ✅ 动态挑战系统（Dynamic Target Generator）
+- ✅ 动态挑战系统（Dynamic Target Generator）
+- ✅ 动态挑战系统（Dynamic Target Generator）
 
 ## 管理控制台
 
