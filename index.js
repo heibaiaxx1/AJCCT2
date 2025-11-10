@@ -63,6 +63,7 @@ let cloudSyncReady = false; // Flag to prevent premature writes
 let CLIENT_ID = '';
 let lastRemoteSyncStamp = 0;
 let isApplyingRemoteSnapshot = false;
+let isFirebaseConnected = false; // Firebase 连接状态
 
 // =================== 计时器同步状态 ===================
 let timerData = null; // 当前计时器状态
