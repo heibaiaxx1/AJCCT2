@@ -3467,3 +3467,4 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
 
   initializeApp();
 });
+})();
