@@ -1,5 +1,31 @@
 
-document.addEventListener('DOMContentLoaded', ()=>{
+(function() {
+  'use strict';
+  
+  // 防止重复加载的检查
+  if (window.__HAOQING_APP_LOADED__) {
+    console.warn('豪情应用已加载，跳过重复执行');
+    return;
+  }
+  window.__HAOQING_APP_LOADED__ = true;
+  
+  // 文件完整性检查
+  try {
+    // 检查代码是否完整
+    const lastLine = document.currentScript ? document.currentScript.textContent.split('\
+').pop() : '';
+    if (lastLine && !lastLine.includes('});')) {
+      console.error('代码文件可能被截断，重新加载页面');
+      if (confirm('应用文件加载不完整，是否重新加载？')) {
+        window.location.reload();
+        return;
+      }
+    }
+  } catch (e) {
+    console.warn('文件完整性检查失败:', e);
+  }
+
+  document.addEventListener('DOMContentLoaded', ()=>{
 
 const rootEl = document.documentElement;
 const isIOSDevice = /iP(hone|od|ad)/i.test(navigator.userAgent) || (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints > 1);
@@ -1457,6 +1483,8 @@ async function sendTimerHeartbeat() {
                 delete a.saveTimeout;
             }, saveDelay);
         }
+    } catch (error) {
+        console.error('发送计时器心跳时出错:', error);
     }
 }
 
@@ -3474,3 +3502,7 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
 
   initializeApp();
 });
+
+})(); // 文件结束标志
+
+})(); // 文件结束标志
