@@ -367,7 +367,8 @@ function getRetryDelay(error) {
 
 // 增强的同步状态显示函数
 function updateSyncStatus(activeSessionOrConnected, message = "") {
-    if (!el.syncStatus) return;
+    // 先检查 el 是否已定义，如果未定义则跳过
+    if (!window.el || !window.el.syncStatus) return;
     
     // 判断参数类型：是布尔值（连接状态）还是活跃会话对象
     if (typeof activeSessionOrConnected === 'boolean') {
@@ -2314,6 +2315,12 @@ function calcSegmentBonus(currentS){
 // 日连击展示刷新
 async function refreshDStreakFromBackend(){
   try {
+    // 检查 cloud 是否可用，如果不可用则跳过
+    if (typeof cloud === 'undefined') {
+      console.warn('云函数不可用，跳过日连击刷新');
+      return;
+    }
+    
     const today = new Date().toISOString().slice(0,10);
     const db = cloud.database();
     const snap = await db.collection('streakState').where({ userId, date: today }).get();
@@ -3289,6 +3296,12 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
 
   // 渲染挑战卡片
   function renderChallenge(challenge) {
+    // 检查 el 是否已定义，如果未定义则跳过
+    if (!window.el || !window.el.challengeCard) {
+      console.warn('挑战卡片元素未定义，跳过渲染');
+      return;
+    }
+    
     if (!challenge) {
       el.challengeCard.style.display = 'none';
       return;
