@@ -2070,7 +2070,7 @@ function checkAndTakeOverTimer(activeSession, currentTime) {
         // 立即保存接管状态
         save();
         
-        pushToast(`已接管计时器（原设备${activeSession.lastHeartbeatFrom}已离线）`, 'info');
+        pushToast("已接管计时器（原设备" + activeSession.lastHeartbeatFrom + "已离线）", 'info');
     }
 }
 
