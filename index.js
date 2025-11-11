@@ -964,20 +964,8 @@ const processSaveQueue = async () => {
         const payload = getFullStateSnapshot(syncStamp);
         
         try {
-            // iOS设备上使用更简单的保存方式，避免事务失败
-            if (isIOSDevice) {
-                await db.collection('users').doc(uid).set(payload);
-            } else {
-                // 非iOS设备继续使用事务操作
-                const transaction = await db.startTransaction();
-                try {
-                    await transaction.collection('users').doc(uid).set(payload);
-                    await transaction.commit();
-                } catch (txError) {
-                    await transaction.rollback();
-                    throw txError;
-                }
-            }
+            // 统一使用更简单的保存方式，避免事务相关的INVALID_ACTION错误
+            await db.collection('users').doc(uid).set(payload);
             lastRemoteSyncStamp = Math.max(lastRemoteSyncStamp, syncStamp);
             // 重置重试计数器
             state.saveRetryCount = 0;
@@ -2221,8 +2209,14 @@ function calcSegmentBonus(currentS){
 async function refreshDStreakFromBackend(){
   try {
     // 检查 cloud 是否可用，如果不可用则跳过
-    if (typeof cloud === 'undefined') {
+    if (typeof cloud === 'undefined' || !cloud) {
       console.warn('云函数不可用，跳过日连击刷新');
+      return;
+    }
+    
+    // 检查是否已连接到CloudBase
+    if (!isCloudBaseConfigured || !cloudSyncReady) {
+      console.warn('CloudBase未就绪，跳过日连击刷新');
       return;
     }
     
@@ -3201,8 +3195,20 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
 
   // 渲染挑战卡片
   function renderChallenge(challenge) {
-    // 检查 el 是否已定义，如果未定义则跳过
-    if (!window.el || !window.el.challengeCard) {
+    // 检查 el 和挑战卡片元素是否已定义，如果未定义则跳过
+    if (!window.el) {
+      // 尝试重新查找元素
+      window.el = {};
+      el.challengeCard = document.getElementById('challengeCard');
+      el.challengeDesc = document.getElementById('challengeDesc');
+      el.challengeTarget = document.getElementById('challengeTarget');
+      el.challengeReward = document.getElementById('challengeReward');
+      el.challengeProgressFill = document.getElementById('challengeProgressFill');
+      el.challengeProgressText = document.getElementById('challengeProgressText');
+      el.challengeStatus = document.getElementById('challengeStatus');
+    }
+    
+    if (!el.challengeCard) {
       console.warn('挑战卡片元素未定义，跳过渲染');
       return;
     }
