@@ -76,7 +76,61 @@
   h2{font-size:18px;font-weight:700;margin:0 0 1em}
   h3{font-size:16px;font-weight:600;margin:0 0 .8em}
   h4{font-weight:700}
-  .workspace{display:grid;gap:28px;grid-template-columns:minmax(0,1.3fr) minmax(380px,0.7fr)}
+  .workspace{
+    display:grid;
+    gap:28px;
+    grid-template-columns:minmax(0,1.3fr) minmax(380px,0.7fr);
+    grid-template-areas: "challenge challenge" "main sidebar";
+  }
+  
+  /* 移动端布局 */
+  @media (max-width: 768px) {
+    .workspace {
+      grid-template-columns: 1fr;
+      grid-template-areas: "challenge" "main" "sidebar";
+    }
+    
+    .column-side {
+      grid-area: sidebar;
+    }
+    
+    .column-main {
+      grid-area: main;
+    }
+  }
+  
+  /* PC端布局优化 */
+  @media (min-width: 769px) {
+    .workspace {
+      grid-template-columns: minmax(0, 1.3fr) minmax(380px, 0.7fr);
+      grid-template-areas: "main challenge" "main sidebar";
+      align-items: start; /* 确保所有元素顶部对齐 */
+    }
+    
+    .challenge-card {
+      grid-area: challenge;
+      align-self: start;
+      justify-self: end;
+      margin-bottom: 0;
+      
+      /* 确保卡片在PC端有固定宽度 */
+      width: 280px;
+      max-width: 280px;
+      
+      /* 紧凑布局 */
+      margin-top: 0;
+    }
+    
+    .column-side {
+      grid-area: sidebar;
+    }
+    
+    .column-main {
+      grid-area: main;
+      /* 确保主内容区域有足够的空间 */
+      min-height: 400px;
+    }
+  }
   .column{display:flex;flex-direction:column;gap:24px}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;box-shadow:var(--shadow);overflow:hidden}
   .card.compact .bd{padding:16px 24px}
@@ -313,6 +367,24 @@
     background: var(--panel-2);
     margin-bottom: 20px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    
+    /* PC端优化 - 集成到网格布局中 */
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+    
+    /* 确保在PC端有合适的布局位置 */
+    grid-area: challenge;
+  }
+  
+  /* 移动端样式 */
+  @media (max-width: 768px) {
+    .challenge-card {
+      max-width: none;
+      margin-left: 0;
+      margin-right: 0;
+      grid-area: auto; /* 重置网格区域 */
+    }
   }
   
   .challenge-header {
@@ -388,6 +460,98 @@
     padding: 6px 12px;
     background: rgba(0, 122, 255, 0.05);
     border-radius: 6px;
+  }
+  
+  /* PC端紧凑样式 - 挑战卡片 */
+  @media (min-width: 769px) {
+    .challenge-card {
+      padding: 14px 16px;
+      max-width: 280px; /* 进一步缩小卡片宽度 */
+      margin-bottom: 0;
+      
+      /* 紧凑布局优化 */
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+      border: 1px solid #e5e5e7;
+      background: var(--panel);
+      
+      /* 悬浮效果 */
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    
+    .challenge-card:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+    
+    .challenge-header {
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .challenge-header h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin: 0;
+      color: var(--text);
+    }
+    
+    .challenge-reward {
+      font-size: 11px;
+      padding: 3px 8px;
+      letter-spacing: 0.02em;
+      background: var(--success);
+      color: white;
+      border-radius: 6px;
+      font-weight: 600;
+    }
+    
+    .challenge-desc {
+      font-size: 11px;
+      margin-bottom: 4px;
+      line-height: 1.2;
+      font-weight: 500;
+      color: var(--text);
+    }
+    
+    .challenge-target {
+      font-size: 10px;
+      margin-bottom: 6px;
+      color: var(--muted);
+    }
+    
+    .challenge-progress {
+      gap: 4px;
+      margin-bottom: 4px;
+    }
+    
+    .progress-bar {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+    }
+    
+    .progress-fill {
+      background: var(--success);
+    }
+    
+    .progress-text {
+      font-size: 10px;
+      min-width: 25px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    
+    .challenge-status {
+      font-size: 10px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      background: rgba(0, 122, 255, 0.08);
+      color: var(--accent);
+      font-weight: 500;
+      text-align: center;
+    }
   }
 
   /* 每日总结界面样式 */
@@ -1114,7 +1278,7 @@
   </header>
 
   <div class="workspace">
-    <!-- 挑战卡片 -->
+    <!-- 挑战卡片 - 放置在PC端的侧边栏位置 -->
     <div class="challenge-card" id="challengeCard" style="display: none;">
       <div class="challenge-header">
         <h3>🎯 今日挑战</h3>
