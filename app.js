@@ -225,9 +225,6 @@ class HaoqingApp {
             
             this.cloudServices.isCloudBaseConfigured = true;
             console.log('Tencent CloudBase 初始化成功');
-            
-            // 初始化 Firebase
-            this.initFirebase();
 
         } catch (error) {
             console.error('CloudBase 初始化失败:', error);
