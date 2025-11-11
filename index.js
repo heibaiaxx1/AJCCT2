@@ -2087,7 +2087,7 @@ function checkAndTakeOverTimer(activeSession, currentTime) {
             const taskTitle = task ? task.title : '未知任务';
             
             // 显示接管提示
-            pushToast(`${taskTitle} 的控制设备可能已离线，您现在可以完全控制计时器`, 'info', 8000);
+            pushToast(`${taskTitle} 的控制设备可能已离线，您现在可以完全控制计时器`, 'info');
             
             // 标记已提示过
             activeSession.takeoverOfferedAt = currentTime;
@@ -2108,7 +2108,7 @@ async function getServerTime() {
         // 确保返回的是时间戳数字
         return serverTimestamp ? new Date(serverTimestamp).getTime() : null;
     } catch (error) {
-        console.error("Failed to get server time:", error);
+        console.error('获取服务器时间失败:', error);
         return null;
     }
 }
@@ -2122,6 +2122,18 @@ async function syncTimeOffset() {
     if (isIOSDevice && window.lastTimeSyncAttempt && (now - window.lastTimeSyncAttempt < 15000)) {
         return; // iOS设备上至少间隔15秒再尝试同步
     }
+    
+    try {
+        const serverTime = await getServerTime();
+        if (serverTime) {
+            const localTime = Date.now();
+            window.GLOBAL_TIME_OFFSET = serverTime - localTime;
+            window.lastTimeSyncAttempt = now;
+        }
+    } catch (error) {
+        console.error('同步时间偏移量失败:', error);
+    }
+}
     
     window.lastTimeSyncAttempt = now;
     
@@ -3907,19 +3919,6 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
   }
 }
 
-// ==================== 多端同步网络状态监控和自动重连机制 ====================
-
-// 网络状态监控变量
-let networkStatus = {
-  online: navigator.onLine,
-  lastPingTime: 0,
-  pingSuccessCount: 0,
-  pingFailureCount: 0,
-  connectionQuality: 'good', // good, fair, poor, disconnected
-  reconnectAttempts: 0,
-  maxReconnectAttempts: 5
-};
-
 // 网络连接状态监控
 function initNetworkMonitor() {
   // 监听网络状态变化
@@ -4184,20 +4183,6 @@ if (typeof window !== 'undefined') {
     setInterval(updateNetworkStatusUI, 5000);
   }, 1000);
 }
-  }
-}
-
-// ==================== 多端同步网络状态监控和自动重连机制 ====================
-
-// 网络状态监控变量
-let networkStatus = {
-  online: navigator.onLine,
-  lastPingTime: 0,
-  pingSuccessCount: 0,
-  pingFailureCount: 0,
-  connectionQuality: 'good', // good, fair, poor, disconnected
-  reconnectAttempts: 0,
-  maxReconnectAttempts: 5
 };
 
 // 网络连接状态监控
