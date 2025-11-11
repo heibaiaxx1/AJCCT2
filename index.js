@@ -79,9 +79,364 @@ let timerHeartbeatInterval = null;
 const HEARTBEAT_INTERVAL_MS = 2000; // 2秒心跳间隔
 const DEVICE_TIMEOUT_MS = 30000; // 30秒超时
 
+// =================== 云函数同步配置 ===================
+const CLOUD_FUNCTION_CONFIG = {
+  // 云函数名称
+  timerSync: 'timerSync',
+  dataSync: 'dataSync',
+  dailySettlement: 'dailySettlement',
+  
+  // 同步间隔
+  syncInterval: 10000, // 10秒同步间隔
+  heartbeatInterval: 5000, // 5秒心跳间隔
+  
+  // 重试配置
+  maxRetries: 3,
+  retryDelay: 1000
+};
+
+// 云函数调用状态
+let cloudFunctionState = {
+  lastSync: 0,
+  lastHeartbeat: 0,
+  isOnline: false,
+  retryCount: 0
+};
+
 // Firebase相关功能已移除
 
-// =================== CLOUDBASE 实时监听器管理 ===================
+// =================== 云函数核心逻辑集成 ===================
+
+// 计时器同步云函数类
+class TimerSyncFunction {
+    constructor() {
+        this.name = "timerSync";
+        this.description = "计时器多端同步云函数";
+        this.runtime = "Nodejs18.15";
+        this.timeout = 60;
+    }
+
+    // 主函数逻辑
+    async main(event) {
+        try {
+            const { 
+                action,           // 操作类型: 'heartbeat', 'start', 'pause', 'stop', 'sync'
+                deviceId,         // 设备ID
+                userId,           // 用户ID
+                timerData,        // 计时器数据
+                timestamp,        // 时间戳
+                sessionId         // 会话ID
+            } = event;
+            
+            if (!userId || !deviceId) {
+                return { success: false, error: '缺少必要参数: userId 和 deviceId' };
+            }
+            
+            const now = new Date();
+            const currentTime = timestamp || now.getTime();
+            
+            // 如果 CloudBase 已配置，使用真实数据库操作
+            if (isCloudBaseConfigured && db) {
+                // 获取或创建设备状态记录
+                const deviceStateId = `${userId}_${deviceId}`;
+                
+                switch (action) {
+                    case 'heartbeat':
+                        // 心跳检测 - 更新设备在线状态
+                        await db.collection('deviceHeartbeats').doc(deviceStateId).set({
+                            userId,
+                            deviceId,
+                            lastHeartbeat: currentTime,
+                            status: 'online',
+                            updatedAt: now
+                        });
+                        
+                        // 如果这个设备有活跃计时器，更新计时器状态
+                        if (timerData) {
+                            await db.collection('activeTimers').doc(userId).set({
+                                userId,
+                                activeDevice: deviceId,
+                                timerData,
+                                lastUpdate: currentTime,
+                                sessionId: sessionId || timerData.sessionId,
+                                updatedAt: now
+                            });
+                        }
+                        break;
+                        
+                    case 'start':
+                        // 开始计时器 - 设置活跃计时器
+                        if (!timerData) {
+                            return { success: false, error: '开始计时器需要timerData参数' };
+                        }
+                        
+                        await db.collection('activeTimers').doc(userId).set({
+                            userId,
+                            activeDevice: deviceId,
+                            timerData,
+                            lastUpdate: currentTime,
+                            sessionId: sessionId || timerData.sessionId,
+                            startedAt: currentTime,
+                            updatedAt: now
+                        });
+                        
+                        // 记录计时器开始历史
+                        await db.collection('timerHistory').add({
+                            userId,
+                            deviceId,
+                            action: 'start',
+                            timerData,
+                            timestamp: currentTime,
+                            sessionId: sessionId || timerData.sessionId
+                        });
+                        break;
+                        
+                    case 'pause':
+                        // 暂停计时器
+                        const activeTimer = await db.collection('activeTimers').doc(userId).get();
+                        if (activeTimer.data && activeTimer.data.activeDevice === deviceId) {
+                            await db.collection('activeTimers').doc(userId).set({
+                                ...activeTimer.data,
+                                timerData: timerData,
+                                lastUpdate: currentTime,
+                                status: 'paused',
+                                updatedAt: now
+                            });
+                        }
+                        break;
+                        
+                    case 'stop':
+                        // 停止计时器
+                        const currentTimer = await db.collection('activeTimers').doc(userId).get();
+                        if (currentTimer.data && currentTimer.data.activeDevice === deviceId) {
+                            // 移除活跃计时器
+                            await db.collection('activeTimers').doc(userId).remove();
+                        }
+                        break;
+                        
+                    case 'sync':
+                        // 同步请求 - 返回当前活跃计时器状态
+                        const syncTimer = await db.collection('activeTimers').doc(userId).get();
+                        const syncData = syncTimer.data;
+                        
+                        return {
+                            success: true,
+                            data: {
+                                activeTimer: syncData,
+                                lastSync: currentTime
+                            }
+                        };
+                        
+                    default:
+                        return { success: false, error: '不支持的操作类型' };
+                }
+            } else {
+                // CloudBase 未配置，返回模拟响应
+                console.log(`[模拟云函数] TimerSync - ${action}`, event);
+                
+                if (action === 'sync') {
+                    return {
+                        success: true,
+                        data: {
+                            activeTimer: null,
+                            lastSync: currentTime
+                        }
+                    };
+                }
+            }
+            
+            return { success: true, message: `计时器操作 ${action} 执行成功` };
+            
+        } catch (error) {
+            console.error('计时器同步云函数执行失败:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+}
+
+// 数据同步云函数类
+class DataSyncFunction {
+    constructor() {
+        this.name = "dataSync";
+        this.description = "多端数值实时同步云函数";
+        this.runtime = "Nodejs18.15";
+        this.timeout = 60;
+    }
+
+    // 主函数逻辑
+    async main(event) {
+        try {
+            const { 
+                action,           // 操作类型: 'sync', 'update', 'history'
+                userId,           // 用户ID
+                deviceId,         // 设备ID
+                dataType,         // 数据类型: 'tasks', 'meta', 'agg', 'all'
+                localData,        // 本地数据
+                lastSyncTime,     // 最后同步时间
+                changes           // 变更内容
+            } = event;
+            
+            if (!userId) {
+                return { success: false, error: '缺少必要参数: userId' };
+            }
+            
+            const now = new Date();
+            const currentTime = now.getTime();
+            
+            // 如果 CloudBase 已配置，使用真实数据库操作
+            if (isCloudBaseConfigured && db) {
+                switch (action) {
+                    case 'sync':
+                        // 同步数据 - 获取云端数据
+                        if (!dataType) {
+                            return { success: false, error: '同步需要指定dataType' };
+                        }
+                        
+                        // 获取云端数据
+                        const cloudData = await db.collection('userData').doc(userId).get();
+                        const cloudState = cloudData.data || {};
+                        
+                        return {
+                            success: true,
+                            data: {
+                                cloudState: cloudState,
+                                lastSyncTime: currentTime
+                            }
+                        };
+                        
+                    case 'update':
+                        // 更新数据到云端
+                        if (!dataType || !changes) {
+                            return { success: false, error: '更新需要dataType和changes参数' };
+                        }
+                        
+                        // 更新用户数据
+                        const updateData = {};
+                        
+                        if (dataType === 'all') {
+                            updateData.lastUpdate = currentTime;
+                            updateData.lastDevice = deviceId;
+                            
+                            // 合并所有数据
+                            for (const [key, value] of Object.entries(changes)) {
+                                updateData[key] = value;
+                            }
+                        } else {
+                            updateData[dataType] = changes;
+                            updateData.lastUpdate = currentTime;
+                            updateData.lastDevice = deviceId;
+                        }
+                        
+                        await db.collection('userData').doc(userId).set(updateData, { merge: true });
+                        
+                        return {
+                            success: true,
+                            data: {
+                                updatedFields: Object.keys(changes),
+                                timestamp: currentTime
+                            }
+                        };
+                        
+                    case 'history':
+                        // 获取数据变更历史
+                        const historyQuery = {
+                            userId: userId
+                        };
+                        
+                        if (dataType && dataType !== 'all') {
+                            historyQuery.dataType = dataType;
+                        }
+                        
+                        const history = await db.collection('dataHistory')
+                            .where(historyQuery)
+                            .orderBy('timestamp', 'desc')
+                            .limit(50)
+                            .get();
+                        
+                        return {
+                            success: true,
+                            data: {
+                                history: history.data,
+                                count: history.data.length
+                            }
+                        };
+                        
+                    default:
+                        return { success: false, error: '不支持的操作类型' };
+                }
+            } else {
+                // CloudBase 未配置，返回模拟响应
+                console.log(`[模拟云函数] DataSync - ${action}`, event);
+                
+                if (action === 'sync') {
+                    return {
+                        success: true,
+                        data: {
+                            cloudState: {},
+                            lastSyncTime: currentTime
+                        }
+                    };
+                }
+                
+                if (action === 'update') {
+                    return {
+                        success: true,
+                        data: {
+                            updatedFields: Object.keys(changes || {}),
+                            timestamp: currentTime
+                        }
+                    };
+                }
+            }
+            
+        } catch (error) {
+            console.error('数据同步云函数执行失败:', error);
+            return {
+                success: false,
+                error: error.message
+            };
+        }
+    }
+}
+
+// 云函数管理器
+const CloudFunctions = {
+    timerSync: new TimerSyncFunction(),
+    dataSync: new DataSyncFunction(),
+    
+    // 调用云函数
+    async call(functionName, params) {
+        const func = this[functionName];
+        if (!func) {
+            throw new Error(`云函数 ${functionName} 不存在`);
+        }
+        
+        return await func.main(params);
+    },
+    
+    // 获取云函数配置
+    getConfig() {
+        return {
+            timerSync: {
+                name: this.timerSync.name,
+                description: this.timerSync.description,
+                runtime: this.timerSync.runtime,
+                timeout: this.timerSync.timeout
+            },
+            dataSync: {
+                name: this.dataSync.name,
+                description: this.dataSync.description,
+                runtime: this.dataSync.runtime,
+                timeout: this.dataSync.timeout
+            }
+        };
+    }
+};
+
+console.log('云函数核心逻辑已集成到 index.js');
 
 // =================== CLOUDBASE 实时监听器管理 ===================
 
@@ -388,6 +743,229 @@ if (isCloudBaseConfigured) {
   }
 } else {
   console.warn("CloudBase is not configured. Running in local-only mode.");
+}
+
+/* =================== 云函数调用集成 =================== */
+
+// 云函数调用函数
+async function callCloudFunction(functionName, data) {
+  if (!isCloudBaseConfigured || !app) {
+    console.warn('CloudBase not configured, skipping cloud function call');
+    return { success: false, error: 'CloudBase not configured' };
+  }
+  
+  try {
+    const result = await app.callFunction({
+      name: functionName,
+      data: {
+        ...data,
+        timestamp: Date.now(),
+        userId: currentLoginState?.user?.uid || 'anonymous',
+        deviceId: CLIENT_ID
+      }
+    });
+    
+    cloudFunctionState.lastSync = Date.now();
+    cloudFunctionState.isOnline = true;
+    cloudFunctionState.retryCount = 0;
+    
+    return result.result;
+  } catch (error) {
+    console.error(`Cloud function ${functionName} call failed:`, error);
+    cloudFunctionState.retryCount++;
+    
+    if (cloudFunctionState.retryCount >= CLOUD_FUNCTION_CONFIG.maxRetries) {
+      cloudFunctionState.isOnline = false;
+      console.warn(`Cloud function ${functionName} is offline after ${cloudFunctionState.retryCount} retries`);
+    }
+    
+    return { success: false, error: error.message };
+  }
+}
+
+// 计时器同步云函数
+async function syncTimerToCloud(action, timerData = null, sessionId = null) {
+  const data = {
+    action,
+    timerData,
+    sessionId
+  };
+  
+  return await callCloudFunction(CLOUD_FUNCTION_CONFIG.timerSync, data);
+}
+
+// 数据同步云函数
+async function syncDataToCloud(action, dataType, changes = null, localData = null, lastSyncTime = null) {
+  const data = {
+    action,
+    dataType,
+    changes,
+    localData,
+    lastSyncTime
+  };
+  
+  return await callCloudFunction(CLOUD_FUNCTION_CONFIG.dataSync, data);
+}
+
+// 每日结算云函数
+async function dailySettlementToCloud(data) {
+  return await callCloudFunction(CLOUD_FUNCTION_CONFIG.dailySettlement, data);
+}
+
+// 同步所有数据到云端
+async function syncAllDataToCloud() {
+  const now = Date.now();
+  
+  // 同步任务数据
+  const taskSyncResult = await syncDataToCloud('update', 'tasks', state.tasks);
+  
+  // 同步元数据
+  const metaSyncResult = await syncDataToCloud('update', 'meta', meta);
+  
+  // 同步统计聚合数据
+  const aggSyncResult = await syncDataToCloud('update', 'agg', state.agg);
+  
+  // 同步所有数据
+  const allDataSyncResult = await syncDataToCloud('update', 'all', {
+    tasks: state.tasks,
+    meta: meta,
+    agg: state.agg,
+    lastSync: now
+  });
+  
+  return {
+    tasks: taskSyncResult,
+    meta: metaSyncResult,
+    agg: aggSyncResult,
+    all: allDataSyncResult
+  };
+}
+
+// 从云端同步数据
+async function syncDataFromCloud(dataType = 'all') {
+  const localData = {
+    tasks: state.tasks,
+    meta: meta,
+    agg: state.agg
+  };
+  
+  const result = await syncDataToCloud('sync', dataType, null, localData, cloudFunctionState.lastSync);
+  
+  if (result.success && result.data) {
+    // 处理云端数据
+    if (result.data.cloudState) {
+      await handleCloudDataSync(result.data.cloudState);
+    }
+    
+    // 处理冲突
+    if (result.data.conflicts && result.data.conflicts.length > 0) {
+      await handleDataConflicts(result.data.conflicts);
+    }
+    
+    cloudFunctionState.lastSync = result.data.lastSyncTime || Date.now();
+    return result;
+  }
+  
+  return result;
+}
+
+// 处理云端数据同步
+function handleCloudDataSync(cloudState) {
+  if (cloudState.tasks && Array.isArray(cloudState.tasks)) {
+    // 合并任务数据
+    state.tasks = mergeTasks(state.tasks, cloudState.tasks);
+  }
+  
+  if (cloudState.meta) {
+    // 合并元数据，取较大值
+    for (const [key, value] of Object.entries(cloudState.meta)) {
+      if (typeof value === 'number') {
+        meta[key] = Math.max(meta[key] || 0, value);
+      } else {
+        meta[key] = value;
+      }
+    }
+  }
+  
+  if (cloudState.agg) {
+    // 合并聚合数据，累加
+    for (const [key, value] of Object.entries(cloudState.agg)) {
+      if (typeof value === 'number') {
+        state.agg[key] = (state.agg[key] || 0) + value;
+      }
+    }
+  }
+  
+  save();
+  renderTasks();
+}
+
+// 合并任务数据的策略
+function mergeTasks(localTasks, cloudTasks) {
+  const mergedTasks = [...localTasks];
+  const taskMap = new Map(localTasks.map(task => [task.id, task]));
+  
+  for (const cloudTask of cloudTasks) {
+    const localTask = taskMap.get(cloudTask.id);
+    
+    if (!localTask) {
+      // 本地没有的任务，添加
+      mergedTasks.push(cloudTask);
+    } else if (cloudTask.updatedAt > localTask.updatedAt) {
+      // 云端更新时间的任务优先
+      const index = mergedTasks.findIndex(t => t.id === cloudTask.id);
+      if (index !== -1) {
+        mergedTasks[index] = cloudTask;
+      }
+    }
+  }
+  
+  return mergedTasks;
+}
+
+// 处理数据冲突
+function handleDataConflicts(conflicts) {
+  console.log('Handling data conflicts:', conflicts);
+  
+  for (const conflict of conflicts) {
+    if (!conflict.resolved) {
+      // 默认采用云端数据
+      if (conflict.resolution === 'cloud' && conflict.cloud) {
+        switch (conflict.field) {
+          case 'tasks':
+            state.tasks = conflict.cloud;
+            break;
+          case 'meta':
+            meta = { ...meta, ...conflict.cloud };
+            break;
+          case 'agg':
+            state.agg = { ...state.agg, ...conflict.cloud };
+            break;
+        }
+        conflict.resolved = true;
+      }
+    }
+  }
+  
+  save();
+}
+
+// 启动云函数同步定时器
+function startCloudFunctionSync() {
+  // 定期同步数据
+  setInterval(async () => {
+    if (cloudFunctionState.isOnline && currentLoginState?.user?.uid) {
+      await syncDataFromCloud('all');
+    }
+  }, CLOUD_FUNCTION_CONFIG.syncInterval);
+  
+  // 定期发送心跳
+  setInterval(async () => {
+    if (cloudFunctionState.isOnline && currentLoginState?.user?.uid) {
+      await syncTimerToCloud('heartbeat', timerData);
+      cloudFunctionState.lastHeartbeat = Date.now();
+    }
+  }, CLOUD_FUNCTION_CONFIG.heartbeatInterval);
 }
 
 
@@ -1382,6 +1960,40 @@ async function sendTimerHeartbeat() {
     }
 }
 
+// 发送计时器接管通知
+async function sendTimerTakeoverNotification(activeSession) {
+    try {
+        await callCloudFunction('timerSync', {
+            action: 'takeover',
+            userId: state.userId,
+            deviceId: CLIENT_ID,
+            originalLeader: activeSession.leaderClientId,
+            timerData: activeSession,
+            timestamp: Date.now(),
+            sessionId: activeSession.sessionId
+        });
+    } catch (error) {
+        console.error('发送计时器接管通知失败:', error);
+    }
+}
+
+// 发送计时器接管通知
+async function sendTimerTakeoverNotification(activeSession) {
+    try {
+        await callCloudFunction('timerSync', {
+            action: 'takeover',
+            userId: state.userId,
+            deviceId: CLIENT_ID,
+            originalLeader: activeSession.leaderClientId,
+            timerData: activeSession,
+            timestamp: Date.now(),
+            sessionId: activeSession.sessionId
+        });
+    } catch (error) {
+        console.error('发送计时器接管通知失败:', error);
+    }
+}
+
 // 智能保存判断函数
 function needsImmediateSave(activeSession, currentTime, sessionSeconds) {
     // 如果是当前设备发起的会话，需要更频繁地保存
@@ -1416,7 +2028,28 @@ function checkAndTakeOverTimer(activeSession, currentTime) {
     }
     
     // 判断当前设备是否可以接管计时器
-    const timeSinceLastHeartbeat = currentTime - activeSession.lastHeartbeatAt;
+    const heartbeatTimeout = currentTime - activeSession.lastHeartbeatAt;
+    const leaderIsOffline = heartbeatTimeout > HEARTBEAT_TIMEOUT_MS;
+    
+    // 当前设备是发起者或者发起者已离线且当前设备在线
+    const canTakeOver = (activeSession.leaderClientId === CLIENT_ID) || 
+                       (leaderIsOffline && isRealtimeConnected);
+    
+    if (canTakeOver && !activeSession.isTakingOver) {
+        console.log(`设备 ${CLIENT_ID} 正在接管计时器，原主设备 ${activeSession.leaderClientId} 已离线`);
+        
+        // 标记接管状态
+        activeSession.isTakingOver = true;
+        activeSession.takeoverTime = currentTime;
+        
+        // 更新领导设备
+        activeSession.leaderClientId = CLIENT_ID;
+        activeSession.lastTakeover = currentTime;
+        
+        // 发送接管通知到云端
+        sendTimerTakeoverNotification(activeSession);
+    }
+}    const timeSinceLastHeartbeat = currentTime - activeSession.lastHeartbeatAt;
     const leaderIsActive = timeSinceLastHeartbeat < DEVICE_TIMEOUT_MS;
     const shouldTakeOver = !leaderIsActive && 
                           activeSession.leaderClientId !== CLIENT_ID &&
@@ -3271,6 +3904,566 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
     // 获取昨天的有效分钟数
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
+  }
+}
+
+// ==================== 多端同步网络状态监控和自动重连机制 ====================
+
+// 网络状态监控变量
+let networkStatus = {
+  online: navigator.onLine,
+  lastPingTime: 0,
+  pingSuccessCount: 0,
+  pingFailureCount: 0,
+  connectionQuality: 'good', // good, fair, poor, disconnected
+  reconnectAttempts: 0,
+  maxReconnectAttempts: 5
+};
+
+// 网络连接状态监控
+function initNetworkMonitor() {
+  // 监听网络状态变化
+  window.addEventListener('online', handleNetworkOnline);
+  window.addEventListener('offline', handleNetworkOffline);
+  
+  // 启动网络状态检测
+  startNetworkPing();
+  
+  // 启动自动重连机制
+  startAutoReconnect();
+}
+
+// 网络状态变化处理
+function handleNetworkOnline() {
+  networkStatus.online = true;
+  networkStatus.connectionQuality = 'good';
+  networkStatus.reconnectAttempts = 0;
+  
+  console.log('网络已连接');
+  pushToast('网络连接已恢复', 'success');
+  
+  // 网络恢复后立即同步数据
+  if (cloudSyncReady) {
+    setTimeout(() => {
+      syncAllData().catch(console.error);
+    }, 1000);
+  }
+}
+
+function handleNetworkOffline() {
+  networkStatus.online = false;
+  networkStatus.connectionQuality = 'disconnected';
+  
+  console.log('网络已断开');
+  pushToast('网络连接已断开', 'warn');
+  
+  // 暂停计时器同步
+  if (timerHeartbeatInterval) {
+    clearInterval(timerHeartbeatInterval);
+    timerHeartbeatInterval = null;
+  }
+}
+
+// 网络质量检测
+function startNetworkPing() {
+  setInterval(async () => {
+    if (!networkStatus.online) return;
+    
+    try {
+      const startTime = Date.now();
+      const response = await fetch('/ping', { 
+        method: 'HEAD',
+        timeout: 5000 
+      });
+      
+      const latency = Date.now() - startTime;
+      networkStatus.lastPingTime = Date.now();
+      
+      if (response.ok) {
+        networkStatus.pingSuccessCount++;
+        
+        // 根据延迟评估网络质量
+        if (latency < 200) {
+          networkStatus.connectionQuality = 'good';
+        } else if (latency < 800) {
+          networkStatus.connectionQuality = 'fair';
+        } else {
+          networkStatus.connectionQuality = 'poor';
+        }
+      } else {
+        networkStatus.pingFailureCount++;
+        updateConnectionQuality();
+      }
+    } catch (error) {
+      networkStatus.pingFailureCount++;
+      updateConnectionQuality();
+    }
+    
+    // 定期重置计数
+    if (networkStatus.pingSuccessCount > 100 || networkStatus.pingFailureCount > 50) {
+      networkStatus.pingSuccessCount = 0;
+      networkStatus.pingFailureCount = 0;
+    }
+  }, 30000); // 每30秒检测一次
+}
+
+// 更新连接质量评估
+function updateConnectionQuality() {
+  const failureRate = networkStatus.pingFailureCount / 
+    (networkStatus.pingSuccessCount + networkStatus.pingFailureCount);
+  
+  if (failureRate > 0.7) {
+    networkStatus.connectionQuality = 'poor';
+  } else if (failureRate > 0.3) {
+    networkStatus.connectionQuality = 'fair';
+  }
+  
+  // 如果连续失败次数过多，标记为离线
+  if (networkStatus.pingFailureCount > 10) {
+    handleNetworkOffline();
+  }
+}
+
+// 自动重连机制
+function startAutoReconnect() {
+  setInterval(() => {
+    if (networkStatus.online || 
+        networkStatus.reconnectAttempts >= networkStatus.maxReconnectAttempts) {
+      return;
+    }
+    
+    // 尝试重新连接
+    attemptReconnect();
+  }, 10000); // 每10秒尝试重连
+}
+
+// 重新连接尝试
+async function attemptReconnect() {
+  if (networkStatus.reconnectAttempts >= networkStatus.maxReconnectAttempts) {
+    console.log('已达到最大重连尝试次数');
+    return;
+  }
+  
+  networkStatus.reconnectAttempts++;
+  
+  try {
+    console.log(`尝试重新连接 (${networkStatus.reconnectAttempts}/${networkStatus.maxReconnectAttempts})`);
+    
+    // 尝试简单的网络请求
+    const response = await fetch('/ping', { 
+      method: 'HEAD',
+      timeout: 3000 
+    });
+    
+    if (response.ok) {
+      // 连接成功
+      handleNetworkOnline();
+      networkStatus.reconnectAttempts = 0;
+      
+      // 重新初始化CloudBase连接
+      if (window.cloud && isCloudBaseConfigured) {
+        initCloudBaseSync();
+      }
+    }
+  } catch (error) {
+    console.log(`重连尝试 ${networkStatus.reconnectAttempts} 失败`);
+    
+    // 如果多次重连失败，显示提示
+    if (networkStatus.reconnectAttempts >= 3) {
+      pushToast('网络连接异常，请检查网络设置', 'warn');
+    }
+  }
+}
+
+// 智能数据同步策略
+function getSyncStrategy() {
+  const quality = networkStatus.connectionQuality;
+  
+  switch (quality) {
+    case 'good':
+      return {
+        interval: 5000, // 5秒同步一次
+        batchSize: 50,
+        retryAttempts: 2,
+        timeout: 10000
+      };
+    case 'fair':
+      return {
+        interval: 15000, // 15秒同步一次
+        batchSize: 20,
+        retryAttempts: 1,
+        timeout: 20000
+      };
+    case 'poor':
+      return {
+        interval: 30000, // 30秒同步一次
+        batchSize: 10,
+        retryAttempts: 0,
+        timeout: 30000
+      };
+    default:
+      return {
+        interval: 60000, // 1分钟同步一次
+        batchSize: 5,
+        retryAttempts: 0,
+        timeout: 60000
+      };
+  }
+}
+
+// 根据网络状态调整同步策略
+function adjustSyncStrategy() {
+  const strategy = getSyncStrategy();
+  
+  // 调整计时器同步频率
+  if (timerHeartbeatInterval) {
+    clearInterval(timerHeartbeatInterval);
+    timerHeartbeatInterval = setInterval(sendTimerHeartbeat, strategy.interval);
+  }
+  
+  // 调整数据同步策略
+  if (dataSyncInterval) {
+    clearInterval(dataSyncInterval);
+    dataSyncInterval = setInterval(() => {
+      if (networkStatus.online) {
+        syncAllData().catch(console.error);
+      }
+    }, strategy.interval * 2); // 数据同步频率比计时器同步低
+  }
+}
+
+// 网络状态UI显示
+function updateNetworkStatusUI() {
+  const statusElement = document.getElementById('networkStatus') || createNetworkStatusElement();
+  
+  const statusText = {
+    'good': '🟢 网络良好',
+    'fair': '🟡 网络一般',
+    'poor': '🟠 网络较差',
+    'disconnected': '🔴 网络断开'
+  }[networkStatus.connectionQuality];
+  
+  statusElement.textContent = statusText;
+  statusElement.title = `在线状态: ${networkStatus.online ? '在线' : '离线'}
+连接质量: ${networkStatus.connectionQuality}
+重连尝试: ${networkStatus.reconnectAttempts}/${networkStatus.maxReconnectAttempts}`;
+}
+
+// 创建网络状态显示元素
+function createNetworkStatusElement() {
+  const statusElement = document.createElement('div');
+  statusElement.id = 'networkStatus';
+  statusElement.style.cssText = `
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 12px;
+    z-index: 1000;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    cursor: pointer;
+  `;
+  
+  statusElement.onclick = () => {
+    // 点击手动重连
+    if (!networkStatus.online) {
+      attemptReconnect();
+    }
+  };
+  
+  document.body.appendChild(statusElement);
+  return statusElement;
+}
+
+// 初始化网络监控
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    initNetworkMonitor();
+    setInterval(updateNetworkStatusUI, 5000);
+  }, 1000);
+}
+  }
+}
+
+// ==================== 多端同步网络状态监控和自动重连机制 ====================
+
+// 网络状态监控变量
+let networkStatus = {
+  online: navigator.onLine,
+  lastPingTime: 0,
+  pingSuccessCount: 0,
+  pingFailureCount: 0,
+  connectionQuality: 'good', // good, fair, poor, disconnected
+  reconnectAttempts: 0,
+  maxReconnectAttempts: 5
+};
+
+// 网络连接状态监控
+function initNetworkMonitor() {
+  // 监听网络状态变化
+  window.addEventListener('online', handleNetworkOnline);
+  window.addEventListener('offline', handleNetworkOffline);
+  
+  // 启动网络状态检测
+  startNetworkPing();
+  
+  // 启动自动重连机制
+  startAutoReconnect();
+}
+
+// 网络状态变化处理
+function handleNetworkOnline() {
+  networkStatus.online = true;
+  networkStatus.connectionQuality = 'good';
+  networkStatus.reconnectAttempts = 0;
+  
+  console.log('网络已连接');
+  pushToast('网络连接已恢复', 'success');
+  
+  // 网络恢复后立即同步数据
+  if (cloudSyncReady) {
+    setTimeout(() => {
+      syncAllData().catch(console.error);
+    }, 1000);
+  }
+}
+
+function handleNetworkOffline() {
+  networkStatus.online = false;
+  networkStatus.connectionQuality = 'disconnected';
+  
+  console.log('网络已断开');
+  pushToast('网络连接已断开', 'warn');
+  
+  // 暂停计时器同步
+  if (timerHeartbeatInterval) {
+    clearInterval(timerHeartbeatInterval);
+    timerHeartbeatInterval = null;
+  }
+}
+
+// 网络质量检测
+function startNetworkPing() {
+  setInterval(async () => {
+    if (!networkStatus.online) return;
+    
+    try {
+      const startTime = Date.now();
+      const response = await fetch('/ping', { 
+        method: 'HEAD',
+        timeout: 5000 
+      });
+      
+      const latency = Date.now() - startTime;
+      networkStatus.lastPingTime = Date.now();
+      
+      if (response.ok) {
+        networkStatus.pingSuccessCount++;
+        
+        // 根据延迟评估网络质量
+        if (latency < 200) {
+          networkStatus.connectionQuality = 'good';
+        } else if (latency < 800) {
+          networkStatus.connectionQuality = 'fair';
+        } else {
+          networkStatus.connectionQuality = 'poor';
+        }
+      } else {
+        networkStatus.pingFailureCount++;
+        updateConnectionQuality();
+      }
+    } catch (error) {
+      networkStatus.pingFailureCount++;
+      updateConnectionQuality();
+    }
+    
+    // 定期重置计数
+    if (networkStatus.pingSuccessCount > 100 || networkStatus.pingFailureCount > 50) {
+      networkStatus.pingSuccessCount = 0;
+      networkStatus.pingFailureCount = 0;
+    }
+  }, 30000); // 每30秒检测一次
+}
+
+// 更新连接质量评估
+function updateConnectionQuality() {
+  const failureRate = networkStatus.pingFailureCount / 
+    (networkStatus.pingSuccessCount + networkStatus.pingFailureCount);
+  
+  if (failureRate > 0.7) {
+    networkStatus.connectionQuality = 'poor';
+  } else if (failureRate > 0.3) {
+    networkStatus.connectionQuality = 'fair';
+  }
+  
+  // 如果连续失败次数过多，标记为离线
+  if (networkStatus.pingFailureCount > 10) {
+    handleNetworkOffline();
+  }
+}
+
+// 自动重连机制
+function startAutoReconnect() {
+  setInterval(() => {
+    if (networkStatus.online || 
+        networkStatus.reconnectAttempts >= networkStatus.maxReconnectAttempts) {
+      return;
+    }
+    
+    // 尝试重新连接
+    attemptReconnect();
+  }, 10000); // 每10秒尝试重连
+}
+
+// 重新连接尝试
+async function attemptReconnect() {
+  if (networkStatus.reconnectAttempts >= networkStatus.maxReconnectAttempts) {
+    console.log('已达到最大重连尝试次数');
+    return;
+  }
+  
+  networkStatus.reconnectAttempts++;
+  
+  try {
+    console.log(`尝试重新连接 (${networkStatus.reconnectAttempts}/${networkStatus.maxReconnectAttempts})`);
+    
+    // 尝试简单的网络请求
+    const response = await fetch('/ping', { 
+      method: 'HEAD',
+      timeout: 3000 
+    });
+    
+    if (response.ok) {
+      // 连接成功
+      handleNetworkOnline();
+      networkStatus.reconnectAttempts = 0;
+      
+      // 重新初始化CloudBase连接
+      if (window.cloud && isCloudBaseConfigured) {
+        initCloudBaseSync();
+      }
+    }
+  } catch (error) {
+    console.log(`重连尝试 ${networkStatus.reconnectAttempts} 失败`);
+    
+    // 如果多次重连失败，显示提示
+    if (networkStatus.reconnectAttempts >= 3) {
+      pushToast('网络连接异常，请检查网络设置', 'warn');
+    }
+  }
+}
+
+// 智能数据同步策略
+function getSyncStrategy() {
+  const quality = networkStatus.connectionQuality;
+  
+  switch (quality) {
+    case 'good':
+      return {
+        interval: 5000, // 5秒同步一次
+        batchSize: 50,
+        retryAttempts: 2,
+        timeout: 10000
+      };
+    case 'fair':
+      return {
+        interval: 15000, // 15秒同步一次
+        batchSize: 20,
+        retryAttempts: 1,
+        timeout: 20000
+      };
+    case 'poor':
+      return {
+        interval: 30000, // 30秒同步一次
+        batchSize: 10,
+        retryAttempts: 0,
+        timeout: 30000
+      };
+    default:
+      return {
+        interval: 60000, // 1分钟同步一次
+        batchSize: 5,
+        retryAttempts: 0,
+        timeout: 60000
+      };
+  }
+}
+
+// 根据网络状态调整同步策略
+function adjustSyncStrategy() {
+  const strategy = getSyncStrategy();
+  
+  // 调整计时器同步频率
+  if (timerHeartbeatInterval) {
+    clearInterval(timerHeartbeatInterval);
+    timerHeartbeatInterval = setInterval(sendTimerHeartbeat, strategy.interval);
+  }
+  
+  // 调整数据同步策略
+  if (dataSyncInterval) {
+    clearInterval(dataSyncInterval);
+    dataSyncInterval = setInterval(() => {
+      if (networkStatus.online) {
+        syncAllData().catch(console.error);
+      }
+    }, strategy.interval * 2); // 数据同步频率比计时器同步低
+  }
+}
+
+// 网络状态UI显示
+function updateNetworkStatusUI() {
+  const statusElement = document.getElementById('networkStatus') || createNetworkStatusElement();
+  
+  const statusText = {
+    'good': '🟢 网络良好',
+    'fair': '🟡 网络一般',
+    'poor': '🟠 网络较差',
+    'disconnected': '🔴 网络断开'
+  }[networkStatus.connectionQuality];
+  
+  statusElement.textContent = statusText;
+  statusElement.title = `在线状态: ${networkStatus.online ? '在线' : '离线'}
+连接质量: ${networkStatus.connectionQuality}
+重连尝试: ${networkStatus.reconnectAttempts}/${networkStatus.maxReconnectAttempts}`;
+}
+
+// 创建网络状态显示元素
+function createNetworkStatusElement() {
+  const statusElement = document.createElement('div');
+  statusElement.id = 'networkStatus';
+  statusElement.style.cssText = `
+    position: fixed;
+    top: 10px;
+    right: 10px;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 12px;
+    z-index: 1000;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    cursor: pointer;
+  `;
+  
+  statusElement.onclick = () => {
+    // 点击手动重连
+    if (!networkStatus.online) {
+      attemptReconnect();
+    }
+  };
+  
+  document.body.appendChild(statusElement);
+  return statusElement;
+}
+
+// 初始化网络监控
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    initNetworkMonitor();
+    setInterval(updateNetworkStatusUI, 5000);
+  }, 1000);
+}
     const dateKey = yesterday.toISOString().split('T')[0];
     
     // 从本地存储的历史数据中获取
