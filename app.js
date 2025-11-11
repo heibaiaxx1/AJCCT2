@@ -235,27 +235,7 @@ class HaoqingApp {
         }
     }
 
-    // 初始化 Firebase
-    initFirebase() {
-        if (typeof firebase === 'undefined') {
-            console.warn('Firebase SDK 未加载，计时器同步将不可用');
-            this.updateSyncStatus(false, 'Firebase SDK 未加载');
-            return;
-        }
-
-        try {
-            // 初始化 Firebase 计时器监听器
-            this.initFirebaseTimerListener();
-            console.log('Firebase 实时数据库初始化成功');
-            this.cloudServices.isFirebaseConnected = true;
-            this.updateSyncStatus(true, 'Firebase 连接正常');
-            
-        } catch (error) {
-            console.error('Firebase 初始化失败:', error);
-            this.cloudServices.isFirebaseConnected = false;
-            this.updateSyncStatus(false, 'Firebase 初始化失败');
-        }
-    }
+    // Firebase 功能已移除
 
     // 初始化数据同步
     initDataSync() {
@@ -370,11 +350,7 @@ class HaoqingApp {
         alert(`应用错误: ${message}`);
     }
 
-    // 初始化 Firebase 计时器监听器（占位方法）
-    initFirebaseTimerListener() {
-        console.log('初始化 Firebase 计时器监听器');
-        // 具体实现在专门的模块中
-    }
+    // Firebase 相关功能已移除
 
     // 启动数据同步（占位方法）
     startDataSync() {

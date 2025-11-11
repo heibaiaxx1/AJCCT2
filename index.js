@@ -63,7 +63,6 @@ let cloudSyncReady = false; // Flag to prevent premature writes
 let CLIENT_ID = '';
 let lastRemoteSyncStamp = 0;
 let isApplyingRemoteSnapshot = false;
-let isFirebaseConnected = false; // Firebase 连接状态
 let realtimeListener = null; // 实时监听器
 
 // =================== 计时器同步状态 ===================
@@ -80,95 +79,7 @@ let timerHeartbeatInterval = null;
 const HEARTBEAT_INTERVAL_MS = 2000; // 2秒心跳间隔
 const DEVICE_TIMEOUT_MS = 30000; // 30秒超时
 
-// 初始化Firebase计时器监听器
-function initFirebaseTimerListener() {
-    if (!timerRef) {
-        console.error("Firebase timer reference not available");
-        isFirebaseConnected = false;
-        return;
-    }
-    
-    try {
-        timerListener = timerRef.on('value', (snapshot) => {
-            const data = snapshot.val();
-            if (data) {
-                console.log("Firebase timer data received:", data);
-                applyTimerData(data);
-                isFirebaseConnected = true;
-                updateSyncStatus(true, "Firebase 连接正常");
-            }
-        }, (error) => {
-            console.error("Firebase timer listener error:", error);
-            isFirebaseConnected = false;
-            updateSyncStatus(false, `Firebase 连接失败: ${error.message}`);
-        });
-        
-        isFirebaseConnected = true;
-        console.log("Firebase timer listener initialized successfully");
-    } catch (error) {
-        console.error("Failed to initialize Firebase timer listener:", error);
-        isFirebaseConnected = false;
-        updateSyncStatus(false, "Firebase 初始化失败");
-    }
-}
-
-// 应用远程计时器数据
-function applyTimerData(data) {
-    if (!data || typeof data !== 'object') return;
-    
-    // 检查是否是当前设备的数据，避免循环更新
-    if (data.clientId === CLIENT_ID) return;
-    
-    // 更新计时器状态
-    timerData = data;
-    
-    // 如果远程有活动会话，同步到本地状态
-    if (data.activeSession) {
-        state.active = data.activeSession;
-        
-        // 更新UI状态
-        if (el.activeHint && data.activeSession.taskId) {
-            const task = getTask(data.activeSession.taskId);
-            if (task) {
-                el.activeHint.textContent = `正在计时: ${task.title}`;
-            }
-        }
-        
-        // 启动本地心跳检测
-        if (data.activeSession.isRunning && !data.activeSession.isPaused) {
-            if (timerHeartbeatInterval) clearInterval(timerHeartbeatInterval);
-            timerHeartbeatInterval = setInterval(sendTimerHeartbeat, HEARTBEAT_INTERVAL_MS);
-        }
-    } else if (state.active) {
-        // 如果远程没有活动会话但本地有，停止本地计时器
-        state.active = null;
-        if (timerHeartbeatInterval) {
-            clearInterval(timerHeartbeatInterval);
-            timerHeartbeatInterval = null;
-        }
-    }
-    
-    // 渲染计时器界面
-    renderTimer();
-}
-
-// 保存计时器状态到 Firebase
-function saveTimerToFirebase(sessionData = null) {
-    if (!timerRef) return;
-    
-    const timerState = {
-        activeSession: sessionData || state.active,
-        clientId: CLIENT_ID,
-        updatedAt: Date.now(),
-        version: (state.syncVersion || 0) + 1
-    };
-    
-    timerRef.set(timerState).catch((error) => {
-        console.error("Firebase timer save error:", error);
-        isFirebaseConnected = false;
-        updateSyncStatus(false, `Firebase 保存失败: ${error.message}`);
-    });
-}
+// Firebase相关功能已移除
 
 // =================== CLOUDBASE 实时监听器管理 ===================
 
@@ -469,32 +380,14 @@ if (isCloudBaseConfigured) {
       db = app.database();
       console.log("Tencent CloudBase initialized successfully.");
       
-      // =================== FIREBASE 初始化 ===================
-      if (typeof firebase !== 'undefined') {
-        try {
-          initFirebaseTimerListener();
-          console.log("Firebase Realtime Database initialized successfully.");
-        } catch (firebaseError) {
-          console.error("Firebase initialization failed:", firebaseError);
-          isFirebaseConnected = false;
-          updateSyncStatus(false, "Firebase 初始化失败");
-        }
-      } else {
-        console.error("Firebase SDK not loaded. Timer sync will not work.");
-        isFirebaseConnected = false;
-        updateSyncStatus(false, "Firebase SDK 未加载");
-      }
-      
     } catch (e) {
       console.error("CloudBase initialization failed:", e);
       alert(`CloudBase 初始化失败，请检查您的配置。\n\n错误详情: ${e.message || e.toString()}\n\n应用将以本地模式运行。`);
       isCloudBaseConfigured = false;
-      isFirebaseConnected = false;
     }
   }
 } else {
   console.warn("CloudBase is not configured. Running in local-only mode.");
-  isFirebaseConnected = false;
 }
 
 
@@ -3150,10 +3043,10 @@ function todayObj(){ const k = todayKey(); if (!meta.daily[k]) { meta.daily[k] =
             
             setupCloudBaseListener(user.uid);
             
-            // 启动连接状态监控
-            if (!window.connectionMonitorInterval) {
-                startConnectionMonitor();
-            }
+            // 启动连接状态监控（可选）
+            // if (!window.connectionMonitorInterval) {
+            //     startConnectionMonitor();
+            // }
             
             cloudSyncReady = true;
           } catch (err) {
